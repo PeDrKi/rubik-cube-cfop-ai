@@ -195,12 +195,23 @@ T-perm/Y-perm) đôi khi phải **nối 3 lần liền nhau** (~40-60+ nước) 
 nước, dưới 2 giây** — gần với mức thực tế người chơi CFOP thật đạt được
 (thường 50-70 nước cho 1 lần giải không tối ưu tốc độ).
 
-**Giới hạn còn lại (trung thực cho báo cáo):** đây CHƯA PHẢI đúng 100% tinh
-thần CFOP (vẫn có ~55% case PLL cần nối 2 generator thay vì nhận diện đúng
-1 trong 21 công thức chuẩn). Để đạt "1 case = 1 công thức" cần triển khai
-đầy đủ bộ nhận diện 21 case PLL + 57 case OLL với thuật toán verified cho
-từng case — khối lượng công việc lớn hơn nhiều, là hướng phát triển tiếp
-theo hợp lý nếu có thêm thời gian.
+**Giới hạn còn lại (trung thực cho báo cáo, tại THỜI ĐIỂM VIẾT đoạn
+này):** đây CHƯA PHẢI đúng 100% tinh thần CFOP (vẫn có ~55% case PLL
+cần nối 2 generator thay vì nhận diện đúng 1 trong 21 công thức
+chuẩn). Để đạt "1 case = 1 công thức" cần triển khai đầy đủ bộ nhận
+diện 21 case PLL + 57 case OLL với thuật toán verified cho từng case
+— khối lượng công việc lớn hơn nhiều, là hướng phát triển tiếp theo
+hợp lý nếu có thêm thời gian.
+
+**Cập nhật (2026-08, đã đạt mục tiêu ở trên):** cả 2 mục tiêu đã hoàn
+thành ở các phiên sau. PLL hiện có đầy đủ **21/21 case** nhận diện
+trực tiếp (`solver/pll_algorithms.py`, không còn cần nối 2 generator
+cho bất kỳ case nào). OLL hiện có bảng **55/57 case** nhận diện trực
+tiếp (`solver/oll_algorithms.py`) — 2 case còn lại (OLL 2, OLL 20)
+không có thuật toán thuần face-turn trong bất kỳ nguồn cộng đồng nào
+tra được (luôn cần slice/wide move), nên chủ động fallback về kiến
+trúc 2-look cũ cho đúng 2 case này, không phải thiếu sót. Chi tiết đầy
+đủ: `CHANGELOG_SESSION.md`.
 
 ## Cập nhật QUYẾT ĐỊNH #2: PLL cũng chậm/thất bại cho đa số case → áp dụng lại kỹ thuật macro-move (T-perm/Y-perm)
 

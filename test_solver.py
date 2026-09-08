@@ -45,7 +45,7 @@ from solver.pll_solver import solve_pll
 from solver.move_simplify import simplify
 from solver.oll_algorithms import (OLL_TABLE, VERIFIED_ALG_NAMES as OLL_VERIFIED,
                                     REJECTED_ALG_NAMES as OLL_REJECTED,
-                                    _RAW_ALGS as OLL_RAW, solve_oll_with_auf)
+                                    _RAW_ALGS as OLL_RAW, solve_oll_with_auf, _inv)
 from solver.pll_algorithms import (PLL_TABLE, VERIFIED_ALG_NAMES as PLL_VERIFIED,
                                     solve_pll_lookup_named)
 from solver import cfop_ai
@@ -308,8 +308,16 @@ class TestF2LSolver:
 # ────────────────────────────────────────────────────────────────────────
 
 class TestOLLAlgorithms:
-    def test_all_57_cases_present_in_raw_table(self):
-        assert len(OLL_RAW) == 57
+    def test_all_55_addressable_cases_present_in_raw_table(self):
+        """Bang co 55 entry, KHONG PHAI 57: OLL 2 va OLL 20 khong co thuat
+        toan thuan face-turn (moi nguon cong dong deu can M/S/E hoac
+        r/l/f/u/d/b) nen bi loai tru co chu dich va roi ve fallback
+        2-look. 55 = 57 - 2 case nay. Truoc day bang co 57 raw entry
+        nhung 2 trong so do (case_auto_03, case_auto_05) la BAN SAO cua
+        Sune/AntiSune bi lech AUF (da kiem chung bang thuc nghiem, xem
+        CHANGELOG_SESSION.md) nen da bi go bo de tranh dem trung khi
+        thong ke so case da khop so hieu cong dong."""
+        assert len(OLL_RAW) == 55
 
     def test_verification_step_actually_ran(self):
         """Khong assert '57/57 verified' mu quang -- chi assert buoc kiem
@@ -334,28 +342,55 @@ class TestOLLAlgorithms:
         assert len(OLL_TABLE) >= 50
 
     def test_own_generating_set_round_trip(self):
-        """Voi moi cong thuc da verify + 4 AUF, ap cong thuc do de tao ra
-        1 case OLL, roi kiem tra solve_oll_with_auf() GIAI DUOC LAI case
-        do. Day la kiem tra 'khep kin' rieng cua bo test nay -- LUU Y: khi
-        chay thuc te tren may minh, ket qua la 224/228 (~98.2%), CHUA PHAI
-        100%; test dat nguong 90% de khong che giau van de nhung cung
-        khong doi hoi hoan hao tuyet doi chua duoc kiem chung ky. Neu ban
-        sua oll_algorithms.py va con so nay TUT xuong duoi nguong, day la
-        tin hieu that can dieu tra (xem CFOP_AI_README.md).
+        """Voi moi cong thuc da verify + 4 AUF, dung TRANG THAI DICH THAT
+        SU ma cong thuc do duoc thiet ke de giai (= ap NGHICH DAO cua
+        cong thuc len cube da giai -- day la dinh nghia dung theo ly
+        thuyet nhom cua "trang thai can giai"), roi kiem tra
+        solve_oll_with_auf() khong chi TIM THAY 1 muc khop trong bang, ma
+        loi giai tra ve THAT SU giai dung OLL (ap dung xong, oll_solved
+        tra ve True).
+
+        SUA 2026-08 (xem CHANGELOG_SESSION.md muc 14 va 19): ban CU cua
+        test nay ap cong thuc THEO CHIEU THUAN len cube da giai (thay vi
+        chieu nghich dao), tuc la kiem tra sai doi tuong -- no hoi "trang
+        thai SAU KHI ap dung cong thuc nay co TINH CO duoc bang nhan
+        dien khong", chu khong phai "cong thuc nay co giai DUNG trang
+        thai ma no duoc thiet ke de giai khong". Vi sai doi tuong kiem
+        tra, ban cu bao cao 216/220 (Dot_OLL1 " that bai" ca 4 AUF) va bi
+        hieu nham la 1 loi that trong bang OLL. Da xac minh lai bang
+        ground-truth dung ly thuyet nhom (so sanh key dang luu voi key
+        tinh tu trang thai nghich-dao-that-su cho ca 55 case): khop
+        100% (55/55), khong co case nao sai. Ban test nay kiem tra dung
+        doi tuong va cho 220/220 = 100%.
         """
         ok = 0
         total = 0
+        fails = []
         for name in OLL_VERIFIED:
             seq = OLL_RAW[name].split()
+            inv_seq = _inv(seq)
             for auf in ([], ['U'], ['U2'], ["U'"]):
                 st = make_solved()
-                _apply_seq(st, seq)
+                _apply_seq(st, inv_seq)
+                _apply_seq(st, auf)
                 full = from_facelets(st)
                 total += 1
-                if solve_oll_with_auf(full) is not None:
+                result = solve_oll_with_auf(full)
+                if result is None:
+                    fails.append((name, auf, 'khong tim thay muc khop'))
+                    continue
+                auf_prefix, alg_moves, _matched_name = result
+                st2 = make_solved()
+                _apply_seq(st2, inv_seq)
+                _apply_seq(st2, auf)
+                _apply_seq(st2, auf_prefix)
+                _apply_seq(st2, alg_moves)
+                if oll_solved(st2):
                     ok += 1
-        assert total > 0
-        assert ok / total >= 0.90, f'round-trip qua thap: {ok}/{total}'
+                else:
+                    fails.append((name, auf, 'khop bang nhung KHONG giai dung'))
+        assert total == 220
+        assert ok == total, f'round-trip (ground-truth) khong hoan hao: {ok}/{total}, that bai: {fails}'
 
 
 class TestOLLSolver:

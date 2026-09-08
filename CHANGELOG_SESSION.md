@@ -395,3 +395,387 @@ Việc còn mở, theo mức ưu tiên:
 Không còn việc "code/phân tích tự động" nào bắt buộc phải làm trước khi
 nộp — các mục còn lại (1, 2, 5) chủ yếu là quyết định nội dung/điều tra
 sâu thêm, không còn gì chặn việc nộp bài.
+
+## CẬP NHẬT MỚI NHẤT 10 — Sửa lỗi số liệu OLL/thống kê, thí nghiệm
+capped-bonus admissibility, dọn bibliography, hạ tầng mở rộng Exp 3
+
+**Bối cảnh:** phiên làm việc dài, đánh giá dự án như 1 đề tài NCKH rồi
+đối chiếu từng con số trong paper với code/dữ liệu thô (không chỉ đọc
+prose). Tìm và sửa nhiều lỗi thật, không chỉ lỗi văn phong.
+
+**1. Lỗi trùng lặp trong bảng OLL (đã sửa code, không chỉ paper):**
+- `case_auto_03` và `case_auto_05` (2/57 raw algorithm) được xác minh
+  bằng thực nghiệm (áp nghịch đảo lên cube đã giải, so khớp dưới 4 phép
+  AUF) là **bản sao lệch-AUF của Sune/AntiSune**, không phải case mới —
+  ladder solver nội bộ hội tụ nhầm về 2 seed này khi sinh tự động.
+- Đã gỡ 2 entry này khỏi `solver/oll_algorithms.py`
+  (`_RAW_ALGS`/`PRETTY_CASE_NAME`). Bảng OLL giờ là **55 case** (không
+  phải 57) — khớp đúng 57 case chuẩn CFOP trừ OLL 2 và OLL 20 (2 case
+  không có thuật toán thuần, đã biết từ trước, fallback 2-look).
+- Trong 55 case, **40 đã khớp số hiệu cộng đồng, 15 chưa khớp**. Con số
+  "40" trùng ngẫu nhiên với con số cũ trong paper (vốn tính đúng theo
+  số hiệu duy nhất) nhưng "57"/"17" trong paper cũ là sai — đã sửa
+  paper thành "55"/"15" cho nhất quán.
+- Sửa test `test_all_57_cases_present_in_raw_table` (hard-code sai
+  giả định) → `test_all_55_addressable_cases_present_in_raw_table`.
+- **319/319 test pass** sau thay đổi.
+
+**2. Đối chiếu toàn bộ số liệu thống kê trong paper với dữ liệu thô
+(không chỉ OLL):**
+- Exp1 (N=60, N=100), Exp2 (Wilcoxon W/p), Exp3 (ICC, Spearman ρ, 24
+  stimuli, 28 rater): **tất cả khớp tuyệt đối** khi chạy lại script gốc
+  trong repo (`compute_icc.py`, `compute_exact_correlation.py`).
+- **Tìm được 1 lỗi thật:** effect size `r` của Wilcoxon ở Exp2 sai
+  (paper ghi r=0,83 và r=0,60; công thức đúng z/√n — đã xác nhận đúng
+  công thức này qua việc nó tái lập chính xác r=0,87 ở Exp1 — cho ra
+  r=0,75 và r=0,45). Đã sửa cả `main.tex` và `main_vi.tex`. W và p
+  không sai, chỉ sai ở bước z→r (khả năng lỗi chép tay).
+- Sửa câu diễn đạt "20% (12/60) exceeded timeout" — thực ra chỉ 10/12
+  là timeout thật, 2 là `f2l_partial` (dừng trước mốc 20s). Đã sửa câu
+  chữ ở cả 2 bản cho chính xác.
+
+**3. Thí nghiệm capped-bonus admissibility (KHÔNG chỉ đề xuất, đã cài
+đặt + chạy thật + đưa số liệu vào paper):**
+- Thêm tham số `cap` vào `trigger_bonus_count()`/
+  `solve_f2l_trigger_biased()` trong `research/trigger_biased_search.py`
+  (mặc định `cap=None` = hành vi cũ, không đổi).
+- Script mới `research/run_capped_bonus_sweep.py`, tự-kiểm-chứng khớp
+  120/120 với `pareto_n60.csv` gốc trước khi tin dữ liệu mới (từng bị
+  lệch 1 lần do dùng nhầm 60k thay vì đúng 40k node/depth như Exp2 —
+  đã phát hiện và sửa).
+- Chạy đủ N=60 × 2λ × 4 cap (1,2,4,none) = 480 case, lưu
+  `research/capped_bonus_n60.csv`.
+- **Kết quả chính:** cap=4 cho kết quả giống hệt uncapped (không khác
+  biệt thống kê nào) — đạt cận admissibility λ·4 "miễn phí". Cap=1,2
+  giảm trigger-overlap có ý nghĩa NHƯNG cũng giảm tỷ lệ giải thành công
+  (53-58/60 so với 59-60/60) — phát hiện bất ngờ: bonus trigger đôi khi
+  giúp search thoát bế tắc, không chỉ là thiên lệch thẩm mỹ.
+- Đã viết kết quả này (kèm bảng) vào Discussion của cả `main.tex` và
+  `main_vi.tex`, thay cho câu "để dành cho tương lai" cũ. Cả 2 file
+  biên dịch sạch (pdflatex/xelatex), bảng không tràn lề.
+
+**4. Dọn bibliography (cả 2 bản):**
+- `humanlike2025`: sửa label `[Author(s)(2025)]` → tên tác giả thật đã
+  điền sẵn nhưng label bị lệch.
+- `kociemba`: năm để trống → `(n.d.)` (xác nhận qua tìm kiếm: website
+  đang duy trì liên tục, không có 1 năm xuất bản cố định).
+- `vanacore2025`: xác nhận qua dblp + tìm kiếm — đã **chính thức công
+  bố tại IEEE ICHI 2025** (không còn "unpublished manuscript" như paper
+  cũ ghi). Cập nhật thành trích dẫn proceedings đầy đủ (trang 251-260),
+  sửa cả câu in-text ở Related Work.
+
+**5. Bỏ hướng "chọn venue quốc tế" theo yêu cầu — coi là đề tài nghiên
+cứu thuần túy:**
+- Sửa comment đầu `main.tex` (bỏ TODO đổi documentclass theo venue, bỏ
+  ghi chú double-blind).
+
+**6. Hạ tầng mở rộng Exp 3 (đã chuẩn bị, KHÔNG áp dụng vào bản chính
+thức — xem lý do rollback bên dưới):**
+- **Phát hiện lỗi nghiêm trọng tiềm ẩn** trong `add_human_stimulus.py`/
+  `prepare_stimuli.py` cũ: xáo trộn + đánh số lại TOÀN BỘ `display_id`
+  mỗi lần chạy. Vì `analyze_results.py` tra nội dung theo `display_id`
+  từ `stimuli.json` hiện tại (không lưu trong CSV), chạy lại 2 script
+  này sẽ làm sai lệch âm thầm 28 rating đã thu. Đã sửa
+  `add_human_stimulus.py` để chỉ APPEND, không bao giờ đụng entry cũ
+  (xác nhận `rating_tool.html` đã tự xáo thứ tự hiển thị phía client
+  rồi nên việc xáo ở khâu sinh file là thừa).
+- Viết `expand_stimuli.py` (sinh thêm Nhóm A/A+ tự động) và
+  `fill_missing_group_b.py` (điền Nhóm B — cần thư viện `kociemba`).
+  Đã test an toàn trên bản sao, xác nhận 0 sai lệch với 24 entry cũ.
+- **Đã thử mở rộng thật** (+6 seed → +12 stimuli A/A+, tổng 36) nhưng
+  **ROLLBACK về đúng 24 stimuli gốc theo yêu cầu** vì không cài được
+  `kociemba` trên máy Windows của người dùng (lỗi thiếu MSVC Build
+  Tools, thử 2 hướng khắc phục không cần compiler đều vướng — pip build
+  isolation vẫn cố compile `cffi`). `stimuli.json` hiện tại = đúng bản
+  gốc, đã xác nhận khớp 0 sai lệch với 28 rating đã có
+  (`analyze_results.py` cho lại đúng ρ=0,440, N=24 như cũ).
+- 2 script `expand_stimuli.py`/`fill_missing_group_b.py` vẫn còn trong
+  repo, sẵn sàng dùng khi có máy cài được `kociemba` — KHÔNG cần sửa gì
+  thêm lúc đó.
+
+**7. Vấn đề đã biết, kiểm tra lại — vẫn còn nguyên, không phải lỗi mới:**
+- Mục "còn mở" #1 phía trên (round-trip OLL, cũ ghi 224/228) vẫn còn,
+  giờ là **216/220 (55 case × 4 AUF, cùng tỷ lệ 98,2%)** — đã xác định
+  chính xác hơn: **toàn bộ 4 case thất bại đều là `Dot_OLL1`** (trước
+  đây không rõ case nào). Đã xác nhận **không ảnh hưởng khả năng giải
+  thực tế** — `solve_oll()` có fallback graceful về kiến trúc 2-look cũ
+  khi bảng full-OLL không khớp, không có solve nào thất bại vì lý do
+  này. Vẫn là việc điều tra sâu tuỳ chọn, không chặn gì.
+
+Không còn việc "code/phân tích tự động" nào bắt buộc phải làm trước khi
+dùng bản này. Việc mở (không bắt buộc): điều tra `Dot_OLL1` (mục 7),
+mở rộng Exp 3 thật khi có máy cài được `kociemba` (mục 6).
+
+## CẬP NHẬT MỚI NHẤT 11 — Hiệu chỉnh multiple-comparison cho bảng
+capped-bonus, sửa nhãn "giống hệt" sai ở 1 hàng
+
+- Bảng capped-bonus (CẬP NHẬT 10, mục 3) có 10 kiểm định Wilcoxon (2λ ×
+  3 cap × 2 chỉ số, bỏ 2 ô phương sai=0) chạy trên cùng bộ dữ liệu mà
+  chưa hiệu chỉnh — đúng kiểu "gia đình kiểm định" cần Holm-Bonferroni.
+  Đã tính lại: **5/10 vẫn có ý nghĩa sau hiệu chỉnh** (đánh dấu $^\dagger$
+  trong bảng) — toàn bộ khác biệt trigger-overlap đứng vững, nhưng phần
+  lớn khác biệt số nước (trừ λ=1,0/cap=1) không còn ý nghĩa. Kết luận
+  chính của thí nghiệm KHÔNG đổi (cap chặt tốn trigger-overlap thật
+  nhưng không chắc tiết kiệm được nước đi) — hiệu chỉnh làm câu chuyện
+  chặt chẽ hơn, không đảo ngược.
+- Phát hiện thêm khi soát lại: nhãn "giống hệt" (identical) ở hàng
+  λ=1,0/cap=4 trong bảng cũ là **sai** — kiểm tra từng seed cho thấy
+  2-3/59 seed THỰC SỰ khác nhau (không phải 0 như λ=0,5/cap=4), chỉ là
+  chênh lệch không có ý nghĩa thống kê (p=0,18 và p=1,0). Đã sửa bảng
+  để ghi rõ p-value thật + số seed khác nhau thay vì gộp chung là
+  "giống hệt" — chỉ hàng λ=0,5/cap=4 mới thực sự là 0/59 khác biệt.
+- Đã sửa cả `main.tex` và `main_vi.tex`, biên dịch sạch cả 2
+  (pdflatex/xelatex), không overfull mới. 319/319 test vẫn pass (không
+  đụng code solver, chỉ đụng bảng/prose trong paper).
+
+## CẬP NHẬT MỚI NHẤT 12 — Rà phụ lục, phát hiện thiếu trích dẫn nguồn
+cho corpus finger-tricks
+
+- Đối chiếu Phụ lục "Seed corpus T (|T|=11)" với source thật
+  (`research/finger_tricks.py`): **11 trigger khớp 100%**, không lỗi
+  số liệu.
+- Nhưng chính docstring của file này ghi rõ khuyến nghị "khi viết báo
+  cáo/luận văn, NÊN trích nguồn tổng quan (vd. J Perm 'Finger tricks'
+  video series, speedsolving.com Wiki) thay vì coi đây là đóng góp gốc
+  của bạn" — paper trước đó KHÔNG có trích dẫn nào cho thuật ngữ
+  finger-tricks/tên các trigger (sexy move, sledgehammer...), dù đây
+  không phải đóng góp gốc của dự án.
+- Tìm được nguồn chính xác qua tìm kiếm: `jperm.net/3x3/fingertricks`
+  (trang "Finger Tricks" chính thức của J Perm/Dylan Wang). Đã thêm
+  bibitem `jperm-fingertricks` và trích dẫn tại 2 chỗ: nơi giới thiệu
+  thuật ngữ trong Method, và đầu Phụ lục — ở cả `main.tex` và
+  `main_vi.tex`.
+- Biên dịch 2 lần mỗi bản (cần pass 2 để resolve citation mới) — sạch,
+  không còn "undefined citation" warning nào. 319/319 test pass.
+
+## CẬP NHẬT MỚI NHẤT 13 — Rà Related Work, sửa 1 lỗi gán nhầm tên
+phương pháp cho sai citation
+
+- Kiểm tra từng claim gán cho các paper trích dẫn (không chỉ tên/năm
+  như trước, mà cả nội dung mô tả) — tìm được: câu văn gọi phương pháp
+  của **McAleer et al. 2018** là **"DeepCubeA"** và nói nó "đạt độ dài
+  lời giải gần tối ưu" — cả hai đều SAI. Xác minh qua tìm kiếm: paper
+  2018 (arXiv:1805.07470) giới thiệu thuật toán tên
+  **"Autodidactic Iteration"**, độ dài lời giải trung vị **30 nước**
+  (cao hơn khá nhiều so với tối ưu 20 nước) — không phải "gần tối ưu".
+  "DeepCubeA" là tên của **paper khác, năm 2019** (Agostinelli, McAleer,
+  Shmakov, Baldi — Nature Machine Intelligence, đúng là near-optimal:
+  giải 100% test, tìm được đường ngắn nhất 60,3% số lần).
+- Sửa: thêm bibitem `agostinelli2019` (đúng paper DeepCubeA 2019), viết
+  lại câu văn thành 2 câu tách bạch — 1 câu đúng cho McAleer 2018
+  (Autodidactic Iteration, ~30 nước), 1 câu đúng cho Agostinelli 2019
+  (DeepCubeA, near-optimal) — ở cả `main.tex` và `main_vi.tex`.
+- Biên dịch sạch cả 2 (2-3 pass để resolve citation mới), 319/319 test
+  pass (không đụng code, chỉ prose+bib).
+
+## CẬP NHẬT MỚI NHẤT 14 — Điều tra sâu Dot_OLL1: phát hiện lớn hơn dự
+kiến, QUYẾT ĐỊNH KHÔNG SỬA CODE trong phiên này
+
+**Bối cảnh:** mục "còn mở" cũ (round-trip OLL, hiện 216/220, riêng
+`Dot_OLL1` fail cả 4 AUF) — điều tra để hiểu nguyên nhân gốc.
+
+**Phát hiện (quan trọng, thay đổi hiểu biết về scope vấn đề):**
+1. Test round-trip cũ (`if solve_oll_with_auf(full) is not None`) chỉ
+   kiểm tra "khớp được VỚI BẤT KỲ entry nào trong bảng", KHÔNG kiểm tra
+   "khớp lại đúng CHÍNH NÓ" — yếu hơn giả định ban đầu đáng kể.
+2. Đào theo hướng "vì sao piece-indexed (dùng trong `_delta_of`/
+   `_table_key_for`) lại khác slot-indexed thật (dùng trong
+   `_slot_indexed`, dùng lúc tra cứu)": phát hiện giả định "Lesson 2"
+   trong docstring đầu `oll_algorithms.py` ("piece-indexed đọc trực
+   tiếp = slot-indexed thật, vì bắt đầu từ identity") **chỉ đúng khi
+   permutation là identity** — mà thực tế đo được **52/55 case có
+   piece-indexed KHÁC slot-indexed thật**, không phải hiện tượng riêng
+   của `Dot_OLL1` như tưởng ban đầu. Đây là phát hiện về CHÍNH PHƯƠNG
+   PHÁP xây toàn bộ bảng, không phải lỗi cục bộ 1 case.
+3. **Kiểm chứng thực nghiệm để đánh giá mức độ nghiêm trọng thực sự**:
+   chạy pipeline đầy đủ Cross→F2L→OLL trên 40 scramble ngẫu nhiên thật
+   (không phải seq áp lên cube đã giải như round-trip test) — **38/38
+   ca hoàn thành F2L đều được OLL giải ĐÚNG, 0 lỗi thật, 0 case OLL
+   không tìm được thuật toán**. Kết hợp với 319 test hiện có và hàng
+   trăm scramble thật ở Exp1-3 (chưa từng báo lỗi liên quan OLL), có
+   bằng chứng thực nghiệm mạnh rằng **bảng OLL vẫn đúng trong thực tế
+   sử dụng**, dù công thức xây bảng "không sạch" về lý thuyết nhóm.
+
+**Quyết định (có chủ đích, không phải bỏ sót):** KHÔNG sửa
+`_delta_of`/`_table_key_for` trong phiên này. Lý do: đây là vấn đề sâu
+chạm đến cách xây TOÀN BỘ 55 entry (không phải 1 case), sửa vội có rủi
+ro thật (VD gây trùng key mới giữa các case khi đổi công thức) mà
+không đủ thời gian kiểm chứng lại toàn diện (rebuild + so sánh key cũ/
+mới cho cả 55 case + rerun toàn bộ 319 test + đối chiếu lại Exp1-3) —
+việc này nên dành 1 phiên riêng, tập trung hoàn toàn vào việc này.
+Bằng chứng thực nghiệm hiện tại đủ mạnh để yên tâm DÙNG bảng hiện tại,
+chỉ là chưa nên ĐỘNG vào công thức xây bảng ngay bây giờ.
+
+**Nếu muốn theo đuổi tiếp trong 1 phiên riêng:** hướng sửa đúng là đổi
+`_delta_of()` để tính qua `_slot_indexed(ep,eo)`/`_slot_indexed(cp,co)`
+thay vì đọc thẳng `eo[0:4]`/`co[0:4]`, rebuild bảng, kiểm tra không có
+2 case nào đụng key nhau sau khi đổi công thức, rồi rerun toàn bộ test
++ đối chiếu Exp1-3 trước khi tin kết quả mới.
+
+## CẬP NHẬT MỚI NHẤT 15 — Tăng khả năng tái lập: sửa
+`weight_sensitivity.py` không khớp với chính phân tích nó mô tả
+
+- Paper (đoạn "Composite HLI") báo cáo 1 sensitivity analysis cụ thể:
+  khoảng cách HLI Nhóm A-B dao động [0,397 ; 1,000] tùy trọng số, gap
+  tại trọng số hiện tại (0,3/0,4/0,3) = 0,653. Kiểm tra thấy
+  `research/weight_sensitivity.py` **không thể tái lập được chính con
+  số này** — script cũ chỉ đọc component 1 nhóm (Nhóm A từ
+  `results_n100.csv`, cột `A_segmentability`...) và báo cáo biến thiên
+  HLI nội bộ 1 nhóm, khác hoàn toàn phép tính GAP giữa 2 nhóm mà paper
+  thực sự dùng.
+- Tìm ra file đúng đã được chuẩn bị riêng cho phân tích này
+  (`research/AB_components_for_wS_sensitivity.csv`, N=78, cột
+  `A_S/A_P/A_O/B_S/B_P/B_O`) nhưng chưa có script nào dùng đến.
+- Viết lại `weight_sensitivity.py` để đọc đúng file này, tính GAP =
+  mean(HLI_A) - mean(HLI_B) qua 5 bộ trọng số đặt tên + sweep wS, và
+  **tự đối chiếu kết quả với số trong paper** (in ra "KHOP"/"KHONG
+  KHOP"). Chạy thử: cho đúng range [0,397 ; 1,000] và gap=0,653 —
+  khớp tuyệt đối.
+- Thêm 1 câu trong `main.tex`/`main_vi.tex` trỏ đến lệnh chạy
+  (`python3 -m research.weight_sensitivity`) ngay tại đoạn báo cáo kết
+  quả, để người đọc/reviewer có thể tái lập ngay lập tức. Biên dịch
+  sạch cả 2 bản, 319/319 test pass (không đụng code solver).
+
+## CẬP NHẬT MỚI NHẤT 16 — Hạ tầng tái lập toàn bộ paper (`REPRODUCE.md`)
+
+**Phát hiện khi kiểm kê:**
+1. `results_randomstate_n60.csv` và `results_n100.csv` (dữ liệu thô
+   Experiment 1) **KHÔNG có script sinh** trong repo — tìm ra
+   `research/run_experiment.py` (đã có sẵn nhưng chưa từng dùng đến
+   trong phiên này). Test regenerate thử: chỉ ~50% seed khớp lại với
+   code hiện tại (solver đã tinh chỉnh nhiều lần từ lúc thu dữ liệu) —
+   đây là giới hạn THẬT, đã ghi nhận công khai trong `REPRODUCE.md`
+   (Tầng 3), không che giấu.
+2. **Không có script phân tích thống kê nào được lưu** cho Exp1, Exp2,
+   capped-bonus — toàn bộ Wilcoxon/Holm-Bonferroni trước đó chỉ chạy
+   tay (`python3 -c`) trong hội thoại, chưa từng persist thành file.
+   Nếu không sửa, không ai tái lập được chính các con số thống kê
+   trong paper dù có đủ dữ liệu thô.
+
+**Đã làm:**
+- Viết 3 script mới: `research/analyze_experiment1.py`,
+  `analyze_experiment2.py`, `analyze_capped_bonus.py` — mỗi script đọc
+  đúng CSV có sẵn, tính lại toàn bộ thống kê, và **tự đối chiếu với
+  con số trong paper** (in "KHỚP"/"LỆCH" cho từng mục, giống pattern
+  đã dùng ở `weight_sensitivity.py`). Cả 3 chạy thử đều báo "TẤT CẢ
+  KHỚP VỚI PAPER".
+- Trong lúc viết `analyze_experiment2.py`, phát hiện và sửa 1 lỗi nhỏ
+  trong chính kiểm tra: con số "+7.4%" trong paper tính trên TRUNG
+  BÌNH TOÀN NHÓM mỗi λ riêng biệt (n=51 và n=60), không phải trên tập
+  con đã ghép cặp (n=51) — cách làm này hợp lệ (mô tả từng nhóm đúng
+  cỡ mẫu của nó, chỉ ghép cặp khi cần kiểm định Wilcoxon), chỉ là cần
+  sửa lại cách script tự-kiểm-chứng cho khớp đúng phương pháp gốc.
+- Viết `REPRODUCE.md` ở gốc repo — bản đồ đầy đủ mọi con số/bảng trong
+  paper → đúng lệnh tái lập, phân 3 Tầng rõ ràng (chính xác tuyệt đối
+  / cần môi trường đặc biệt / không đảm bảo khớp lại — công khai lý
+  do). Đây là điểm reviewer "artifact evaluation" thường tìm kiếm.
+- 319/319 test pass, không đụng code solver (chỉ thêm file mới trong
+  `research/` + `REPRODUCE.md`, sửa 1 câu trong 2 file `.tex`).
+
+## CẬP NHẬT MỚI NHẤT 17 — Bootstrap CI cho các ước lượng chính (tăng
+độ sâu thống kê)
+
+- Paper trước đó chỉ báo cáo p-value/effect size, chưa có khoảng tin
+  cậy (CI) cho bản thân độ lớn ước lượng — 1 khoảng chuẩn thống kê
+  hiện đại thường yêu cầu đủ cả 2 (p-value nói về ý nghĩa, CI nói về
+  độ lớn + độ chính xác).
+- Viết `research/bootstrap_ci.py` (BCa, 9999 lần lấy mẫu lại,
+  `scipy.stats.bootstrap`, seed cố định để tự nó tái lập được) —
+  tính CI 95% cho: chênh lệch số nước Exp1 (A-B), HLI Nhóm A, chênh
+  lệch trigger-overlap và số nước Exp2 (λ=1.0 so λ=0), Spearman ρ
+  Exp3.
+- **Kết quả đáng chú ý nhất**: CI của ρ Exp3 **rất rộng**
+  [0,19 ; 0,84] — phản ánh đúng, định lượng hóa giới hạn N=24 (pilot
+  scale) đã được disclose từ trước trong Threats to Validity, không
+  mâu thuẫn gì, chỉ làm nó cụ thể hơn thay vì chỉ nói suông "cỡ mẫu
+  nhỏ". CI của Exp2 (số nước) cũng khá rộng so với ước lượng điểm
+  [0,59 ; 2,86], trong khi CI Exp1 và CI trigger-overlap Exp2 tương
+  đối hẹp/chắc chắn.
+- Đưa toàn bộ CI này vào `main.tex`/`main_vi.tex` ngay tại vị trí
+  từng con số liên quan (không tạo mục riêng, giữ gần ngữ cảnh). Thêm
+  1 câu diễn giải trung thực cho CI rộng của Exp3, nối lại đúng với
+  giới hạn N=24 đã nêu ở Threats to Validity — cần thêm `\label{sec:threats}`
+  (chưa có từ trước) để trỏ tới được, đã thêm ở cả 2 bản.
+- Biên dịch sạch cả 2 (3 pass để resolve label + CI mới), không
+  overfull mới, 319/319 test pass.
+
+## CẬP NHẬT MỚI NHẤT 18 — Adversarial sanity check cho HLI: tìm ra lỗ
+hổng thật của Trigger-overlap, đã disclose có trách nhiệm
+
+- Quan sát: `segmentability()` chỉ là cờ nhị phân ("có giải xong qua
+  pipeline CFOP không"), không phạt số nước dư. Đặt câu hỏi: liệu
+  Trigger-overlap có thể bị "chơi xấu" (gamed) bằng cách chèn nước
+  thừa không tiến triển gì hay không?
+- Xác nhận bằng tính toán: `sexy_move + sexy_move_inv`
+  (`R U R' U'` rồi `U R U' R'`) triệt tiêu hoàn toàn về identity (cube
+  không đổi trạng thái) — hợp lệ để chèn vào bất kỳ đâu trong 1 lời
+  giải mà không phá nó.
+- Đo thực nghiệm trên 1 lời giải thật (63 nước, sinh từ chính
+  Trigger-Biased Search): chèn 10 cặp no-op này (thêm 80 nước vô
+  nghĩa) làm Trigger-overlap tăng từ **0,333 lên 0,706** — hơn gấp
+  đôi, chỉ nhờ padding không tiến triển gì. Đây là lỗ hổng THẬT của
+  công thức đo hiện tại.
+- **Kiểm tra quan trọng để không hoảng loạn quá mức**: xác nhận
+  Trigger-Biased Search (tạo ra Nhóm A/A+ đã báo cáo) dùng A* tối
+  thiểu hóa `g(n)` = số nước THẬT, cộng bonus heuristic **bị chặn** ở
+  `λc` — không có động cơ chèn padding (chỉ tốn thêm cost, không lợi
+  gì thêm sau khi đã cap). => Lỗ hổng có thật ở METRIC, nhưng KHÔNG
+  ảnh hưởng đến TÍNH TOÀN VẸN của kết quả đã báo cáo (không có cơ chế
+  nào trong pipeline thực tế tạo ra padding).
+- Viết đầy đủ finding này (kèm cả 2 mặt: lỗ hổng thật + lý do không
+  ảnh hưởng kết quả đã có) vào mục Construct validity trong Threats to
+  Validity, cả `main.tex` và `main_vi.tex`. Đề xuất hướng khắc phục
+  cho công việc tương lai (thêm số hạng phạt hiệu quả/số nước vào
+  Trigger-overlap nếu dùng HLI làm mục tiêu tối ưu trực tiếp).
+- Biên dịch sạch cả 2, không overfull mới, 319/319 test pass.
+
+## CẬP NHẬT MỚI NHẤT 19 — ĐÍNH CHÍNH mục 14: `Dot_OLL1` KHÔNG PHẢI lỗi
+thật, bảng OLL đúng 100% — kết luận trước đó của chính mình bị sai
+
+**Bối cảnh:** quay lại điều tra `Dot_OLL1` sau khi tạm dừng ở mục 14
+(lúc đó kết luận "vấn đề sâu hơn dự kiến, 52/55 case, cố tình chưa
+sửa"). Lần này làm đến cùng, và phát hiện **kết luận ở mục 14 chính nó
+mới là sai** — không phải do thận trọng thừa, mà do so sánh nhầm đối
+tượng cần so sánh.
+
+**Sai lầm ở mục 14 (đính chính):** lúc đó so sánh "piece-indexed đọc
+từ áp `seq` THEO CHIỀU THUẬN lên cube đã giải" với "slot-indexed của
+CHÍNH trạng thái đó" — nhưng đây không phải là thứ cần so sánh để biết
+bảng có đúng không! Theo đúng lý thuyết nhóm, key của bảng cần đại
+diện cho trạng thái mà `seq` **được thiết kế để giải** — tức là
+`nghịch_đảo(seq)` áp lên cube đã giải, KHÔNG PHẢI `seq` áp thuận.
+
+**Kiểm tra lại đúng (ground-truth):** với cả 55 case, tính
+slot-indexed của trạng thái `nghịch_đảo(seq)` áp lên cube đã giải
+(= trạng thái THẬT SỰ mà `seq` giải được), so với key hiện đang lưu
+trong bảng → **55/55 khớp tuyệt đối**. Công thức xây bảng
+(`_delta_of`/`_table_key_for`, dùng "Lesson 2" trong docstring) **luôn
+luôn đúng về mặt toán học** — không có case nào sai, kể cả `Dot_OLL1`.
+
+**Vậy vì sao test round-trip cũ báo lỗi?** Vì chính bài test đó kiểm
+tra sai đối tượng — nó áp công thức THEO CHIỀU THUẬN rồi hỏi "trạng
+thái kết quả có tình cờ khớp được với bảng không" (một câu hỏi không
+thật sự có ý nghĩa để đánh giá tính đúng đắn), thay vì "công thức này
+có giải ĐÚNG trạng thái mà nó được thiết kế để giải hay không".
+
+**Đã sửa:**
+- Viết lại `test_own_generating_set_round_trip` trong `test_solver.py`
+  dùng đúng trạng thái nghịch đảo (ground-truth), và kiểm tra MẠNH hơn
+  hẳn bản cũ: không chỉ "tìm thấy 1 mục khớp trong bảng" mà "áp dụng
+  lời giải trả về THẬT SỰ giải đúng OLL" (`oll_solved()` sau khi áp
+  dụng). Kết quả: **220/220 = 100%**, siết ngưỡng từ `>= 0.90` (che
+  giấu vấn đề tiềm ẩn) thành `== 220` (đòi hỏi hoàn hảo tuyệt đối,
+  đúng vì giờ đã xác nhận đạt được).
+- Sửa `HUONG_DAN_CHAY.md` (còn ghi "98,2%, chưa rõ 4 case còn lại là
+  bug hay giới hạn thiết kế") và `REPRODUCE.md` (còn liệt kê đây là 1
+  hạn chế đã biết) — cả 2 giờ phản ánh đúng: đã giải quyết dứt điểm,
+  không còn hạn chế nào ở đây.
+- 319/319 test pass (bao gồm bản test mới, nghiêm ngặt hơn).
+
+**Bài học rút ra (đáng ghi lại cho phiên sau):** quyết định "không sửa
+vội, cần điều tra kỹ hơn" ở mục 14 là ĐÚNG về mặt quy trình (không
+rush 1 fix khi chưa chắc chắn) — nhưng bản thân KẾT LUẬN đưa ra lúc đó
+(dựa trên phép so sánh sai) lại sai. Điều này cho thấy: ngay cả khi
+thận trọng và minh bạch, vẫn cần tự nghi ngờ lại chính kết luận của
+mình trước khi coi nó là sự thật cuối cùng — "thận trọng" và "đúng"
+là 2 việc khác nhau, không suy ra lẫn nhau.

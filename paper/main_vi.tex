@@ -164,9 +164,13 @@ thông qua tìm kiếm dựa trên coset quy mô lớn. Thuật toán hai pha c�
 Kociemba \citep{kociemba} đánh đổi tính tối ưu tuyệt đối để lấy thời
 gian chạy khả thi, thường trả về lời giải chỉ cách tối ưu 1--4 nước, và
 là baseline chúng tôi dùng trong Mục~\ref{sec:setup}. McAleer và cộng
-sự \citep{mcaleer2018} cho thấy một tác nhân học tăng cường (DeepCubeA)
-có thể học giải cube mà không cần tri thức con người có sẵn, đạt độ dài
-lời giải gần tối ưu. Không phương pháp nào trong số này tạo ra kế hoạch
+sự \citep{mcaleer2018} giới thiệu Autodidactic Iteration, một tác nhân
+học tăng cường có thể học giải cube mà không cần tri thức con người có
+sẵn (độ dài lời giải trung vị $\approx$30 nước, cao hơn mức tối ưu 20
+nước). Công trình tiếp nối DeepCubeA \citep{agostinelli2019} kết hợp
+hàm giá trị đã học này với tìm kiếm A* có trọng số theo lô, giải được
+100\% scramble thử nghiệm và tìm ra đường đi ngắn nhất 60,3\% số lần
+-- tức đạt độ dài lời giải gần tối ưu. Không phương pháp nào trong số này tạo ra kế hoạch
 có thể phân đoạn, có tên, hay diễn giải được theo cách con người học có
 thể nhận ra — chúng, theo thuật ngữ của chúng tôi, mang tính
 \emph{computer-like} tối đa.
@@ -214,8 +218,8 @@ Gần với công trình của chúng tôi nhất, hệ thống ALLURE \citep{al
 kết hợp một solver tự động (tìm kiếm dựa trên DeepCubeA qua các mục
 tiêu con) với một chatbot gia sư tương tác để giúp người học hiểu các
 lời giải có thể giải thích được cho mục tiêu con White Cross của CFOP;
-một nghiên cứu pilot gần đây \citep{vanacore2025} (bản thảo chưa công
-bố tại thời điểm viết bài) phân tích các pattern tương tác của học sinh
+một nghiên cứu pilot gần đây \citep{vanacore2025} (đã công bố bình
+duyệt tại IEEE ICHI 2025) phân tích các pattern tương tác của học sinh
 trong ALLURE qua phân cụm hành vi, báo cáo rằng chiến lược white-cross
 cho người mới đòi hỏi nhiều nước đi hơn đáng kể so với CFOP, mà bản
 thân CFOP lại đòi hỏi nhiều nước hơn các phương pháp tối ưu hoàn toàn —
@@ -289,7 +293,8 @@ T, Ua, Ub, V, Y, Z).
 hệ thống này, được sinh ra bởi tìm kiếm heuristic không ràng buộc),
 chúng tôi đo tỷ lệ số nước đi được bao phủ bởi một phép phân đoạn
 greedy-longest-match của $\pi$ đối chiếu với một kho hạt giống $T$ gồm
-$|T|=11$ finger-trick phổ biến của con người (ví dụ "sexy move"
+$|T|=11$ finger-trick phổ biến của con người
+\citep{jperm-fingertricks} (ví dụ "sexy move"
 $R\,U\,R'\,U'$, "sledgehammer" $R'\,F\,R\,F'$; kho đầy đủ trong Phụ lục
 \ref{app:corpus}). Đây là một kho hạt giống được tuyển chọn thủ công
 từ tri thức phổ biến của cộng đồng speedcubing, không suy ra từ thống
@@ -315,7 +320,9 @@ trọng số chúng tôi chọn cho khoảng cách $0,653$. Điều này cho th�
 tuyên bố trung tâm của bài báo — rằng AI-CFOP giống người hơn đáng kể
 so với baseline tối ưu-kiểu-máy-tính — là robust với lựa chọn cụ thể
 của $(w_S,w_P,w_O)$ trong bất kỳ phạm vi hợp lý nào, dù \emph{độ lớn}
-của khoảng cách tự nhiên phụ thuộc vào trọng số.
+của khoảng cách tự nhiên phụ thuộc vào trọng số. Phân tích này tái lập
+được đầy đủ qua lệnh \texttt{python3 -m research.weight\_sensitivity},
+script tự đối chiếu kết quả với các con số nêu trên.
 
 \subsection{Trigger-Biased A* Search}
 
@@ -388,12 +395,17 @@ chọn làm kết quả chính vì khớp sát hơn với phương pháp sinh sc
 thi đấu thật. Nhóm A dùng ngân sách node F2L đã giảm (40.000
 node/độ sâu, từ mặc định 120.000) và timeout 20 giây thực cho mỗi
 lần giải để phù hợp với phần cứng đánh giá đơn-lõi của chúng tôi;
-$20\%$ scramble ($12/60$) vượt quá timeout này và bị loại khỏi thống
-kê theo cặp bên dưới. Trong số $48$ scramble được cả hai nhóm giải,
+$20\%$ scramble ($12/60$) không đạt trạng thái đã giải trong ngân
+sách này (10 case timeout thực sự, cộng 2 case dừng lại ở F2L dở
+dang trước khi chạm mốc 20 giây) và bị loại khỏi thống kê theo cặp
+bên dưới. Trong số $48$ scramble được cả hai nhóm giải,
 kiểm định Wilcoxon signed-rank xác nhận Nhóm A cần số nước nhiều
 hơn có ý nghĩa so với Nhóm B ($W=0$, $p=1,61\times10^{-9}$, $r=0,87$,
-effect size rất lớn), trong khi theo cấu trúc chỉ Nhóm A có HLI khác
-0. Chúng tôi cũng chạy lại phép so sánh này trên $N=100$ scramble
+effect size rất lớn; chênh lệch trung bình $45,7$ nước, CI 95\% bootstrap
+$[43,3\,;\,48,9]$, BCa, $9999$ lần lấy mẫu lại), trong khi theo cấu
+trúc chỉ Nhóm A có HLI khác 0 (trung bình $0,658$, CI 95\%
+$[0,629\,;\,0,682]$). Chúng tôi cũng chạy lại phép so sánh này trên
+$N=100$ scramble
 random-move như một kiểm tra độ vững --- kết quả gần như giống hệt,
 kể cả một hiện tượng search không hội tụ đáng chú ý ($22\%$ timeout);
 xem Mục~\ref{sec:pathological} và~\ref{sec:discussion} để thảo luận
@@ -426,8 +438,14 @@ phí số nước từ $25,7 \to 27,6$ nước ($+7,4\%$), trong khi thời gian
 tính trung bình tăng từ $2,77$s lên $7,87$s. Trên $n=51$ scramble được
 giải ở cả $\lambda=0$ và $\lambda=1,0$, kiểm định Wilcoxon signed-rank
 theo cặp xác nhận cả hai khác biệt đều có ý nghĩa thống kê: độ trùng
-lặp trigger ($W=29,0$, $p=8,25\times10^{-8}$, $r=0,83$, effect size rất
-lớn) và số nước ($W=209,5$, $p=0,0014$, $r=0,60$, effect size lớn).
+lặp trigger ($W=29,0$, $p=8,25\times10^{-8}$, $r=0,75$, effect size rất
+lớn) và số nước ($W=209,5$, $p=0,0014$, $r=0,45$, effect size trung bình);
+trên tập con ghép cặp này, chênh lệch trung bình theo cặp là $+0,163$
+độ trùng lặp trigger (CI 95\% $[0,122\,;\,0,206]$) và $+1,75$ nước (CI
+95\% $[0,59\,;\,2,86]$, rộng hơn đáng kể so với ước lượng điểm nếu so
+tương đối, nhất quán với việc hiệu ứng số nước nhỏ và nhiễu hơn hiệu
+ứng trigger-overlap ở mức từng scramble; CI 95\% bootstrap, BCa, $9999$
+lần lấy mẫu lại).
 Đáng chú ý, $\lambda=0,5$ cho thời gian giải \emph{tối đa} quan sát
 được (55,5s) cao hơn $\lambda=1,0$ (55,6s, tương đương), và cả hai đều
 cao hơn nhiều so với mức tối đa của $\lambda=0$ (16,5s) — nhất quán với
@@ -504,9 +522,15 @@ bảng của chúng tôi hay không). Với phép tính chính xác này, tươn
 lượng proxy, xác nhận kỳ vọng của chúng tôi rằng proxy nhị phân theo
 nhóm đã làm loãng thay vì phản ánh đúng construct validity thật sự.
 Riêng thành phần trigger-overlap vẫn tương quan mạnh nhất với đánh giá
-con người ($\rho=0,605$, $p=0,0017$), cho thấy nó vẫn là thành phần
+con người ($\rho=0,605$, $p=0,0017$, CI 95\% bootstrap $[0,19\,;\,0,84]$,
+BCa, $9999$ lần lấy mẫu lại), cho thấy nó vẫn là thành phần
 liên quan nhất đến đánh giá con người của HLI trong mẫu này, với
 Segmentability và Pattern-conformity đóng góp tích cực nhưng yếu hơn.
+Độ rộng của khoảng này (trải từ tương quan yếu đến rất mạnh) tự nó
+mang thông tin: nó định lượng, thay vì chỉ khẳng định suông, mức độ
+bất định ở quy mô pilot đã nêu ở Mục~\ref{sec:threats} — cần một tập
+stimulus lớn hơn trước khi coi $\rho=0,605$ là 1 effect size chính
+xác.
 
 % ============================================================
 \section{Thảo luận}
@@ -556,11 +580,76 @@ dụ weighted A* với hệ số lạm phát cố định và cận suboptimalit
 minh được), chúng tôi hiện chưa cung cấp cận hình thức nào cho tính
 suboptimal về độ dài lời giải của Trigger-Biased Search; Mục~\ref{sec:results}
 thay vào đó báo cáo điều này bằng thực nghiệm (trung bình $+7,4\%$ số
-nước tại $\lambda=1,0$). Một biện pháp giảm nhẹ tự nhiên, để dành cho
-công việc tương lai, là giới hạn $\mathrm{bonus}$ ở một mức tối đa cố
-định (ví dụ $\min(\mathrm{bonus}(\mathrm{path}(n)), c)$ cho hằng số $c$
-nào đó), điều này sẽ khôi phục lại một độ méo bị chặn cố định tương tự
-như số hạng penalty hiện có.
+nước tại $\lambda=1,0$). Một biện pháp giảm nhẹ tự nhiên là giới hạn $\mathrm{bonus}$ ở một
+mức tối đa cố định,
+$\mathrm{bonus}_c(\mathrm{path}(n)) = \min(\mathrm{bonus}(\mathrm{path}(n)),
+c)$ cho hằng số $c$ nào đó, giúp chặn độ đánh giá thấp bổ sung tối đa ở
+mức cố định $\lambda \cdot c$ bất kể độ sâu đường đi -- chúng tôi đã cài
+đặt và thử nghiệm điều này thay vì chỉ dừng ở mức đề xuất.
+
+\paragraph{Thực nghiệm capped-bonus.} Chúng tôi chạy lại đúng tập $N=60$
+scramble của Experiment~2 (seed 2000--2059, cùng ngân sách
+40.000 node/độ sâu) với $\mathrm{bonus}_c$ cho $c \in \{1, 2, 4\}$ tại
+$\lambda \in \{0,5; 1,0\}$, đối chiếu theo cặp với lần chạy không cap đã
+báo cáo ở trên. Bảng~\ref{tab:capped-bonus} tóm tắt kết quả (Wilcoxon
+signed-rank trên các scramble được giải bởi cả hai điều kiện).
+\begin{table}[h]
+\centering
+\footnotesize
+\caption{Capped bonus so với không cap, $N=60$, Wilcoxon signed-rank
+theo cặp trên scramble được giải bởi cả hai, đã hiệu chỉnh
+Holm--Bonferroni trên toàn bộ $m=10$ kiểm định trong bảng này}
+\label{tab:capped-bonus}
+\begin{tabular}{ccccc}
+\toprule
+$\lambda$ & $c$ & giải được & số nước ($p$,$r$) & trig.ov. ($p$,$r$) \\
+\midrule
+0,5 & 1 & 53/59 & 25,9/26,3 ($p{=}{,}16$) & ,110/,186 ($p{<}10^{-4}$,,57)$^\dagger$ \\
+0,5 & 2 & 53/59 & 25,8/26,3 ($p{=}{,}06$) & ,124/,186 ($p{<}10^{-3}$,,54)$^\dagger$ \\
+0,5 & 4 & 59/59 & 26,7/26,7 (0/59 khác) & ,201/,201 (0/59 khác) \\
+1,0 & 1 & 53/60 & 25,8/27,3 ($p{=}{,}003$,,41)$^\dagger$ & ,124/,248 ($p{<}10^{-6}$,,70)$^\dagger$ \\
+1,0 & 2 & 58/60 & 26,7/27,5 ($p{=}{,}03$,,29) & ,199/,253 ($p{=}{,}008$,,35)$^\dagger$ \\
+1,0 & 4 & 59/60 & 27,6/27,5 ($p{=}{,}18$; 2/59 khác) & ,256/,256 ($p{=}1{,}0$; 3/59 khác) \\
+\bottomrule
+\end{tabular}
+\\[2pt]
+{\scriptsize giải được = capped/uncapped, cả hai trên tổng 60; cột số
+nước và trig.ov.\ là trung bình capped/uncapped (trên tập con giải
+được ở cả hai điều kiện). $^\dagger$ có ý nghĩa ở mức family-wise
+$\alpha=0,05$ sau hiệu chỉnh Holm--Bonferroni trên 10 kiểm định có
+$p$-value xác định trong bảng (2 ô tại $\lambda{=}0,5,c{=}4$ có
+phương sai bằng 0, không tính vào nhóm hiệu chỉnh). "$X/Y$ khác" làm
+rõ: 1 ô không có ý nghĩa hoặc không gắn dấu vẫn có thể chứa khác biệt
+thật ở từng scramble nhưng triệt tiêu nhau khi lấy trung bình -- chỉ
+riêng hàng $\lambda{=}0,5,c{=}4$ là thực sự giống hệt không cap.}
+\end{table}
+Hai phát hiện nổi bật. Thứ nhất, $c=4$ không khác biệt về mặt thống kê
+so với không cap trên mọi chỉ số ở cả hai giá trị $\lambda$, trong dải
+độ dài lời giải này (F2L khoảng 20--33 nước), và vẫn đứng vững sau khi
+hiệu chỉnh Holm--Bonferroni cho toàn bộ 10 kiểm định: tại $\lambda=0,5$
+đây là khác biệt 0/59 thực sự, còn tại $\lambda=1,0$ có vài scramble
+khác nhau (2--3/59) nhưng triệt tiêu nhau khi lấy trung bình, không để
+lại hiệu ứng đo được. Dù theo cách nào, cận cố định $\lambda \cdot c$
+đạt được \emph{miễn phí}, không tốn chi phí đo lường được nào cho phần
+tăng trigger-overlap đã báo cáo ở trên. Thứ hai, và bất ngờ hơn, các
+cap chặt hơn ($c=1,2$) \emph{không} đánh đổi trigger-overlap lấy số
+nước ít hơn một cách sạch sẽ như kỳ vọng ban đầu -- mọi khác biệt
+trigger-overlap trong Bảng~\ref{tab:capped-bonus} đều đứng vững sau
+hiệu chỉnh, nhưng chỉ 1 so sánh số nước cực đoan nhất
+($\lambda=1,0,c=1$) đứng vững; phần còn lại không phân biệt được với
+nhiễu sau hiệu chỉnh. Thay vào đó, cap chặt hơn làm giảm đo được
+\emph{tỷ lệ giải thành công} (53--58/60 so với 59--60/60 trong cùng
+ngân sách node). Kiểm tra từng scramble cụ thể (ví dụ seed 2053, 2054,
+2058) xác nhận cơ chế: với các scramble này, tìm kiếm bị timeout khi
+$c=1$ hoặc $c=2$ nhưng giải được khi $c=4$ hoặc không cap -- cho thấy
+bonus trigger ở đây không chỉ đơn thuần là một thiên lệch tính-người
+mang tính thẩm mỹ, mà còn đóng vai trò \emph{định hướng thứ tự tìm
+kiếm} không chính thức, đôi khi giúp tìm kiếm bị giới hạn ngân sách
+node thoát khỏi vùng cây không hiệu quả. Vì vậy, giới hạn bonus quá
+chặt có thể phản tác dụng trên cả hai trục (tính-người \emph{và} độ
+tin cậy) mà không chắc chắn đổi lại được hiệu quả số nước, đây là lý
+do chúng tôi báo cáo đây như một đánh đổi thực nghiệm thay vì đề xuất
+một giá trị $c$ "an toàn" duy nhất tiên nghiệm.
 
 \subsection{Scramble bệnh lý và tình trạng tìm kiếm không hội tụ}
 \label{sec:pathological}
@@ -588,6 +677,7 @@ hơn}, không phải nhiều hơn, các thất bại hội tụ trên tập dữ
 
 % ============================================================
 \section{Đe dọa đến Tính hợp lệ (Threats to Validity)}
+\label{sec:threats}
 \begin{itemize}
   \item \textbf{Tìm kiếm không hội tụ}: như đã báo cáo ở
     Mục~\ref{sec:pathological}, $22\%$ scramble trong lần kiểm tra độ
@@ -599,7 +689,26 @@ hơn}, không phải nhiều hơn, các thất bại hội tụ trên tập dữ
     tương quan với tiềm năng trigger-overlap).
   \item \textbf{Construct validity của HLI}: chỉ số này được thiết kế
     thủ công, đã được validate đối chiếu với đánh giá con người thông
-    qua Experiment~3 (Mục~\ref{sec:exp3}).
+    qua Experiment~3 (Mục~\ref{sec:exp3}). Chúng tôi cũng chạy thêm 1
+    kiểm định đối nghịch (adversarial sanity check): chèn thêm các cặp
+    nước "trung tính" (1 trigger đã biết theo ngay sau bởi nghịch đảo
+    của chính nó, vd $R\,U\,R'\,U'$ rồi $U\,R\,U'\,R'$, triệt tiêu về
+    identity -- đã xác minh bằng tính toán) vào 1 lời giải vốn không
+    đổi khác làm Trigger-overlap tăng vọt (vd $0,333 \to 0,706$ sau
+    khi chèn 10 cặp no-op vào 1 ví dụ dài 63 nước), vì cả Segmentability
+    lẫn Pattern-conformity đều không phạt số nước dư thừa không tạo ra
+    tiến triển. Đây là 1 giới hạn thật của Trigger-overlap theo định
+    nghĩa hiện tại -- nó không bền vững trước input bị chèn đối
+    nghịch. Tuy nhiên, điều này \emph{không} làm suy giảm các kết quả
+    đã báo cáo ở trên: Trigger-Biased Search (Nhóm A/A+) được dẫn dắt
+    bởi A* tối thiểu hóa số nước thật $g(n)$ cộng với 1 bonus heuristic
+    \emph{bị chặn} ở mức $\lambda c$ (Mục~\ref{sec:pathological}), nên
+    không có động cơ chèn thêm nước làm tăng chi phí để đổi lấy 1
+    phần thưởng không giới hạn/không bị chặn; Nhóm~B đến từ 1 solver
+    tối ưu độc lập; Nhóm~H là ghi nhận từ người thật. Công việc tương
+    lai áp dụng HLI ngoài bối cảnh tối thiểu-hóa-số-nước này (vd làm
+    mục tiêu tối ưu hóa trực tiếp) nên bổ sung 1 số hạng phạt hiệu
+    quả/số nước rõ ràng vào Trigger-overlap để khép lại lỗ hổng này.
   \item \textbf{Độ tin cậy liên giám khảo}: từng giám khảo riêng lẻ
     chỉ đạt mức đồng thuận khiêm tốn (ICC(2,1)$=0,26$, dưới ngưỡng
     chấp nhận thường dùng $0,4$), nhưng nhóm $N=28$ giám khảo cho
@@ -723,6 +832,12 @@ các miền câu đố lớn, đã được hiểu rõ như Rubik's Cube.
 \bibliographystyle{plainnat}
 \begin{thebibliography}{99}
 
+\bibitem[Agostinelli et~al.(2019)]{agostinelli2019}
+F.~Agostinelli, S.~McAleer, A.~Shmakov, và P.~Baldi.
+\newblock Solving the rubik's cube with deep reinforcement learning and
+  search.
+\newblock \emph{Nature Machine Intelligence}, 1(8):356--363, 2019.
+
 \bibitem[Chakraborti et~al.(2019)]{chakraborti2019}
 T.~Chakraborti, A.~Kulkarni, S.~Sreedharan, D.~E. Smith, và
 S.~Kambhampati.
@@ -738,10 +853,15 @@ P.~Hingston.
 \newblock \emph{IEEE Transactions on Computational Intelligence and AI
   in Games}, 1(3):169--186, 2009.
 
-\bibitem[Kociemba()]{kociemba}
+\bibitem[Kociemba(n.d.)]{kociemba}
 H.~Kociemba.
 \newblock Cube explorer / two-phase algorithm.
 \newblock \url{http://kociemba.org/cube.htm}, truy cập ngày 26 tháng 7 năm 2026.
+
+\bibitem[Wang(n.d.)]{jperm-fingertricks}
+D.~Wang (J~Perm).
+\newblock Finger tricks.
+\newblock \url{https://jperm.net/3x3/fingertricks}, truy cập ngày 17 tháng 8 năm 2026.
 
 \bibitem[Korf(1997)]{korf1997}
 R.~E. Korf.
@@ -767,7 +887,7 @@ T.~Rokicki, H.~Kociemba, M.~Davidson, và J.~Dethridge.
 \newblock The diameter of the rubik's cube group is twenty.
 \newblock \emph{SIAM Review}, 56(4):645--670, 2014.
 
-\bibitem[Author(s)(2025)]{humanlike2025}
+\bibitem[{\'S}wiechowski và {\'S}l{\k{e}}zak(2025)]{humanlike2025}
 M.~Świechowski và D.~Ślęzak.
 \newblock The many challenges of human-like agents in virtual game
   environments.
@@ -789,10 +909,9 @@ K.~Lakkaraju, T.~Hassan, V.~Khandelwal, P.~Singh, C.~Bradley, R.~Shah,
 K.~Vanacore, J.~Ocumpaugh, F.~Agostinelli, D.~Wu, S.~Vuruma, và M.~Irvin.
 \newblock Student engagement in ai-assisted complex problem solving: A
   pilot study of human-ai rubik's cube collaboration.
-\newblock \emph{arXiv preprint arXiv:2511.01683}, 2025.
-\newblock Ghi chú: bản thảo chưa công bố, bài báo đang chuẩn bị nộp tại
-  thời điểm viết bài -- kiểm tra lại tình trạng công bố trước khi trích
-  dẫn như một nguồn đã bình duyệt.
+\newblock Trong \emph{Proceedings of the IEEE International Conference on
+  Healthcare Informatics (ICHI)}, trang 251--260, 2025.
+\newblock Cũng có trên arXiv preprint arXiv:2511.01683.
 
 \bibitem[Zhang et~al.(2017)]{zhang2017}
 Y.~Zhang, S.~Sreedharan, A.~Kulkarni, T.~Chakraborti, H.~H. Zhuo, và
@@ -811,7 +930,10 @@ Bảng~\ref{tab:corpus} liệt kê đầy đủ kho hạt giống $T$ dùng đ�
 Độ trùng lặp Trigger $O(\pi)$ (Mục~\ref{sec:hli-trigger}) và số hạng
 $\mathrm{bonus}(\mathrm{path})$ trong Trigger-Biased Search
 (Mục~\ref{sec:hli-trigger}), lấy trực tiếp từ
-\texttt{research/finger\_tricks.py}. Mỗi trigger được liệt kê dưới
+\texttt{research/finger\_tricks.py}. Các tên gọi và chuỗi nước này là
+thuật ngữ chuẩn của cộng đồng speedcubing, không phải đóng góp gốc của
+công trình này; xem \citet{jperm-fingertricks} như một nguồn tham
+khảo tiêu biểu của cộng đồng. Mỗi trigger được liệt kê dưới
 dạng chuẩn (dựa trên R); hệ thống tự động sinh biến thể mirror (dựa
 trên L, hoán đổi R$\leftrightarrow$L) khi đối chiếu.
 

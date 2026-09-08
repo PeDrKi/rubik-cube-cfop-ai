@@ -1,8 +1,7 @@
 \documentclass[10pt,conference]{article}
-% GHI CHU: dung class 'article' tam thoi de bien dich duoc ngay khong can
-% file .cls rieng. Truoc khi nop that, THAY documentclass nay bang class
-% chuan cua venue (vd IEEEtran cho IEEE CoG/ToG, hoac class cua ICAPS/AAAI
-% workshop) -- moi venue co yeu cau khac nhau ve margin/font/column.
+% GHI CHU: dung class 'article' -- day la ban bao cao de tai nghien cuu,
+% khong nham nop cho 1 venue/hoi nghi cu the nao, nen khong can .cls rieng
+% cua IEEE/ACM/etc.
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}   % T1 du dung cho ten tac gia co dau (vd Swiechowski,
@@ -35,8 +34,8 @@
 \title{Quantifying and Improving Human-Likeness in AI-Generated CFOP
 Solutions for Rubik's Cube: A Trigger-Biased Search Approach}
 
-% GHI CHU: doi ten tac gia/don vi truoc khi nop. Xoa comment neu venue
-% yeu cau double-blind (thuong phai an danh ban thao khi submit).
+% GHI CHU: day la de tai nghien cuu (khong nop cho venue cu the nao),
+% nen thong tin tac gia/don vi giu nguyen, khong can an danh double-blind.
 \author{
   Pham Dang Khue \\
   Faculty of Information Technology, Electric Power University\\
@@ -113,21 +112,27 @@ reported in this paper were run, OLL coverage was limited to a
 2-look decomposition (2 generator algorithms, Sune/Anti-Sune, rather
 than the full 57); this asymmetry is itself informative for
 Pattern-conformity measurement (Section~\ref{sec:method}). The
-solver has since been extended to a single-look table with all 57
-cases functionally verified (each confirmed not to break Cross+F2L
+solver has since been extended to a single-look table covering 55 of
+the 57 OLL cases, each algorithm confirmed not to break Cross+F2L
 when applied from a solved state, via
-\texttt{verify\_and\_build\_table()}); of these, 40 of 57 have been
-matched against the standard community numbering (increasing over
-successive review passes), with the remaining 17 functionally valid
-but not yet matched to a specific community number. For OLL~2 and
-OLL~20 specifically: every pure face-turn algorithm (no
+\texttt{verify\_and\_build\_table()}. (An earlier version of this
+table additionally contained two entries, later found to be
+AUF-rotated duplicates of the Sune/Anti-Sune algorithms already
+present rather than distinct cases --- confirmed by applying each
+algorithm's inverse to a solved cube and checking equality under all
+four AUF rotations --- and removed accordingly.) Of the 55 covered
+cases, 40 have been matched against the standard community
+numbering, with the remaining 15 functionally valid but not yet
+matched to a specific community number. The two cases excluded from
+the table, OLL~2 and OLL~20: every pure face-turn algorithm (no
 slice/wide moves) published by the speedcubing community for these
 two cases uses a slice or wide move (M/S/E or r/l/f/u/d/b) --- this
 is an \emph{empirical observation} from public sources, \textbf{not}
 a formal proof by exhaustive search (no such script exists in this
-repository); these two cases therefore still fall back to the
-verified 2-look decomposition. This upgrade postdates data
-collection and does not alter the results reported in
+repository); these two cases therefore fall back to the verified
+2-look decomposition, so between the 55-case table and this
+fallback, all 57 official cases are addressable. This upgrade
+postdates data collection and does not alter the results reported in
 Section~\ref{sec:results}, which reflect the 2-generator OLL table
 described above.
 
@@ -184,10 +189,14 @@ cube state is solvable within 20 face turns (``God's Number''), via
 large-scale coset-based search. Kociemba's two-phase algorithm
 \citep{kociemba} trades strict optimality for tractable runtime,
 typically returning solutions within 1--4 moves of optimal, and is
-the baseline we use in Section~\ref{sec:setup}. McAleer et al.\
-\citep{mcaleer2018} showed a reinforcement-learning agent
-(DeepCubeA) can learn to solve the cube without built-in human
-knowledge, achieving near-optimal solution lengths. None of these
+the baseline we use in Section~\ref{sec:setup}. McAleer et al.\ \citep{mcaleer2018} introduced Autodidactic
+Iteration, a reinforcement-learning agent that learns to solve the
+cube without built-in human knowledge (median solution length
+$\approx$30 moves, above the 20-move optimum). The follow-up
+DeepCubeA \citep{agostinelli2019} combines this learned value
+function with batch-weighted A* search, solving 100\% of test
+scrambles and finding a shortest path 60.3\% of the time --- i.e.\
+near-optimal solution lengths. None of these
 methods produce plans that are segmentable, named, or otherwise
 interpretable in terms any human learner would recognize --- they are,
 in our terminology, maximally \emph{computer-like}.
@@ -236,7 +245,8 @@ Closest to our work, the ALLURE system \citep{allure} pairs an
 automatic solver (DeepCubeA-based search over subgoals) with an
 interactive chatbot tutor to help learners understand explainable
 solutions to the White Cross sub-goal of CFOP; a recent pilot study
-\citep{vanacore2025} (unpublished manuscript at the time of writing)
+\citep{vanacore2025} (published as a peer-reviewed pilot study at
+IEEE ICHI 2025)
 analyzes student engagement patterns within ALLURE via behavioral
 clustering, reporting that the beginner white-cross strategy
 requires substantially more moves than CFOP, which in turn requires
@@ -294,7 +304,7 @@ of solved stages whose corresponding sub-sequence exactly matches an
 entry in a verified table of canonical algorithms (Aa, Ab, \ldots,
 Z for PLL; Sune/Anti-Sune generators for 2-look OLL, the table in
 effect at data-collection time --- see Section~\ref{sec:intro} for
-the subsequent upgrade to a full single-look OLL table, which does
+the subsequent upgrade to a 55-case single-look OLL table, which does
 not affect the
 figures below) rather than an
 unstructured search fallback. All 21/21 PLL cases in the table are
@@ -311,7 +321,8 @@ For the Cross and F2L stages (which lack a canonical case table in
 this system, being generated by unconstrained heuristic search), we
 measure the fraction of moves covered by a greedy longest-match
 segmentation of $\pi$ against a seed corpus $T$ of $|T|=11$ common
-human finger-tricks (e.g.\ the ``sexy move'' $R\,U\,R'\,U'$,
+human finger-tricks \citep{jperm-fingertricks} (e.g.\ the ``sexy
+move'' $R\,U\,R'\,U'$,
 ``sledgehammer'' $R'\,F\,R\,F'$; full corpus in
 Appendix~\ref{app:corpus}). This is a manually curated seed corpus
 drawn from common speedcubing-community knowledge, not derived from
@@ -339,7 +350,9 @@ indicates the paper's central claim --- that AI-CFOP is
 substantially more human-like than a computer-optimal baseline ---
 is robust to the specific choice of $(w_S,w_P,w_O)$ within any
 reasonable range, though the \emph{magnitude} of the gap is
-naturally weight-dependent.
+naturally weight-dependent. This analysis is fully reproducible via
+\texttt{python3 -m research.weight\_sensitivity}, which self-checks
+its output against the figures quoted above.
 
 \subsection{Trigger-Biased A* Search}
 
@@ -416,12 +429,16 @@ matches real competition scrambler methodology. Group A used a
 reduced F2L node budget (40{,}000 nodes/depth, down from the
 120{,}000 default) and a 20-second wall-clock timeout per solve to
 accommodate our single-core evaluation hardware; $20\%$ of scrambles
-($12/60$) exceeded this timeout and are excluded from the paired
+($12/60$) did not reach a solved state within this budget (10
+literal timeouts plus 2 cases that stalled at partial F2L below the
+20s wall clock) and are excluded from the paired
 statistics below. Among the $48$ scrambles solved by both groups, a
 Wilcoxon signed-rank test confirms Group A requires significantly
 more moves than Group B ($W=0$, $p=1.61\times10^{-9}$, $r=0.87$, a
-very large effect), while by construction only Group A has non-zero
-HLI. We also re-ran the same comparison on $N=100$ random-move
+very large effect; mean gap $45.7$ moves, bootstrap 95\% CI
+$[43.3, 48.9]$, BCa, $9999$ resamples), while by construction only
+Group A has non-zero HLI (mean $0.658$, 95\% CI $[0.629, 0.682]$).
+We also re-ran the same comparison on $N=100$ random-move
 scrambles as a robustness check --- results were nearly identical,
 including a notable search non-convergence phenomenon ($22\%$
 timeout); see Sections~\ref{sec:pathological} and~\ref{sec:discussion}
@@ -455,8 +472,14 @@ $2.8\times$ increase) at a move-count cost of $25.7 \to 27.6$ moves
 $7.87$s. On the $n=51$ scrambles solved at both $\lambda=0$ and
 $\lambda=1.0$, paired Wilcoxon signed-rank tests confirm both
 differences are statistically significant: trigger-overlap
-($W=29.0$, $p=8.25\times10^{-8}$, $r=0.83$, very large effect) and
-move-count ($W=209.5$, $p=0.0014$, $r=0.60$, large effect). Notably,
+($W=29.0$, $p=8.25\times10^{-8}$, $r=0.75$, very large effect) and
+move-count ($W=209.5$, $p=0.0014$, $r=0.45$, medium effect); on this
+paired subset, the mean paired difference is $+0.163$ trigger-overlap
+(95\% CI $[0.122, 0.206]$) and $+1.75$ moves (95\% CI $[0.59, 2.86]$,
+notably wider relative to its point estimate than the trigger-overlap
+CI, consistent with the move-count effect being individually smaller
+and noisier than the trigger-overlap effect at the per-scramble
+level, bootstrap 95\% CI, BCa, $9999$ resamples). Notably,
 $\lambda=0.5$ produced a higher \emph{maximum} observed solve time
 (55.5s) than $\lambda=1.0$ (55.6s, comparable), and both are far
 above the $\lambda=0$ maximum (16.5s) --- consistent with the
@@ -535,10 +558,15 @@ $\rho=0.487$ ($p=0.016$) --- more significant than the proxy
 estimate, confirming our expectation that the binary group-level
 proxy was diluting rather than reflecting genuine construct
 validity. The trigger-overlap component alone still correlates most
-strongly with human judgment ($\rho=0.605$, $p=0.0017$), suggesting
+strongly with human judgment ($\rho=0.605$, $p=0.0017$, bootstrap
+95\% CI $[0.19, 0.84]$, BCa, $9999$ resamples), suggesting
 it remains HLI's single most human-judgment-relevant component in
 this sample, with Segmentability and Pattern-conformity contributing
-positively but less strongly.
+positively but less strongly. The width of this interval (spanning
+weak-to-very-strong correlation) is itself informative: it quantifies,
+rather than merely asserts, the pilot-scale uncertainty already
+flagged in Section~\ref{sec:threats} --- a larger stimulus set is
+needed before treating $\rho=0.605$ as a precise effect size.
 
 % ============================================================
 \section{Discussion}
@@ -588,11 +616,76 @@ bounded-suboptimal search (e.g.\ weighted A* with a fixed inflation
 factor and a provable suboptimality bound), we do not currently
 provide any formal bound on Trigger-Biased Search's solution-length
 suboptimality; Section~\ref{sec:results} instead reports this
-empirically (mean $+7.4\%$ moves at $\lambda=1.0$). A natural
-mitigation, left for future work, is to cap $\mathrm{bonus}$ at a
-fixed maximum (e.g.\ $\min(\mathrm{bonus}(\mathrm{path}(n)), c)$ for
-some constant $c$), which would restore a fixed-bound distortion
-comparable to the existing penalty term.
+empirically (mean $+7.4\%$ moves at $\lambda=1.0$). A natural mitigation is to cap $\mathrm{bonus}$ at a fixed maximum,
+$\mathrm{bonus}_c(\mathrm{path}(n)) = \min(\mathrm{bonus}(\mathrm{path}(n)),
+c)$ for some constant $c$, which bounds the maximum possible
+additional underestimation at a fixed $\lambda \cdot c$ regardless of
+path depth --- we implemented and tested this rather than leaving it
+purely as a proposal.
+
+\paragraph{Capped-bonus experiment.} We re-ran Experiment~2's exact
+$N=60$ scramble set (seeds 2000--2059, same 40{,}000-node-per-depth
+budget) with $\mathrm{bonus}_c$ for $c \in \{1, 2, 4\}$ at
+$\lambda \in \{0.5, 1.0\}$, paired against the uncapped run reported
+above. Table~\ref{tab:capped-bonus} summarizes the outcome (Wilcoxon
+signed-rank on scrambles solved under both conditions).
+\begin{table}[h]
+\centering
+\footnotesize
+\caption{Capped bonus vs. uncapped, $N=60$, paired Wilcoxon
+signed-rank on scrambles solved by both, Holm--Bonferroni corrected
+across all $m=10$ tests in this table}
+\label{tab:capped-bonus}
+\begin{tabular}{ccccc}
+\toprule
+$\lambda$ & $c$ & solved & moves ($p$,$r$) & trig.ov. ($p$,$r$) \\
+\midrule
+0.5 & 1 & 53/59 & 25.9/26.3 ($p{=}.16$) & .110/.186 ($p{<}10^{-4}$,.57)$^\dagger$ \\
+0.5 & 2 & 53/59 & 25.8/26.3 ($p{=}.06$) & .124/.186 ($p{<}10^{-3}$,.54)$^\dagger$ \\
+0.5 & 4 & 59/59 & 26.7/26.7 (0/59 differ) & .201/.201 (0/59 differ) \\
+1.0 & 1 & 53/60 & 25.8/27.3 ($p{=}.003$,.41)$^\dagger$ & .124/.248 ($p{<}10^{-6}$,.70)$^\dagger$ \\
+1.0 & 2 & 58/60 & 26.7/27.5 ($p{=}.03$,.29) & .199/.253 ($p{=}.008$,.35)$^\dagger$ \\
+1.0 & 4 & 59/60 & 27.6/27.5 ($p{=}.18$; 2/59 differ) & .256/.256 ($p{=}1.0$; 3/59 differ) \\
+\bottomrule
+\end{tabular}
+\\[2pt]
+{\scriptsize solved = capped/uncapped, both out of 60; moves and
+trig.ov.\ cells show capped/uncapped means (paired subset).
+$^\dagger$ significant at family-wise $\alpha=0.05$ after
+Holm--Bonferroni correction across the 10 tests with a defined
+$p$-value in this table (2 cells at $\lambda{=}0.5,c{=}4$ have zero
+variance, excluded from the correction family). "$X/Y$ differ" makes
+explicit that a non-significant or unlabelled cell can still contain
+genuine per-scramble differences that cancel in aggregate --- only
+the $\lambda{=}0.5,c{=}4$ row is truly identical to uncapped.}
+\end{table}
+Two findings stand out. First, $c=4$ is statistically
+indistinguishable from uncapped on every metric at both $\lambda$
+values in this move-length regime (F2L solves of roughly 20--33
+moves), surviving Holm--Bonferroni correction for the full
+10-test family: at $\lambda=0.5$ this is a literal 0/59 difference,
+while at $\lambda=1.0$ a handful of scrambles do differ (2--3/59) but
+average out to no detectable effect. Either way, the fixed bound
+$\lambda \cdot c$ is achieved \emph{for free}, with no measurable
+cost to the trigger-overlap gains reported above. Second, and more
+surprising, tighter caps ($c=1,2$) do \emph{not} cleanly trade
+trigger-overlap for fewer moves as we had expected --- every
+trigger-overlap loss in Table~\ref{tab:capped-bonus} survives
+correction, but only the single most extreme move-count comparison
+($\lambda=1.0,c=1$) does; the rest are not distinguishable from noise
+once corrected. Tighter caps instead measurably reduce the
+\emph{solve success rate} (53--58/60 vs.\ 59--60/60 within the same
+node budget). Inspecting individual scrambles (e.g.\ seeds 2053,
+2054, 2058) confirms the mechanism: for these scrambles the search
+times out under $c=1$ or $c=2$ but succeeds under $c=4$ or uncapped,
+indicating the trigger bonus is not purely a cosmetic humanlikeness
+bias here --- it also functions as informal \emph{search-order
+guidance} that occasionally helps the bounded-node-budget search
+escape unproductive regions of the tree. Aggressively capping the
+bonus can therefore be counterproductive on both axes (humanlikeness
+\emph{and} reliability) without reliably buying back move-count
+efficiency in return, which is why we report this as an empirical
+trade-off rather than recommend a single "safe" $c$ a priori.
 
 \subsection{Pathological scrambles and search non-convergence}
 \label{sec:pathological}
@@ -622,6 +715,7 @@ expectation --- that higher $\lambda$ was associated with
 
 % ============================================================
 \section{Threats to Validity}
+\label{sec:threats}
 \begin{itemize}
   \item \textbf{Search non-convergence}: as reported in
     Section~\ref{sec:pathological}, $22\%$ of scrambles in the
@@ -634,7 +728,27 @@ expectation --- that higher $\lambda$ was associated with
     trigger-overlap potential).
   \item \textbf{Construct validity of HLI}: the metric is
     hand-designed, validated against human judgment via
-    Experiment~3 (Section~\ref{sec:exp3}).
+    Experiment~3 (Section~\ref{sec:exp3}). We additionally ran an
+    adversarial sanity check: inserting move-neutral padding (a known
+    trigger immediately followed by its own inverse, e.g.\
+    $R\,U\,R'\,U'$ then $U\,R\,U'\,R'$, which cancels to the identity
+    permutation --- verified computationally) into an otherwise
+    unchanged solve inflates Trigger-overlap substantially (e.g.\
+    $0.333 \to 0.706$ after 10 inserted no-op pairs on one $63$-move
+    example), since neither Segmentability nor Pattern-conformity
+    penalize non-productive move-count. This is a genuine limitation
+    of Trigger-overlap as currently defined --- it is not robust to
+    adversarially padded input. It does \emph{not}, however,
+    compromise the results reported above: Trigger-Biased Search
+    (Groups A/A+) is driven by A* minimizing true move-count $g(n)$
+    plus a heuristic bonus \emph{capped} at $\lambda c$
+    (Section~\ref{sec:pathological}), giving it no incentive to
+    insert cost-increasing padding for an unbounded, uncapped reward;
+    Group~B comes from an independent optimal solver; Group~H is
+    human-recorded. Future work applying HLI outside this
+    move-minimizing setting (e.g.\ as a direct optimization target)
+    should first add an explicit efficiency or move-count penalty to
+    Trigger-overlap to close this gap.
   \item \textbf{Inter-rater reliability}: individual raters showed
     only modest agreement (ICC(2,1)$=0.26$, below the commonly-used
     $0.4$ acceptable-agreement threshold), but the $N=28$ rater pool
@@ -762,6 +876,12 @@ domains such as the Rubik's Cube.
 \bibliographystyle{plainnat}
 \begin{thebibliography}{99}
 
+\bibitem[Agostinelli et~al.(2019)]{agostinelli2019}
+F.~Agostinelli, S.~McAleer, A.~Shmakov, and P.~Baldi.
+\newblock Solving the rubik's cube with deep reinforcement learning and
+  search.
+\newblock \emph{Nature Machine Intelligence}, 1(8):356--363, 2019.
+
 \bibitem[Chakraborti et~al.(2019)]{chakraborti2019}
 T.~Chakraborti, A.~Kulkarni, S.~Sreedharan, D.~E. Smith, and
 S.~Kambhampati.
@@ -777,10 +897,15 @@ P.~Hingston.
 \newblock \emph{IEEE Transactions on Computational Intelligence and AI
   in Games}, 1(3):169--186, 2009.
 
-\bibitem[Kociemba()]{kociemba}
+\bibitem[Kociemba(n.d.)]{kociemba}
 H.~Kociemba.
 \newblock Cube explorer / two-phase algorithm.
 \newblock \url{http://kociemba.org/cube.htm}, accessed July 26, 2026.
+
+\bibitem[Wang(n.d.)]{jperm-fingertricks}
+D.~Wang (J~Perm).
+\newblock Finger tricks.
+\newblock \url{https://jperm.net/3x3/fingertricks}, accessed August 17, 2026.
 
 \bibitem[Korf(1997)]{korf1997}
 R.~E. Korf.
@@ -806,7 +931,7 @@ T.~Rokicki, H.~Kociemba, M.~Davidson, and J.~Dethridge.
 \newblock The diameter of the rubik's cube group is twenty.
 \newblock \emph{SIAM Review}, 56(4):645--670, 2014.
 
-\bibitem[Author(s)(2025)]{humanlike2025}
+\bibitem[{\'S}wiechowski and {\'S}l{\k{e}}zak(2025)]{humanlike2025}
 M.~{\'S}wiechowski and D.~{\'S}l{\k{e}}zak.
 \newblock The many challenges of human-like agents in virtual game
   environments.
@@ -828,10 +953,9 @@ K.~Lakkaraju, T.~Hassan, V.~Khandelwal, P.~Singh, C.~Bradley, R.~Shah, et~al.,
 K.~Vanacore, J.~Ocumpaugh, F.~Agostinelli, D.~Wu, S.~Vuruma, and M.~Irvin.
 \newblock Student engagement in ai-assisted complex problem solving: A
   pilot study of human-ai rubik's cube collaboration.
-\newblock \emph{arXiv preprint arXiv:2511.01683}, 2025.
-\newblock Note: unpublished manuscript, paper in preparation for future
-  submission at time of writing --- verify publication status before citing
-  as peer-reviewed.
+\newblock In \emph{Proceedings of the IEEE International Conference on
+  Healthcare Informatics (ICHI)}, pages 251--260, 2025.
+\newblock Also available as arXiv preprint arXiv:2511.01683.
 
 \bibitem[Zhang et~al.(2017)]{zhang2017}
 Y.~Zhang, S.~Sreedharan, A.~Kulkarni, T.~Chakraborti, H.~H. Zhuo, and
@@ -850,7 +974,10 @@ Table~\ref{tab:corpus} lists the full seed corpus $T$ used to compute
 Trigger-overlap $O(\pi)$ (Section~\ref{sec:hli-trigger}) and the
 $\mathrm{bonus}(\mathrm{path})$ term in Trigger-Biased Search
 (Section~\ref{sec:hli-trigger}), taken directly from
-\texttt{research/finger\_tricks.py}. Each trigger is listed in its
+\texttt{research/finger\_tricks.py}. These names and sequences are
+standard speedcubing-community terminology, not original to this
+work; see \citet{jperm-fingertricks} for a representative
+community reference. Each trigger is listed in its
 canonical (R-based) form; the system automatically generates the
 mirrored variant (L-based, swapping R$\leftrightarrow$L) when
 matching.

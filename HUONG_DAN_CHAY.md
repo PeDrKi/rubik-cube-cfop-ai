@@ -50,15 +50,19 @@ Kết quả mong đợi: `319 passed` (113 trong `test_solver.py` + 206 trong
 `test_cube_engine.py`). Mất khoảng 10-15 giây (không tính lần đầu build
 cache PDB, xem mục 3).
 
-## 5b. Bảng công thức OLL (57/57 đã kiểm chứng)
+## 5b. Bảng công thức OLL (55/55 đã kiểm chứng)
 
-`solver/oll_algorithms.py` hiện có **đủ 57/57 case OLL chuẩn** (đã tự
+`solver/oll_algorithms.py` hiện có **55/57 case OLL chuẩn** (đã tự
 kiểm chứng khi import module — xem `VERIFIED_ALG_NAMES`/`REJECTED_ALG_NAMES`).
+2 case còn lại (OLL 2, OLL 20) không có thuật toán thuần face-turn
+trong bất kỳ nguồn cộng đồng nào tra được (luôn cần slice/wide move),
+nên chủ động fallback về kiến trúc 2-look cho đúng 2 case này — không
+phải thiếu sót, xem `CHANGELOG_SESSION.md`.
 Kiểm tra lại bất kỳ lúc nào bằng:
 ```bash
 python3 -m solver.oll_algorithms
 ```
-sẽ in ra `57/57 cong thuc OLL hop le`. Muốn thêm/sửa 1 công thức (chỉ
+sẽ in ra `55/55 cong thuc OLL hop le`. Muốn thêm/sửa 1 công thức (chỉ
 chấp nhận nước thuần R/L/U/D/F/B, không lát/rộng):
 ```python
 # mo file solver/oll_algorithms.py, them 1 dong vao dict _RAW_ALGS:
@@ -67,11 +71,16 @@ _RAW_ALGS['TenCaseMoi'] = "chuoi nuoc di ban tim duoc"
 Công thức sai sẽ tự động bị loại (rơi vào `REJECTED_ALG_NAMES`), không
 lo làm hỏng bảng hiện có.
 
-**Lưu ý còn treo:** round-trip tự-sinh-tự-giải (mỗi công thức × 4 AUF =
-228 case) hiện đạt 224/228 (~98.2%), chưa phải 100% — xem
+**Cập nhật (đã giải quyết, 2026-08):** round-trip tự-sinh-tự-giải (mỗi
+công thức × 4 AUF = 220 case, dùng đúng trạng thái nghịch đảo mà công
+thức được thiết kế để giải, không phải áp thuận rồi hỏi "có khớp bảng
+không") giờ đạt **220/220 = 100%** — xem
 `test_solver.py::TestOLLAlgorithms::test_own_generating_set_round_trip`.
-Chưa xác định rõ 4 case còn lại là bug thật hay giới hạn thiết kế đã
-biết.
+Bản test cũ (98.2%, 224/228) kiểm tra sai đối tượng (áp công thức
+THEO CHIỀU THUẬN rồi hỏi "có tình cờ khớp bảng không", không phải "có
+giải đúng trạng thái mình được thiết kế để giải không") — đã sửa lại
+đúng, không phải lỗi thật trong bảng OLL. Chi tiết: CHANGELOG_SESSION.md
+mục 19.
 
 Muốn xem case OLL hiện tại là dạng nào (Dot/Line/Angle/AllOriented) để
 biết cần tìm công thức gì:

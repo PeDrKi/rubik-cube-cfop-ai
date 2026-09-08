@@ -57,9 +57,14 @@ _RAW_ALGS = {
     # di lai -- KHONG chep tay, tu kiem chung 100% bang cross_f2l_ok + huong=0.
     'case_auto_01': "R U2 R' U' R U' R' U R U R' U R U2 R'",
     'case_auto_02': "U R U2 R' U' R U' R' U' R U R' U R U2 R'",
-    'case_auto_03': "U R U R' U R U2 R'",
+    # case_auto_03 va case_auto_05 (nguyen ban: "U"+Sune va "U'"+AntiSune)
+    # da bi go bo -- kiem chung bang thuc nghiem (ap dung nghich dao len
+    # cube da giai, so khop trang thai sau khi xoay AUF) cho thay ca hai
+    # la BAN SAO cua Sune/AntiSune bi lech AUF, khong phai case non-dot
+    # moi. Ladder solver noi bo hoi tu nham ve 2 seed nay. Giu lai chi
+    # gay double-count khi thong ke "da khop so hieu cong dong" (2 slot
+    # cung tra ve OLL 27 / OLL 26). Xem CHANGELOG_SESSION.md.
     'case_auto_04': "U2 R U R' U R U2 R' U2 R U2 R' U' R U' R'",
-    'case_auto_05': "U' R U2 R' U' R U' R'",
     'case_auto_06': "R U R' U R U2 R' U' R U R' U R U2 R'",
     'case_auto_07': "R U2 R' U' R U' R' R U2 R' U' R U' R'",
     'case_auto_08': "L' B' U' B U L U R U2 R' U' R U' R' U' R U R' U R U2 R'",
@@ -239,9 +244,8 @@ PRETTY_CASE_NAME = {
     'Dot_OLL19': 'OLL 19',
     'case_auto_01': 'OLL 24',
     'case_auto_02': 'OLL 23',
-    'case_auto_03': 'OLL 27',
+    # case_auto_03/case_auto_05 go bo -- xem ghi chu trong _RAW_ALGS
     'case_auto_04': 'OLL 25',
-    'case_auto_05': 'OLL 26',
     'case_auto_06': 'OLL 22',
     'case_auto_07': 'OLL 21',
     'case_auto_08': 'Line',

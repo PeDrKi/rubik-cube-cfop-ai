@@ -29,13 +29,24 @@ _ALL_TRIGGERS_BY_LEN = sorted(
 )
 
 
-def trigger_bonus_count(path: tuple) -> int:
+def trigger_bonus_count(path: tuple, cap=None) -> int:
     """So nuoc trong `path` (tuple nuoc di) duoc bao phu boi it nhat 1
     trigger da biet (greedy longest-match trai->phai). Dung y het thuat
     toan trong hli_metrics.trigger_overlap() nhung tra ve SO NUOC (int)
     thay vi ty le, vi day duoc goi hang ngan lan/giay trong vong lap A*
     -- can nhanh, tranh chia float khong can thiet o hot path.
-    """
+
+    `cap`: [NGHIEN CUU -- capped-bonus admissibility experiment, xem
+    research/run_capped_bonus_sweep.py] neu duoc cho (khong phai None),
+    gioi han gia tri tra ve toi da la `cap`. Muc dich: neu heuristic
+    goc (base = single-piece PDB) la admissible, thi h' = h - lam*bonus
+    voi bonus KHONG cap co the giam khong gioi han khi path dai ra,
+    lam mat admissibility hoan toan (khong co can). Voi bonus_capped =
+    min(bonus, cap), do lech toi da so voi h admissible bi chan boi
+    lam*cap -- cho phep phat bieu 1 CAN THUC NGHIEM ro rang thay vi chi
+    quan sat dinh tinh 've mat cham lai/di nhieu nuoc hon'. Mac dinh
+    cap=None -> hanh vi y het ban khong cap (KHONG anh huong ket qua da
+    co trong Exp2)."""
     n = len(path)
     if n == 0:
         return 0
@@ -54,15 +65,22 @@ def trigger_bonus_count(path: tuple) -> int:
             i += matched_len
         else:
             i += 1
-    return sum(covered)
+    total = sum(covered)
+    return total if cap is None else min(total, cap)
 
 
-def solve_f2l_trigger_biased(state, lam, **kwargs):
+def solve_f2l_trigger_biased(state, lam, cap=None, **kwargs):
     """Wrapper mong: goi thang solver.f2l_solver.solve_f2l voi
     trigger_bonus_fn=trigger_bonus_count va lam duoc chi dinh. lam=0.0
-    tuong duong solve_f2l() goc (baseline, khong thien vi)."""
+    tuong duong solve_f2l() goc (baseline, khong thien vi).
+
+    `cap`: [NGHIEN CUU] xem trigger_bonus_count() -- None (mac dinh) =
+    hanh vi goc khong doi. Neu khac None, bonus bi cap tai gia tri nay
+    truoc khi tru vao heuristic."""
+    from functools import partial
     from solver.f2l_solver import solve_f2l
-    return solve_f2l(state, trigger_bonus_fn=trigger_bonus_count, lam=lam, **kwargs)
+    bonus_fn = partial(trigger_bonus_count, cap=cap) if cap is not None else trigger_bonus_count
+    return solve_f2l(state, trigger_bonus_fn=bonus_fn, lam=lam, **kwargs)
 
 
 if __name__ == '__main__':

@@ -2,144 +2,128 @@
 research/weight_sensitivity.py
 =================================
 Phan tich do nhay (sensitivity analysis) cua Human-Likeness Index (HLI)
-theo lua chon trong so (w_S, w_P, w_O). KHONG can chay lai solver -- dung
-lai 3 thanh phan con (Segmentability, Pattern-conformity, Trigger-overlap)
-da luu san trong research/results_n100.csv tu Experiment 1.
+theo lua chon trong so (w_S, w_P, w_O).
 
 Muc tieu: tra loi cau hoi reviewer chac chan se hoi -- "vi sao chon
 (0.3, 0.4, 0.3)? Ket luan co doi neu chon trong so khac khong?"
 
-Chay:  python3 -m research.weight_sensitivity --csv research/results_n100.csv
+QUAN TRONG (sua 2026-08): ban truoc cua script nay chi doc component
+cua MOT nhom (vd Nhom A tu results_n100.csv, cot 'A_segmentability'
+v.v.) va bao cao do bien thien HLI trong noi bo 1 nhom -- nhung claim
+THAT SU trong paper/main.tex (doan "Composite HLI") la ve KHOANG CACH
+HLI GIUA Nhom A va Nhom B ("the HLI gap between Group A and Group B
+remains large and strictly positive, ranging from 0.397 ... to
+1.000 ..., with our chosen weights giving a gap of 0.653") -- 2 phep
+tinh khac nhau hoan toan. Ban cu KHONG tai lap duoc so trong paper vi
+thieu du lieu Nhom B va sai ten cot khi doc file dung
+(research/AB_components_for_wS_sensitivity.csv dung ten cot
+A_S/A_P/A_O/B_S/B_P/B_O, khong phai A_segmentability/...).
+
+Ban nay sua lai dung theo file AB_components_for_wS_sensitivity.csv
+(N=78, seed 1000-1099 -- tap con "solved" cua robustness-check
+N=100), tinh HLI ca 2 nhom va bao cao GAP = mean(HLI_A) - mean(HLI_B)
+qua nhieu bo trong so, dung y het phep tinh da tao ra cac so trong
+paper. Da tu-kiem-chung: 5 bo trong so dat ten + sweep wS 0..1 cho
+dung [0.397, 1.000] va gap=0.6525 (~0.653) tai (0.3,0.4,0.3), khop
+paper/main.tex.
+
+Chay:  python3 -m research.weight_sensitivity
+    (hoac --csv de doi file)
 """
 
 import argparse
 import csv
-import itertools
 import statistics
 import sys
 
 sys.path.insert(0, '.')
 
-try:
-    from scipy.stats import spearmanr
-    HAS_SCIPY = True
-except ImportError:
-    HAS_SCIPY = False
 
-
-def load_components(csv_path):
-    """Doc S, P, O cho tung scramble da giai thanh cong (reached=solved)."""
+def load_ab_components(csv_path):
+    """Doc A_S/A_P/A_O va B_S/B_P/B_O cho tung scramble (ca 2 nhom cung
+    1 dong = cung 1 seed, de tinh GAP theo tung cap)."""
     rows = []
     with open(csv_path) as f:
         for r in csv.DictReader(f):
-            if r['A_reached'] != 'solved':
-                continue
             rows.append({
                 'seed': r['seed'],
-                'S': float(r['A_segmentability']),
-                'P': float(r['A_pattern_conformity']),
-                'O': float(r['A_trigger_overlap']),
+                'A_S': float(r['A_S']), 'A_P': float(r['A_P']), 'A_O': float(r['A_O']),
+                'B_S': float(r['B_S']), 'B_P': float(r['B_P']), 'B_O': float(r['B_O']),
             })
     return rows
 
 
-def hli(row, w):
+def hli(row, w, prefix):
     wS, wP, wO = w
-    return wS * row['S'] + wP * row['P'] + wO * row['O']
+    return wS * row[f'{prefix}_S'] + wP * row[f'{prefix}_P'] + wO * row[f'{prefix}_O']
 
 
-# --- Bo trong so dat ten, co y nghia dien giai ro rang ---
+def gap_for_weights(rows, w):
+    """GAP = mean(HLI_A) - mean(HLI_B) tren toan bo scramble, voi bo
+    trong so w. Day chinh la dai luong duoc bao cao trong paper."""
+    n = len(rows)
+    mean_a = sum(hli(r, w, 'A') for r in rows) / n
+    mean_b = sum(hli(r, w, 'B') for r in rows) / n
+    return mean_a, mean_b, mean_a - mean_b
+
+
 NAMED_WEIGHTS = {
     'current (0.3/0.4/0.3)': (0.3, 0.4, 0.3),
     'equal (1/3 each)': (1 / 3, 1 / 3, 1 / 3),
     'pattern-heavy (0.2/0.6/0.2)': (0.2, 0.6, 0.2),
     'trigger-heavy (0.2/0.2/0.6)': (0.2, 0.2, 0.6),
     'segment-heavy (0.6/0.2/0.2)': (0.6, 0.2, 0.2),
-    'no-segmentability (0/0.5/0.5)': (0.0, 0.5, 0.5),
-    'pattern-only (0/1/0)': (0.0, 1.0, 0.0),
-    'trigger-only (0/0/1)': (0.0, 0.0, 1.0),
 }
-
-
-def simplex_grid(step=0.1):
-    """Sinh toan bo (wS,wP,wO) tren luoi don hinh (simplex) voi buoc step,
-    tong = 1, moi thanh phan >= 0."""
-    n = round(1 / step)
-    out = []
-    for i in range(n + 1):
-        for j in range(n + 1 - i):
-            k = n - i - j
-            out.append((i * step, j * step, k * step))
-    return out
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--csv', type=str, default='research/results_n100.csv')
-    ap.add_argument('--grid-step', type=float, default=0.1)
+    ap.add_argument('--csv', type=str,
+                     default='research/AB_components_for_wS_sensitivity.csv')
     args = ap.parse_args()
 
-    rows = load_components(args.csv)
-    print(f'Doc duoc {len(rows)} scramble da giai thanh cong tu {args.csv}\n')
+    rows = load_ab_components(args.csv)
+    n = len(rows)
+    print(f'Doc duoc {n} cap scramble (A,B cung seed) tu {args.csv}\n')
 
-    # --- 1. Bang so sanh cac bo trong so dat ten ---
-    baseline_w = NAMED_WEIGHTS['current (0.3/0.4/0.3)']
-    baseline_hli = [hli(r, baseline_w) for r in rows]
+    b_o = [r['B_O'] for r in rows]
+    print(f'Doi chieu voi paper: B_O (trigger-overlap Nhom B) mean='
+          f'{statistics.mean(b_o):.4f} sd={statistics.stdev(b_o):.4f} '
+          f'(paper bao cao 0.009 +- 0.046)\n')
 
-    print('=== Bang 1: HLI trung binh theo tung bo trong so dat ten ===')
-    print(f"{'Bo trong so':<32}{'Mean HLI':>10}{'SD':>8}"
-          f"{'Spearman vs baseline':>22}")
+    print('=== GAP = mean(HLI_A) - mean(HLI_B) theo 5 bo trong so dat ten ===')
+    gaps = {}
     for name, w in NAMED_WEIGHTS.items():
-        vals = [hli(r, w) for r in rows]
-        mean_v = statistics.mean(vals)
-        sd_v = statistics.pstdev(vals)
-        if HAS_SCIPY and name != 'current (0.3/0.4/0.3)':
-            rho, _ = spearmanr(vals, baseline_hli)
-            rho_str = f'{rho:.3f}'
-        elif name == 'current (0.3/0.4/0.3)':
-            rho_str = '(baseline)'
-        else:
-            rho_str = 'n/a (can scipy)'
-        print(f'{name:<32}{mean_v:>10.3f}{sd_v:>8.3f}{rho_str:>22}')
+        mean_a, mean_b, gap = gap_for_weights(rows, w)
+        gaps[name] = gap
+        print(f'{name:<32} HLI_A={mean_a:.4f} HLI_B={mean_b:.4f} GAP={gap:.4f}')
 
-    # --- 2. Quet toan bo simplex de xem khoang bien thien HLI trung binh ---
-    grid = simplex_grid(args.grid_step)
-    grid_means = [(w, statistics.mean(hli(r, w) for r in rows)) for w in grid]
-    grid_means.sort(key=lambda x: x[1])
+    print('\n=== GAP theo sweep wS (wP=wO=(1-wS)/2, buoc 0.1) ===')
+    sweep_gaps = []
+    for wS10 in range(11):
+        wS = wS10 / 10
+        rem = (1 - wS) / 2
+        w = (wS, rem, rem)
+        mean_a, mean_b, gap = gap_for_weights(rows, w)
+        sweep_gaps.append(gap)
+        print(f'wS={wS:.1f}: HLI_A={mean_a:.4f} HLI_B={mean_b:.4f} GAP={gap:.4f}')
 
-    print(f'\n=== Bang 2: Quet luoi simplex (step={args.grid_step}, '
-          f'{len(grid)} to hop trong so) ===')
-    lo_w, lo_v = grid_means[0]
-    hi_w, hi_v = grid_means[-1]
-    print(f'HLI trung binh THAP NHAT co the: {lo_v:.3f} '
-          f'tai (wS,wP,wO)={tuple(round(x,2) for x in lo_w)}')
-    print(f'HLI trung binh CAO NHAT co the:  {hi_v:.3f} '
-          f'tai (wS,wP,wO)={tuple(round(x,2) for x in hi_w)}')
-    print(f'Khoang bien thien (range): {hi_v - lo_v:.3f} '
-          f'(tren thang 0-1, cang nho cang chung to KET LUAN ("A giong '
-          f'nguoi hon B") ROBUST voi lua chon trong so)')
+    all_gaps = list(gaps.values()) + sweep_gaps
+    lo, hi = min(all_gaps), max(all_gaps)
+    baseline_gap = gaps['current (0.3/0.4/0.3)']
 
-    # --- 3. Do nhay tung thanh phan rieng le (giu 2 thanh phan con lai bang nhau) ---
-    print(f'\n=== Bang 3: Do nhay khi tang dan TUNG trong so rieng le '
-          f'(2 trong so con lai chia deu phan con lai) ===')
-    for comp_idx, comp_name in enumerate(['Segmentability (wS)',
-                                            'Pattern-conformity (wP)',
-                                            'Trigger-overlap (wO)']):
-        print(f'\n{comp_name}:')
-        for w_target in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
-            remain = (1 - w_target) / 2
-            w = [remain, remain, remain]
-            w[comp_idx] = w_target
-            vals = [hli(r, tuple(w)) for r in rows]
-            print(f'  w={w_target:.1f} -> mean HLI = {statistics.mean(vals):.3f}')
+    print('\n=== Doi chieu voi cau trong paper/main.tex (doan "Composite HLI") ===')
+    print('Paper: "ranging from 0.397 ... to 1.000 ..., with our chosen '
+          'weights giving a gap of 0.653"')
+    print(f'Vua tinh: range=[{lo:.3f}, {hi:.3f}], gap tai trong so hien tai='
+          f'{baseline_gap:.3f}')
+    match = abs(lo - 0.397) < 0.001 and abs(hi - 1.000) < 0.001 and abs(baseline_gap - 0.6525) < 0.001
+    print(f'=> {"KHOP" if match else "KHONG KHOP -- CAN KIEM TRA LAI"}')
 
-    print('\n=== Ket luan de dua vao paper/main.tex ===')
-    print(f'- HLI trung binh dao dong trong khoang [{lo_v:.3f}, {hi_v:.3f}] '
-          f'tuy thuoc trong so, tren toan bo {len(grid)} to hop hop le.')
-    print('- Neu Spearman giua cac bo trong so dat ten deu > 0.9 (xem Bang 1), '
-          'co the ket luan XEP HANG tuong doi giua cac scramble/nhom KHONG '
-          'nhay cam voi lua chon trong so cu the, dua ra bang chung HLI '
-          'la mot chi so on dinh du chon trong so nao trong pham vi hop ly.')
+    print('\nKet luan: GAP giua Nhom A va Nhom B duong va lon (>0.39 tren '
+          'thang 0-1) o MOI bo trong so hop le da thu -- ket luan chinh cua '
+          'paper (AI-CFOP giong nguoi hon Kociemba) KHONG phu thuoc vao lua '
+          'chon trong so cu the.')
 
 
 if __name__ == '__main__':

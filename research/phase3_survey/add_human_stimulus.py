@@ -2,11 +2,23 @@
 research/phase3_survey/add_human_stimulus.py
 =================================================
 Them 1 bai giai NGUOI THAT (Nhom H) vao stimuli.json MOT CACH AN TOAN --
-tu dong gan ID tiep theo, tu dong xao vi tri, tu dong kiem tra chuoi nuoc
-di co hop le khong (dung ky hieu Singmaster) TRUOC khi ghi file, tranh
-loi cu phap JSON khi sua tay.
+tu dong gan ID tiep theo, tu dong kiem tra chuoi nuoc di co hop le khong
+(dung ky hieu Singmaster) TRUOC khi ghi file, tranh loi cu phap JSON khi
+sua tay.
 
-Cach dung (chay nhieu lan, moi lan 1 bai giai, cho toi khi du 6 bai):
+QUAN TRONG (sua loi 2026-08): PHIEN BAN CU cua script nay xao tron +
+danh so lai display_id cua TOAN BO danh sach moi lan chay. Dieu nay AN
+TOAN neu chua co ai cham diem, nhung PHA HONG du lieu da thu duoc mot
+khi da co rater that -- vi analyze_results.py tra cuu noi dung stimulus
+theo display_id TU stimuli.json HIEN TAI (khong luu san trong tung file
+CSV ket qua), nen danh so lai se lam moi rating cu bi gan nham noi
+dung. Ban KHONG can xao display_id de chong doan-quy-luat: rating_tool.html
+da tu xao THU TU HIEN THI o phia client (bien `order`, doc lap voi
+display_id) moi phien cham, nen viec xao lai o day la THUA va RUI RO.
+Tu ban nay tro di: CHI THEM entry moi voi display_id CHUA TUNG DUNG,
+KHONG dung lai, KHONG doi display_id cua entry da co.
+
+Cach dung (chay nhieu lan, moi lan 1 bai giai):
 
     python3 -m research.phase3_survey.add_human_stimulus \
         --moves "R U R' U' R' F R2 U' R' U' R U R' F'"
@@ -18,7 +30,6 @@ Hoac chay khong co --moves de nhap tuong tac (go tung buoc):
 
 import argparse
 import json
-import random
 import sys
 
 VALID_FACES = set('RLUDFB')
@@ -48,6 +59,25 @@ def validate_moves(move_str):
     return tokens, None
 
 
+def _next_free_display_id(stimuli):
+    """Tim so ID nho nhat CHUA TUNG DUNG, quet toan bo lich su -- KHONG
+    chi dua vao len(list) vi cac ID cu (0..len-1) da "chot" voi rater
+    that, phai giu nguyen tuyet doi."""
+    used = set()
+    for s in stimuli:
+        did = s['display_id']
+        # dang "Bài giải #N"
+        try:
+            n = int(did.rsplit('#', 1)[1])
+            used.add(n)
+        except (IndexError, ValueError):
+            pass
+    n = 1
+    while n in used:
+        n += 1
+    return n
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--moves', type=str, default=None,
@@ -60,7 +90,7 @@ def main():
         data = json.load(f)
 
     n_h_before = sum(1 for s in data['stimuli'] if s['internal_group'] == 'H')
-    print(f'Hien tai da co {n_h_before}/6 bai giai Nhom H (nguoi that).')
+    print(f'Hien tai da co {n_h_before} bai giai Nhom H (nguoi that).')
 
     move_str = args.moves
     if move_str is None:
@@ -73,7 +103,7 @@ def main():
         print('KHONG ghi gi vao file -- sua lai chuoi nuoc di roi chay lai lenh nay.')
         sys.exit(1)
 
-    next_id = len(data['stimuli']) + 1
+    next_id = _next_free_display_id(data['stimuli'])
     new_entry = {
         'internal_group': 'H',
         'seed': 'human',
@@ -82,24 +112,16 @@ def main():
         'moves_str': ' '.join(tokens),
     }
     data['stimuli'].append(new_entry)
-
-    # Xao lai TOAN BO thu tu (khong chi phan tu moi) de khong lo thu tu
-    # them vao trung voi vi tri nhom -- tranh nguoi cham doan duoc quy luat.
-    random.shuffle(data['stimuli'])
-    for idx, s in enumerate(data['stimuli'], start=1):
-        s['display_id'] = f'Bài giải #{idx}'
-        s['moves_str'] = ' '.join(s['moves'])
+    # KHONG shuffle, KHONG danh so lai cac entry da co -- xem ghi chu
+    # dau file. rating_tool.html tu lo phan xao thu tu hien thi.
 
     with open(args.stimuli, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     n_h_after = n_h_before + 1
-    print(f'\nDA THEM THANH CONG ({len(tokens)} nuoc). '
-          f'Nhom H: {n_h_after}/6.')
-    if n_h_after < 6:
-        print(f'Con thieu {6 - n_h_after} bai -- chay lai lenh nay voi bai tiep theo.')
-    else:
-        print('DA DU 6/6 -- stimuli.json san sang gui cho nguoi tham gia khao sat!')
+    print(f'\nDA THEM THANH CONG ({len(tokens)} nuoc) voi display_id='
+          f'"Bài giải #{next_id}". Nhom H: {n_h_after} bai. '
+          f'Cac entry cu KHONG bi dong den.')
 
 
 if __name__ == '__main__':
