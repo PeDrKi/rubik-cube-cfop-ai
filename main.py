@@ -102,8 +102,8 @@ def main():
             stage = cfop_ai.stage_of(state)
         except Exception:
             return '—'
-        return {'cross': 'Cross', 'f2l': 'F2L', 'oll': 'OLL',
-                'pll_todo': 'Cross+F2L+OLL xong (PLL: sắp có)'}.get(stage, '—')
+        return {'cross': 'Cross', 'f2l': 'F2L', 'oll': 'OLL', 'pll': 'PLL',
+                'done': 'Đã giải xong! 🎉'}.get(stage, '—')
 
     def start_cfop_job(kind):
         nonlocal cfop_busy, cfop_job_kind
@@ -205,7 +205,8 @@ def main():
             elif kind == 'solve':
                 apply_cfop_solution(res['all_moves'])
                 msgs = {
-                    'oll_done':    f"AI: đã giải Cross + F2L + OLL ({len(res['all_moves'])} nước) — chờ PLL!",
+                    'solved':      f"AI: 🎉 GIẢI XONG cả cube ({len(res['all_moves'])} nước)!",
+                    'pll_partial': "AI: xong Cross+F2L+OLL, PLL còn dở (case khó, thử lại 'A')",
                     'oll_partial': "AI: xong Cross+F2L, OLL còn dở (case khó, thử lại 'A')",
                     'f2l_done':    f"AI: đã giải Cross + F2L ({len(res['all_moves'])} nước)",
                     'f2l_partial': "AI: giải được Cross + một phần F2L (cặp khó, thử lại 'A' lần nữa)",

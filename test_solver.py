@@ -7,12 +7,13 @@ Kiem tra bo giai CFOP AI (Cross + F2L) o muc MVP hien tai.
 import random
 import pytest
 
-from cube_engine import make_solved, scramble_cube, do_move
+from cube_engine import make_solved, scramble_cube, do_move, cube_solved
 from solver.facelets import cross_solved, f2l_solved_slots, F2L_ORDER, pair_solved
 from solver.cross_solver import solve_cross
 from solver.f2l_solver import solve_f2l
 from solver.cfop_ai import full_solve, hint, stage_of
 from solver.oll_solver import solve_oll, oll_done
+from solver.pll_solver import solve_pll
 from solver.full_state import from_facelets
 
 
@@ -56,7 +57,7 @@ def test_full_solve_reaches_f2l_done(seed):
 
 def test_stage_of_progression():
     st = make_solved()
-    assert stage_of(st) == 'pll_todo'
+    assert stage_of(st) == 'done'
     st2 = _scrambled(1)
     assert stage_of(st2) == 'cross'
 
@@ -103,10 +104,16 @@ def test_full_solve_oll_when_reached(seed):
 
 
 def test_hint_oll_two_phases():
-    """hint() phai tach OLL thanh 2 buoc (dinh huong canh, roi goc)."""
-    st = _scrambled(4)
-    res = full_solve(st)
-    for mv in res['cross_moves'] + res['f2l_moves']:
+    """hint() phai tach OLL thanh 2 buoc (dinh huong canh, roi goc).
+    Dung solve_cross/solve_f2l truc tiep (KHONG qua full_solve(), vi
+    full_solve() gio chay ca OLL+PLL noi bo se lang phi thoi gian khong can
+    thiet cho test nay)."""
+    st = _scrambled(1)
+    cmv = solve_cross(st)
+    for mv in cmv:
+        do_move(st, mv)
+    f2l_res = solve_f2l(st)
+    for mv in f2l_res['moves']:
         do_move(st, mv)
     assert cross_solved(st)
     assert all(pair_solved(st, s) for s in F2L_ORDER)
@@ -126,3 +133,54 @@ def test_hint_oll_two_phases():
         do_move(st, mv)
     assert (st['U'] == 'U').all()
     assert cross_solved(st) and all(pair_solved(st, s) for s in F2L_ORDER)
+
+
+def _pll_only_scramble():
+    """Tao 1 trang thai Cross+F2L+OLL van con nguyen, CHI hoan vi 3 canh lop
+    U bi sai (hoan vi chan -> luon hop le vat ly). Dung thao tac facelet
+    truc tiep (khong qua move) de tao case PLL nhanh, tat dinh, on dinh cho
+    test -- tranh phu thuoc scramble ngau nhien co the trung case OCLL/PLL
+    hiem gap va rat cham (xem CFOP_AI_README.md)."""
+    from solver.edge_model import EDGE_SLOTS
+    st = make_solved()
+    uf, ur, ub = EDGE_SLOTS['UF'], EDGE_SLOTS['UR'], EDGE_SLOTS['UB']
+    vuf = [st[f][r, c] for f, r, c in uf]
+    vur = [st[f][r, c] for f, r, c in ur]
+    vub = [st[f][r, c] for f, r, c in ub]
+    for (f, r, c), v in zip(uf, vub):
+        st[f][r, c] = v
+    for (f, r, c), v in zip(ur, vuf):
+        st[f][r, c] = v
+    for (f, r, c), v in zip(ub, vur):
+        st[f][r, c] = v
+    return st
+
+
+def test_pll_simple_permutation_case():
+    """PLL tren mot case hoan vi don gian (nhanh, tat dinh -- khong phu
+    thuoc scramble ngau nhien, tranh cac case OCLL/PLL kho hiem gap trong
+    scramble that co the mat toi vai phut, xem CFOP_AI_README.md)."""
+    st = _pll_only_scramble()
+    assert not cube_solved(st)
+    res = solve_pll(st)
+    assert res['moves'] is not None
+    for mv in res['moves']:
+        do_move(st, mv)
+    assert cube_solved(st)
+
+
+def test_stage_of_reaches_done_on_solved_cube():
+    st = make_solved()
+    assert stage_of(st) == 'done'
+
+
+def test_full_solve_reports_solved_only_when_actually_solved():
+    """Neu full_solve() bao 'reached'=='solved', cube phai THUC SU giai xong
+    tren facelet that (khong chi tin vao internal state). Dung 1 case PLL
+    don gian, tat dinh (khong scramble ngau nhien) de test nhanh & on dinh."""
+    st = _pll_only_scramble()
+    res = full_solve(st)
+    for mv in res['all_moves']:
+        do_move(st, mv)
+    assert res['reached'] == 'solved'
+    assert cube_solved(st)
