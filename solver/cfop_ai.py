@@ -199,3 +199,98 @@ def hint(state, retry=False):
     if res.get('moves'):
         res['moves'] = simplify(res['moves'])
     return res
+
+
+def full_solve_breakdown(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, retry=False):
+    """
+    Giai toan bo CFOP tu state hien tai (KHONG doi state truyen vao),
+    nhung -- khac voi full_solve() -- tra ve ket qua CHIA THEO TUNG BUOC
+    (Cross / 4 cap F2L / OLL / PLL), MOI buoc kem trang thai ro rang, dung
+    de hien thi bang cong thuc "tu trang thai hien tai den khi giai xong":
+
+      {
+        'cross': {'status': 'done'|'moves'|'failed', 'moves': [...]},
+        'f2l':   {slot: {'status': 'done'|'moves'|'failed'|'not_reached',
+                          'moves': [...]} for slot in F2L_ORDER},
+        'oll':   {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...]},
+        'pll':   {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...]},
+      }
+
+    status:
+      'done'        -- buoc nay DA XONG SAN (khong can nuoc di nao) -> hien "DONE!"
+      'moves'       -- can di 'moves' de hoan thanh buoc nay tu trang thai hien tai
+                       (da tinh don den cac buoc TRUOC do)
+      'failed'      -- co thu giai nhung KHONG tim duoc trong ngan sach hien tai
+      'not_reached' -- chua thu giai vi buoc TRUOC do chua xong (vd F2L cap sau
+                       chua toi luot, hoac OLL/PLL vi F2L/OLL chua xong)
+    """
+    from cube_engine import do_move
+    st = copy.deepcopy(state)
+
+    # ── 1) Cross ──────────────────────────────────────────────────────────
+    if cross_solved(st):
+        cross = {'status': 'done', 'moves': []}
+    else:
+        try:
+            mvs = simplify(solve_cross(st))
+        except Exception:
+            mvs = None
+        if mvs is None:
+            cross = {'status': 'failed', 'moves': []}
+            f2l = {s: {'status': 'not_reached', 'moves': []} for s in F2L_ORDER}
+            return {'cross': cross, 'f2l': f2l,
+                    'oll': {'status': 'not_reached', 'moves': []},
+                    'pll': {'status': 'not_reached', 'moves': []}}
+        for mv in mvs:
+            do_move(st, mv)
+        cross = {'status': 'moves', 'moves': mvs}
+
+    # ── 2) F2L (4 cặp, theo F2L_ORDER) ───────────────────────────────────
+    f2l_res = solve_f2l(st, depths=f2l_depths, nodes_per_depth=f2l_nodes_per_depth, retry=retry)
+    f2l = {}
+    for slot in F2L_ORDER:
+        mvs = f2l_res['per_slot'].get(slot, ...)  # ... = sentinel "khong co trong dict"
+        if mvs is ...:
+            f2l[slot] = {'status': 'not_reached', 'moves': []}
+        elif mvs is None:
+            f2l[slot] = {'status': 'failed', 'moves': []}
+        elif not mvs:
+            f2l[slot] = {'status': 'done', 'moves': []}
+        else:
+            f2l[slot] = {'status': 'moves', 'moves': simplify(mvs)}
+    for mv in f2l_res['moves']:
+        do_move(st, mv)
+    f2l_all_done = len(f2l_res['solved_slots']) == len(F2L_ORDER)
+
+    if not f2l_all_done:
+        return {'cross': cross, 'f2l': f2l,
+                'oll': {'status': 'not_reached', 'moves': []},
+                'pll': {'status': 'not_reached', 'moves': []}}
+
+    # ── 3) OLL ────────────────────────────────────────────────────────────
+    if oll_solved(st):
+        oll = {'status': 'done', 'moves': []}
+    else:
+        oll_res = solve_oll(st, retry=retry)
+        mvs = oll_res.get('moves') or []
+        for mv in mvs:
+            do_move(st, mv)
+        oll = {'status': 'moves' if oll_solved(st) else 'failed',
+               'moves': simplify(mvs) if mvs else []}
+
+    if oll['status'] == 'failed':
+        return {'cross': cross, 'f2l': f2l, 'oll': oll,
+                'pll': {'status': 'not_reached', 'moves': []}}
+
+    # ── 4) PLL ────────────────────────────────────────────────────────────
+    if cube_solved(st):
+        pll = {'status': 'done', 'moves': []}
+    else:
+        pll_res = solve_pll(st, retry=retry)
+        mvs = pll_res.get('moves') or []
+        for mv in mvs:
+            do_move(st, mv)
+        pll = {'status': 'moves' if cube_solved(st) else 'failed',
+               'moves': simplify(mvs) if mvs else []}
+
+    return {'cross': cross, 'f2l': f2l, 'oll': oll, 'pll': pll}

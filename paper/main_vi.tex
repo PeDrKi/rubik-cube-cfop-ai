@@ -20,9 +20,9 @@
 Sinh ra cho Rubik's Cube: Phương pháp Trigger-Biased Search}
 
 \author{
-  Phạm Đăng Khuê \\
-  Khoa Công nghệ thông tin, Trường Đại học Điện lực\\
-  \texttt{pdkhue2004@gmail.com}
+  \todo{Tên tác giả} \\
+  \todo{Đơn vị / Trường}\\
+  \todo{email}
 }
 
 \date{}
@@ -49,15 +49,14 @@ lường được (khả năng phân đoạn giai đoạn, độ khớp mẫu-th
 và độ trùng lặp finger-trick), và giới thiệu \emph{Trigger-Biased A*
 Search}, một cải tiến heuristic-search thưởng rõ ràng cho các nhánh tìm
 kiếm trùng khớp với kho finger-trick của con người. Các thí nghiệm thực
-nghiệm (N=60 scramble random-state cho so sánh cơ sở, kiểm tra độ mạnh
-mẽ trên N=100 scramble random-move, N=60 cho quét Pareto) cho thấy việc
+nghiệm (N=100 cho so sánh cơ sở, N=60 cho quét Pareto) cho thấy việc
 thiên vị heuristic tìm kiếm F2L làm tăng độ trùng lặp trigger từ mức cơ
 sở 9,0\% lên 25,5\% tại $\lambda=1,0$ (Wilcoxon $p=8,3\times10^{-8}$),
 với chi phí chỉ 7,4\% số nước tăng thêm (Wilcoxon $p=0,0014$), cho thấy
 một sự đánh đổi Pareto thuận lợi (dù phi tuyến về thời gian tính toán).
 Một nghiên cứu giám khảo con người mù, kiểu BotPrize
 \citep{hingston2009} (24 mẫu, 28 người chấm) xác nhận construct
-validity của HLI (Spearman $\rho=0,487$, $p=0,016$ so với điểm đánh giá
+validity của HLI (Spearman $\rho=0,487$, $p=0,031$ so với điểm đánh giá
 giống-người trung bình) và cho thấy Trigger-Biased Search đưa các lời
 giải do AI sinh ra từ trạng thái \emph{phân biệt được về mặt thống kê
 với người thật} ($p=0,005$) sang \emph{không phân biệt được về mặt
@@ -94,20 +93,8 @@ sinh, Sune/Anti-Sune, thay vì đầy đủ 57 case); sự bất đối xứng n
 nó có giá trị thông tin cho việc đo lường Pattern-conformity
 (Mục~\ref{sec:method}).
 
-Ba hướng nghiên cứu liên quan (Mục~\ref{sec:related}) hiện chưa giao
-nhau: các solver Rubik's Cube tối-ưu-kiểu-máy-tính (Mục~2.1) không
-quan tâm đến khả năng diễn giải; lập kế hoạch AI nhận biết con người
-(Mục~2.2) đã hình thức hóa explicability nhưng mới chỉ áp dụng cho các
-bài toán lập kế hoạch tác vụ ký hiệu quy mô nhỏ, chưa cho một miền tìm
-kiếm tổ hợp quy mô lớn như Rubik's Cube; cộng đồng AI game (Mục~2.3) đã
-phát triển phương pháp luận đánh giá tính giống-người bằng giám khảo
-con người mù (BotPrize) nhưng chưa từng áp dụng cho một tác nhân giải
-câu đố tổ hợp. Hệ thống dạy học CFOP gần nhất (ALLURE, Mục~2.4) chỉ bao
-phủ mục tiêu con Cross và không báo cáo một đánh giá giống-người mù có
-thể so sánh được. Bài báo này lấp khoảng trống đó bằng cách kết hợp cả
-ba hướng: một chỉ số giống-người hình thức hóa theo ngôn ngữ explicability,
-một cơ chế tìm kiếm tối ưu hóa rõ ràng cho chỉ số đó, và một nghiên cứu
-giám khảo con người mù để kiểm chứng cả hai.
+\todo{Đoạn này tóm tắt khoảng trống nghiên cứu -- xem phần Related Work
+bên dưới, viết lại ngắn gọn ở đây, kết bằng câu dẫn vào contributions}
 
 \paragraph{Đóng góp.} Bài báo này có các đóng góp sau:
 \begin{enumerate}
@@ -133,7 +120,6 @@ giám khảo con người mù để kiểm chứng cả hai.
 
 % ============================================================
 \section{Công trình liên quan}
-\label{sec:related}
 
 \subsection{Các solver Rubik's Cube tối ưu kiểu máy tính}
 IDA* của Korf kết hợp pattern database cộng dồn \citep{korf1997} là
@@ -164,11 +150,9 @@ chúng tôi đề xuất trong Mục~\ref{sec:method}, nhưng áp dụng ở đ�
 lập kế hoạch tác vụ ký hiệu thay vì một miền câu đố tổ hợp quy mô lớn.
 Chakraborti và cộng sự \citep{chakraborti2019} khảo sát bối cảnh này
 (explicability, legibility, predictability, transparency), mà chúng
-tôi dùng làm từ vựng lý thuyết cho bài báo này. Zhang và cộng sự
-\citep{zhang2017} đề xuất một cách tính explicability/predictability
-cụ thể cho lập kế hoạch tác vụ robot bằng cách học một hàm gán nhãn từ
-dữ liệu huấn luyện, khác với cách tiếp cận đo lường trực tiếp, không
-cần học, mà chúng tôi dùng cho các thành phần của HLI (Mục~\ref{sec:method}).
+tôi dùng làm từ vựng lý thuyết cho bài báo này. \todo{Nếu tìm thêm được
+bài liên quan (vd Zhang et al. 2017 về legibility trong lập kế hoạch
+tác vụ robot), thêm 1-2 câu ở đây.}
 
 \subsection{Tính giống người / độ tin cậy của tác nhân chơi game}
 Độc lập với hướng trên, cộng đồng AI game từ lâu đã nghiên cứu cách làm
@@ -176,13 +160,9 @@ cho tác nhân tự động \emph{trông giống} con người. Cuộc thi 2K Bo
 \citep{hingston2009} đã hiện thực hóa điều này thành một biến thể Turing
 test, trong đó giám khảo con người chấm điểm cả người chơi thật lẫn bot
 trên thang 1--5 về mức độ giống người, mà không được biết ai là ai.
-Trong kỳ thi năm 2012, hai bot -- UT\textsuperscript{2} (Đại học Texas
-tại Austin) và MirrorBot (Mihai Polceanu) -- lần đầu tiên vượt qua
-ngưỡng $50\%$ về tỷ lệ được chấm là "người thật", thậm chí còn cao hơn
-tỷ lệ chấm cho chính những người chơi thật tham gia kỳ thi năm đó, cho
-thấy một tác nhân tự động được tối ưu hóa rõ ràng cho việc "trông giống
-người" có thể vượt qua chính con người trên chính thước đo giống-người
-đó. Một khảo cứu gần đây
+\todo{1 câu về kết quả BotPrize 2012 (UT\^{}2, MirrorBot vượt qua
+ngưỡng) -- đã có dữ liệu từ tìm kiếm web ở bước trước, điền vào đây,
+PARAPHRASE không trích nguyên văn}. Một khảo cứu gần đây
 \citep{humanlike2025} đóng khung nghiên cứu AI game giống-người quanh
 hai câu hỏi — làm sao mô hình hóa/cài đặt hành vi giống người, và làm
 sao đo mức độ giống người đó — mà chúng tôi dùng làm cấu trúc tổ chức
@@ -250,12 +230,8 @@ case-sang-thuật-toán hữu hạn, có tên trong CFOP), $P(\pi)$ là tỷ l�
 giai đoạn đã giải mà đoạn con nước-đi tương ứng khớp chính xác với một
 mục trong bảng đã kiểm chứng các thuật toán chuẩn (Aa, Ab, \ldots, Z
 cho PLL; các thuật toán sinh Sune/Anti-Sune cho OLL 2-look) thay vì rơi
-vào tìm kiếm không cấu trúc. Toàn bộ $21/21$ case PLL trong bảng đã
-được kiểm chứng tự động khi module được import lần đầu, thông qua
-\texttt{verify\_and\_build\_table()} (\texttt{solver/pll\_algorithms.py});
-chúng tôi xác nhận lại điều này bằng cách chạy trực tiếp hàm này, thu
-được đúng $21$ tên case đã kiểm chứng (\texttt{Aa, Ab, E, F, Ga, Gb, Gc,
-Gd, H, Ja, Jb, Na, Nb, Ra, Rb, T, Ua, Ub, V, Y, Z}).
+vào tìm kiếm không cấu trúc. \todo{Trích số liệu: X/Y case PLL đã kiểm
+chứng, bằng chứng minh bằng \texttt{verify\_and\_build\_table()}}.
 
 \paragraph{Độ trùng lặp Trigger $O(\pi) \in [0,1]$.}
 \label{sec:hli-trigger}
@@ -265,11 +241,9 @@ chúng tôi đo tỷ lệ số nước đi được bao phủ bởi một phép 
 greedy-longest-match của $\pi$ đối chiếu với một kho hạt giống $T$ gồm
 $|T|=11$ finger-trick phổ biến của con người (ví dụ "sexy move"
 $R\,U\,R'\,U'$, "sledgehammer" $R'\,F\,R\,F'$; kho đầy đủ trong Phụ lục
-\ref{app:triggers}). Đây là một kho hạt giống (seed corpus) được tuyển
-chọn thủ công từ tri thức phổ biến trong cộng đồng speedcubing, không
-suy ra từ thống kê n-gram trên log solve người thật; một bản mở rộng
-nên thay thế/bổ sung kho này bằng cách thống kê trực tiếp từ log solve
-thật (ví dụ file .log của CSTimer) để giảm thiên vị do tự chọn corpus.
+\todo{X}). \todo{GHI RÕ trong bài: đây là kho hạt giống thủ công, đề
+xuất mở rộng bằng thống kê n-gram trên log solve người thật (vd
+CSTimer) ở bản mở rộng.}
 
 \paragraph{HLI tổng hợp.}
 $$\mathrm{HLI}(\pi) = w_S \cdot S(\pi) + w_P \cdot P(\pi) + w_O \cdot O(\pi), \quad w_S{+}w_P{+}w_O = 1$$
@@ -329,16 +303,11 @@ bộ sinh (Mục~\ref{sec:discussion}).
 \textbf{Phần cứng / cài đặt.} Sandbox đám mây đơn lõi (1 vCPU, 4GB
 RAM), Python 3.12, biểu diễn cube dựa trên NumPy. Mọi thí nghiệm dùng
 1 seed gốc cố định cho mỗi điều kiện (\texttt{random.Random(seed)},
-seed 5000--5059 cho Experiment~1 chính (random-state), 1000--1099 cho
-lần chạy kiểm tra độ mạnh mẽ random-move, và 2000--2059 cho
-Experiment~2) để tái lập được. Chúng tôi giữ nguyên toàn bộ số liệu
-trên phần cứng đơn-lõi này cho bản thảo hiện tại; tỷ lệ timeout quan
-sát được ($20$--$22\%$, Mục~\ref{sec:pathological}) là một đặc tính
-riêng của thiết lập phần cứng/ngân sách node cụ thể này và nhiều khả
-năng sẽ thấp hơn trên phần cứng nhiều lõi/nhanh hơn -- đây là một giới
-hạn đã biết của kết quả, không phải một thuộc tính phổ quát của
-Trigger-Biased Search, và nên được nêu rõ nếu công bố chính thức
-dùng phần cứng khác.
+seed 1000--1099 cho Experiment~1, 2000--2059 cho Experiment~2) để tái
+lập được. \todo{Nếu chuyển sang máy mạnh hơn trước khi công bố chính
+thức, cập nhật lại thông số và CHẠY LẠI toàn bộ thí nghiệm -- tỷ lệ
+timeout 22\% có thể giảm đáng kể trên máy nhiều core/nhanh hơn, nên
+KHÔNG dùng nguyên số liệu này nếu đổi phần cứng.}
 
 \textbf{Kiểm định thống kê.} Kiểm định Wilcoxon signed-rank (theo cặp,
 từng scramble) cho khác biệt về số nước và HLI giữa các điều kiện; báo
@@ -349,37 +318,30 @@ cáo effect size $r = Z/\sqrt{N}$.
 \label{sec:results}
 
 \subsection{Experiment 1: Khoảng cách giống-người cơ sở}
-Bảng~\ref{tab:exp1} báo cáo kết quả trên $N=60$ scramble random-state
-kiểu WCA (Mục~\ref{sec:setup}: random walk dài, nghịch đảo lời giải
-Kociemba gần-tối-ưu; seed 5000--5059), được chọn làm kết quả chính vì
-khớp sát hơn với phương pháp sinh scramble thi đấu thật. Nhóm A dùng
-ngân sách node F2L đã giảm (40.000 node/độ sâu, từ mặc định 120.000)
-và timeout 20 giây thực cho mỗi lần giải để phù hợp với phần cứng đánh
-giá đơn-lõi của chúng tôi; $20\%$ scramble ($12/60$) vượt quá timeout
-này và bị loại khỏi thống kê theo cặp bên dưới. Trong số $48$ scramble
-được cả hai nhóm giải, kiểm định Wilcoxon signed-rank xác nhận Nhóm A
-cần số nước nhiều hơn có ý nghĩa so với Nhóm B ($W=0$,
-$p=1,61\times10^{-9}$, $r=0,87$, effect size rất lớn), trong khi theo
-cấu trúc chỉ Nhóm A có HLI khác 0. Chúng tôi cũng chạy lại cùng phép so
-sánh trên $N=100$ scramble random-move làm kiểm tra độ mạnh mẽ
-(robustness check) — kết quả gần như giống hệt, bao gồm một hiện
-tượng tìm kiếm không hội tụ đáng chú ý ($22\%$ timeout); xem
-Mục~\ref{sec:pathological} và~\ref{sec:validity} để thảo luận chi tiết
-về kiểm tra này.
+Bảng~\ref{tab:exp1} báo cáo kết quả trên $N=100$ scramble random-move
+(20 nước mỗi scramble, seed 1000--1099). Nhóm A dùng ngân sách node F2L
+đã giảm (40.000 node/độ sâu, từ mặc định 120.000) và timeout 20 giây
+thực cho mỗi lần giải để phù hợp với phần cứng đánh giá đơn-lõi của
+chúng tôi; $22\%$ scramble ($22/100$) vượt quá timeout này và bị loại
+khỏi thống kê theo cặp bên dưới (xem Mục~\ref{sec:pathological} để
+thảo luận về hiện tượng này). Trong số $78$ scramble được cả hai nhóm
+giải, kiểm định Wilcoxon signed-rank xác nhận Nhóm A cần số nước nhiều
+hơn có ý nghĩa so với Nhóm B ($W=0$, $p=1,65\times10^{-14}$, $r=0,87$,
+effect size rất lớn), trong khi theo cấu trúc chỉ Nhóm A có HLI khác 0.
 
 \begin{table}[h]
 \centering
-\caption{Nhóm A (AI-CFOP) so với Nhóm B (Kociemba), N=60 scramble
-random-state kiểu WCA, 48 cặp thành công (Wilcoxon $p=1,61\times10^{-9}$,
-$r=0,87$ cho khác biệt số nước)}
+\caption{Nhóm A (AI-CFOP) so với Nhóm B (Kociemba), N=100 scramble, 78
+cặp thành công (Wilcoxon $p=1,65\times10^{-14}$, $r=0,87$ cho khác
+biệt số nước)}
 \begin{tabular}{lcc}
 \toprule
  & Nhóm A (AI-CFOP) & Nhóm B (Kociemba) \\
 \midrule
-Số nước TB (sd) & 66,3 (9,5) & 20,6 (0,9) \\
-Khoảng số nước & 53--104 & 18--22 \\
-HLI TB (sd) & 0,658 (0,093) & 0 (theo định nghĩa) \\
-Tỷ lệ giải thành công & 80\% (20\% timeout) & 100\% \\
+Số nước TB (sd) & 67,2 (11,1) & 20,6 (1,1) \\
+Khoảng số nước & 47--105 & 16--22 \\
+HLI TB (sd) & 0,655 (0,096) & 0 (theo định nghĩa) \\
+Tỷ lệ giải thành công & 78\% (22\% timeout) & 100\% \\
 \bottomrule
 \end{tabular}
 \label{tab:exp1}
@@ -498,13 +460,11 @@ $\lambda$ cao hơn (Mục~\ref{sec:results}): tính hội tụ có vẻ đáng t
 cậy hơn, nhưng các lần chạy trường-hợp-xấu-nhất cá biệt vẫn có thể mất
 thời gian lâu hơn đáng kể, tức là thiên vị trigger đánh đổi \emph{độ
 tin cậy} hội tụ để lấy \emph{phương sai} thời gian tìm kiếm.
-Chúng tôi lưu ý phát hiện này dựa trên $N=60$ scramble và chỉ ba mức
-$\lambda$ ($0$; $0,5$; $1,0$); chúng tôi chưa xác nhận xu hướng này ổn
-định trên cỡ mẫu lớn hơn hoặc các mức $\lambda$ trung gian (ví dụ
-$0,25$; $0,75$), và xem đây là một hạn chế cần làm rõ thêm ở công việc
-tiếp nối (Mục~\ref{sec:future}) trước khi khẳng định chắc chắn trong
-một bản công bố chính thức. Một phân tích hình thức về việc chính xác
-mất bao nhiêu tính admissible được trình bày dưới đây.
+\todo{Điều tra sau: có thể đây là trùng hợp ngẫu nhiên với N=60, nên
+làm lại với N lớn hơn và nhiều mức lambda hơn (0,25, 0,75...) để xác
+nhận xu hướng này ổn định, trước khi khẳng định chắc chắn trong bản
+công bố chính thức.} Một phân tích hình thức về việc chính xác mất bao
+nhiêu tính admissible được trình bày dưới đây.
 
 \paragraph{Mất bao nhiêu tính admissible?} Heuristic gốc
 $h(n) = h_{\mathrm{PDB}}(n) + \mathrm{penalty}(n)$ vốn cũng không hoàn
@@ -532,73 +492,55 @@ như số hạng penalty hiện có.
 
 \subsection{Scramble bệnh lý và tình trạng tìm kiếm không hội tụ}
 \label{sec:pathological}
-Trong lần chạy kiểm tra độ mạnh mẽ dùng $N=100$ scramble random-move
-(Mục~\ref{sec:validity}), $22\%$ scramble ($22/100$) không hoàn thành
-trong ngân sách 20 giây thực ngay cả với ngân sách tìm kiếm đã giảm
-còn 40.000 node/độ sâu — đáng chú ý, một số thất bại như vậy xảy ra
-liên tiếp nhau (ví dụ seed 1059--1061 trong lần chạy của chúng tôi),
-gợi ý bộ sinh scramble random-move có thể tạo ra các chuỗi cấu hình
-F2L tương tự nhau về cấu trúc, mang tính đối kháng, thay vì độ khó độc
-lập đồng phân bố (i.i.d.). Một seed cụ thể (1013) bị treo hơn 5 phút
-ngay cả với ngân sách đã giảm, trước khi chúng tôi đưa vào một timeout
-thực cứng (dựa trên \texttt{SIGALRM}) trong bộ khai thác đánh giá.
-Chúng tôi diễn giải điều này là bằng chứng cho thấy heuristic A* có bổ
-sung penalty theo từng cặp dùng cho F2L (Mục~\ref{sec:setup}) đôi khi
-bị dẫn vào các vùng tìm kiếm không hiệu quả một cách bệnh lý — một giới
-hạn về độ tin cậy quan trọng, khác biệt với, nhưng có thể bị khuếch đại
-bởi, cơ chế thiên vị trigger ở Mục~\ref{sec:method}. Lưu ý cả lần chạy
-chính (random-state, Bảng~\ref{tab:exp1}) lẫn lần chạy kiểm tra này đều
-dùng $\lambda=0$ xuyên suốt (không áp thiên vị trigger cho giai đoạn
-F2L); chúng tôi đo riêng mối quan hệ giữa $\lambda$ và tỷ lệ thất bại
-hội tụ dùng dữ liệu Experiment~2 (Mục~\ref{sec:discussion}), phát hiện
-— trái với kỳ vọng ban đầu — rằng $\lambda$ cao hơn liên quan đến
-\emph{ít hơn}, không phải nhiều hơn, các thất bại hội tụ trên tập dữ
-liệu đó.
+Trong Experiment 1, $22\%$ scramble ($22/100$) không hoàn thành trong
+ngân sách 20 giây thực ngay cả với ngân sách tìm kiếm đã giảm còn
+40.000 node/độ sâu — đáng chú ý, một số thất bại như vậy xảy ra liên
+tiếp nhau (ví dụ seed 1059--1061 trong lần chạy của chúng tôi), gợi ý
+bộ sinh scramble random-move có thể tạo ra các chuỗi cấu hình F2L
+tương tự nhau về cấu trúc, mang tính đối kháng, thay vì độ khó độc lập
+đồng phân bố (i.i.d.). Một seed cụ thể (1013) bị treo hơn 5 phút ngay
+cả với ngân sách đã giảm, trước khi chúng tôi đưa vào một timeout thực
+cứng (dựa trên \texttt{SIGALRM}) trong bộ khai thác đánh giá. Chúng tôi
+diễn giải điều này là bằng chứng cho thấy heuristic A* có bổ sung
+penalty theo từng cặp dùng cho F2L (Mục~\ref{sec:setup}) đôi khi bị dẫn
+vào các vùng tìm kiếm không hiệu quả một cách bệnh lý — một giới hạn về
+độ tin cậy quan trọng, khác biệt với, nhưng có thể bị khuếch đại bởi,
+cơ chế thiên vị trigger ở Mục~\ref{sec:method}. Lưu ý Experiment~1 dùng
+$\lambda=0$ xuyên suốt (không áp thiên vị trigger cho giai đoạn F2L);
+chúng tôi đo riêng mối quan hệ giữa $\lambda$ và tỷ lệ thất bại hội tụ
+dùng dữ liệu Experiment~2 (Mục~\ref{sec:discussion}), phát hiện — trái
+với kỳ vọng ban đầu — rằng $\lambda$ cao hơn liên quan đến \emph{ít
+hơn}, không phải nhiều hơn, các thất bại hội tụ trên tập dữ liệu đó.
 
 % ============================================================
 \section{Đe dọa đến Tính hợp lệ (Threats to Validity)}
-\label{sec:validity}
 \begin{itemize}
   \item \textbf{Tìm kiếm không hội tụ}: như đã báo cáo ở
-    Mục~\ref{sec:pathological}, $22\%$ scramble trong lần chạy kiểm tra
-    độ mạnh mẽ random-move ($N=100$) và $20\%$ scramble trong lần chạy
-    chính random-state ($N=60$, Bảng~\ref{tab:exp1}) không hoàn thành
-    trong timeout 20 giây ở thiết lập phần cứng/ngân sách đánh giá của
-    chúng tôi; kết quả có điều kiện trên các scramble đã hoàn thành, có
+    Mục~\ref{sec:pathological}, $22\%$ scramble trong thiết lập phần
+    cứng/ngân sách đánh giá của chúng tôi không hoàn thành trong
+    timeout 20 giây; kết quả có điều kiện trên $78\%$ đã hoàn thành, có
     thể không phải là mẫu con đại diện (ví dụ nếu độ khó tương quan với
     tiềm năng trigger-overlap).
   \item \textbf{Construct validity của HLI}: chỉ số này được thiết kế
     thủ công, đã được validate đối chiếu với đánh giá con người thông
     qua Experiment~3 (Mục~\ref{sec:exp3}).
-  \item \textbf{Độ tin cậy liên giám khảo}: từng giám khảo cá nhân có
-    độ đồng thuận khiêm tốn (ICC(2,1)$=0,26$, dưới ngưỡng $0,4$ thường
-    dùng làm mốc "đồng thuận chấp nhận được"), nhưng nhờ cỡ mẫu
-    $N=28$ người chấm, điểm trung bình dùng cho các phân tích tương
-    quan ở Mục~\ref{sec:exp3} đạt độ tin cậy cao (ICC(2,k)$=0,91$) --
-    tương quan RQ-V1 nên được diễn giải như tương quan của một
-    \emph{điểm trung bình ổn định}, không phải của phán đoán từng cá
-    nhân đơn lẻ.
   \item \textbf{Thiên vị kho ngữ liệu}: kho finger-trick $T$ được tuyển
     chọn thủ công (11 trigger), không được suy ra từ log solve người
     thật; kết quả có thể không tổng quát hóa được cho các solver có vốn
     trigger khác.
-  \item \textbf{Sinh scramble (đã kiểm tra)}: Bảng~\ref{tab:exp1} (Mục
-    \ref{sec:results}) dùng bộ sinh scramble kiểu WCA random-state
-    (Mục~\ref{sec:setup}) làm kết quả chính, vì khớp sát hơn với
-    phương pháp sinh scramble thi đấu thật. Chúng tôi cũng chạy lại
-    Experiment~1 trên $N=100$ scramble random-move (seed 1000--1099,
-    bộ sinh dùng cho Experiment~2) như một kiểm tra độ mạnh mẽ
-    (robustness check). Kết quả nhất quán giữa hai bộ sinh (78\% so với
-    80\% tỷ lệ giải thành công; số nước trung bình 67,2 so với 66,3;
-    HLI trung bình 0,655 so với 0,658), cho thấy kết quả chính không
-    phải là hiện tượng giả tạo do lựa chọn bộ sinh scramble cụ thể. Bộ
-    random-move này cũng là nơi chúng tôi quan sát thấy hiện tượng tìm
-    kiếm không hội tụ đáng chú ý ($22\%$ timeout, xem
-    Mục~\ref{sec:pathological}); chúng tôi chưa quan sát cụm thất bại
-    tương tự trên $N=60$ mẫu random-state (tỷ lệ timeout thấp hơn,
-    $20\%$), nhưng cỡ mẫu nhỏ hơn khiến việc so sánh trực tiếp về tính
-    ``cụm'' của thất bại giữa hai bộ sinh chưa đủ mạnh để kết luận chắc
-    chắn.
+  \item \textbf{Sinh scramble (đã kiểm tra)}: chúng tôi đã cài đặt một
+    bộ sinh scramble kiểu WCA random-state (Mục~\ref{sec:setup}) và
+    chạy lại Experiment~1 trên $N=60$ scramble random-state như một
+    kiểm tra độ mạnh mẽ (robustness check). Kết quả nhất quán với điều
+    kiện random-move (80\% so với 78\% tỷ lệ giải thành công; số nước
+    trung bình 66,3 so với 67,2; HLI trung bình 0,658 so với 0,655),
+    cho thấy kết quả random-move ban đầu của chúng tôi không phải là
+    hiện tượng giả tạo do scramble dễ hơn một cách có hệ thống. Dù vậy
+    chúng tôi báo cáo minh bạch kết quả từ cả hai bộ sinh
+    (Bảng~\ref{tab:exp1} dùng random-move để nhất quán với
+    Experiment~2; \todo{nếu muốn, đổi Bảng 1 chính sang dùng
+    random-state làm kết quả chính, giữ random-move như robustness
+    check phụ -- cả 2 cách đều chấp nhận được, tùy quyết định}).
   \item \textbf{Khả năng tổng quát hóa đơn-miền}: kết quả đặc thù cho
     Rubik's Cube; các tuyên bố về explicability nói chung nên được giới
     hạn tương ứng.
@@ -628,26 +570,14 @@ thói quen của một solver đơn lẻ) sẽ thu hẹp khoảng tin cậy trê
 sánh nhóm ở Mục~\ref{sec:exp3}.
 
 \paragraph{Mở rộng pattern-conformity sang Cross/F2L.}
-Hiện tại Pattern-conformity $P(\pi)$ chỉ áp dụng cho OLL/PLL, vì đây là
-hai giai đoạn duy nhất có bảng case-sang-thuật-toán hữu hạn, có tên
-trong hệ thống của chúng tôi; Cross và F2L được đo gián tiếp qua
-Trigger-overlap thay vì Pattern-conformity thật sự. Xây dựng một bảng
-case F2L chuẩn (ví dụ theo hệ thống 41-case phổ biến trong cộng đồng
-speedcubing) và một cơ chế nhận diện case tương tự
-\texttt{verify\_and\_build\_table()} đã dùng cho PLL sẽ cho phép thay
-thế một phần Trigger-overlap bằng Pattern-conformity thật sự cho F2L,
-làm HLI phản ánh chính xác hơn cấu trúc của giai đoạn này.
+\todo{ý tưởng: xây dựng bảng case F2L 41-case chuẩn (như OLL/PLL đã
+có), thay thế một phần trigger-overlap bằng pattern-conformity thật sự
+cho F2L.}
 
-\paragraph{Cơ chế thiên vị thay thế.} Trigger-Biased Search hiện dùng
-một siêu tham số $\lambda$ cố định, chọn thủ công. Công việc tiếp nối
-có thể so sánh cơ chế này với các phương án khác, ví dụ: tinh chỉnh
-trực tiếp trọng số của pattern database dùng cho F2L thay vì cộng thêm
-một số hạng bonus riêng biệt, hoặc học trọng số \texttt{bonus(path)} từ
-dữ liệu solve người thật (ví dụ hồi quy tần suất trigger quan sát được
-trong log CSTimer) thay vì ấn định $\lambda$ bằng tay -- qua đó biến kho
-hạt giống $T$ (Phụ lục~\ref{app:triggers}) từ một danh sách tuyển chọn
-thủ công thành một mô hình được học trực tiếp từ hành vi người giải
-thật.
+\paragraph{Cơ chế thiên vị thay thế.}
+\todo{So sánh trigger-biased A* với cách khác, vd fine-tune trọng số
+PDB, hoặc học trọng số bonus từ dữ liệu solve người (thay vì $\lambda$
+cố định tay).}
 
 % ============================================================
 \section{Kết luận}
@@ -657,10 +587,9 @@ speedcuber con người thay vào đó dùng CFOP, đánh đổi tính tối ưu
 cấu trúc và khả năng học được. Chúng tôi đã hình thức hóa sự đánh đổi
 này bằng ngôn ngữ của lập kế hoạch AI nhận biết con người thành một
 \emph{Chỉ số Giống-Người} (HLI) đo lường được, và cho thấy bằng thực
-nghiệm ($N=60$ scramble random-state, kiểm tra độ mạnh mẽ trên $N=100$
-scramble random-move) rằng solver AI-CFOP của chúng tôi đạt điểm
+nghiệm ($N=100$ scramble) rằng solver AI-CFOP của chúng tôi đạt điểm
 cao hơn đáng kể trên chỉ số này so với baseline Kociemba tối-ưu-kiểu-máy-tính
-(HLI trung bình $0,658$ so với $0$ theo định nghĩa), một khoảng cách
+(HLI trung bình $0,655$ so với $0$ theo định nghĩa), một khoảng cách
 robust trên một phạm vi rộng các cách gán trọng số thành phần
 (Mục~\ref{sec:method}). Sau đó chúng tôi giới thiệu \emph{Trigger-Biased
 A* Search}, một cải tiến tối giản, tương thích ngược cho heuristic F2L
@@ -708,7 +637,7 @@ P.~Hingston.
 \bibitem[Kociemba()]{kociemba}
 H.~Kociemba.
 \newblock Cube explorer / two-phase algorithm.
-\newblock \url{http://kociemba.org/cube.htm}, truy cập ngày 26 tháng 7 năm 2026.
+\newblock \url{http://kociemba.org/cube.htm}, truy cập \todo{ngày truy cập}.
 
 \bibitem[Korf(1997)]{korf1997}
 R.~E. Korf.
@@ -761,46 +690,6 @@ K.~Vanacore, J.~Ocumpaugh, F.~Agostinelli, D.~Wu, S.~Vuruma, và M.~Irvin.
   thời điểm viết bài -- kiểm tra lại tình trạng công bố trước khi trích
   dẫn như một nguồn đã bình duyệt.
 
-\bibitem[Zhang et~al.(2017)]{zhang2017}
-Y.~Zhang, S.~Sreedharan, A.~Kulkarni, T.~Chakraborti, H.~H.~Zhuo, và
-  S.~Kambhampati.
-\newblock Plan explicability and predictability for robot task planning.
-\newblock Trong \emph{Proceedings of the IEEE International Conference on
-  Robotics and Automation (ICRA)}, 2017.
-
 \end{thebibliography}
-
-\appendix
-\section{Kho hạt giống $T$: 11 finger-trick}
-\label{app:triggers}
-Bảng~\ref{tab:triggers} liệt kê đầy đủ kho hạt giống $T$ dùng để tính
-Trigger-overlap $O(\pi)$ và số hạng \texttt{bonus(path)} trong
-Trigger-Biased Search (Mục~\ref{sec:hli-trigger},~\ref{sec:method}),
-trích trực tiếp từ \texttt{research/finger\_tricks.py}. Mỗi trigger
-được liệt kê ở dạng "thuận" (R-based); hệ thống tự sinh thêm biến thể
-mirror (L-based, hoán đổi $R \leftrightarrow L$) khi khớp mẫu.
-
-\begin{table}[h]
-\centering
-\caption{Kho hạt giống $T$ ($|T|=11$)}
-\begin{tabular}{ll}
-\toprule
-Tên & Chuỗi nước đi \\
-\midrule
-sexy\_move        & $R\ U\ R'\ U'$ \\
-sexy\_move\_inv    & $U\ R\ U'\ R'$ \\
-reverse\_sexy      & $R'\ U'\ R\ U$ \\
-sledgehammer      & $R'\ F\ R\ F'$ \\
-sledgehammer\_inv  & $F\ R'\ F'\ R$ \\
-hedgehog          & $R\ U'\ R'$ \\
-triple\_sexy       & $(R\ U\ R'\ U')^3$ \\
-sune\_trigger      & $R\ U\ R'\ U\ R\ U2\ R'$ \\
-ubl\_insert        & $U'\ R\ U$ \\
-urf\_insert        & $U\ R\ U'$ \\
-niklas            & $R\ U\ R'\ U'\ R'\ F\ R\ F'$ \\
-\bottomrule
-\end{tabular}
-\label{tab:triggers}
-\end{table}
 
 \end{document}

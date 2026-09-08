@@ -22,8 +22,6 @@ from cube_engine import (make_solved, scramble_cube, cube_solved,
 from renderer_3d import Rx, Ry, draw_cube_3d, hit_test_3d, ANIMATABLE_BASES
 from draw_helpers import draw_panels, panel_hit, draw_bar
 from solver import cfop_ai
-from solver.oll_algorithms import OLL_ALGS_FOR_DISPLAY
-from solver.pll_algorithms import PLL_ALGS_FOR_DISPLAY
 
 
 ANIM_DUR      = 0.13   # giây, 3D move animation (ở tốc độ x1)
@@ -35,56 +33,74 @@ SPEED_DEFAULT_IDX = SPEED_STEPS.index(1.0)
 
 
 # ── Bảng công thức CFOP (Cross -> F2L -> OLL -> PLL), hiển thị khi bấm T ────
-_CROSS_NOTE = [
-    "Bước trực giác (intuitive) — không có bảng công thức cố định.",
-    "AI dùng A*/IDA* search để tìm lời giải ngắn nhất cho 4 cạnh Cross.",
-    "Mẹo tự giải: đưa 4 cạnh Cross khớp màu tâm 4 mặt bên (không chỉ mặt D).",
-]
-_F2L_NOTE = [
-    "Bước trực giác — không tra bảng công thức cố định (khác OLL/PLL).",
-    "AI dùng A* search ghép từng cặp góc + cạnh (corner-edge pair) trực",
-    "tiếp vào 4 khe (slot) F2L, tận dụng các finger-trick phổ biến.",
-]
-_OLL_NOTE = [
-    "Cơ sở dữ liệu hiện có (chưa đủ 57/57 trường hợp OLL chuẩn):",
-]
-_PLL_NOTE = [
-    "Đầy đủ 21/21 trường hợp PLL chuẩn, đã kiểm chứng bằng code.",
-]
+# Khác với 1 bảng tra cứu tĩnh: nội dung được TÍNH TỪ TRẠNG THÁI CUBE HIỆN
+# TẠI (xem cfop_ai.full_solve_breakdown), nên mỗi bước hiện đúng chuỗi nước
+# đi cần làm để đi tới khi hoàn thành; bước nào đã xong sẵn ghi "DONE!".
+_ROW_GREEN = (110, 230, 140)   # DONE!
+_ROW_AMBER = (235, 180, 90)    # that bai trong ngan sach hien tai
+_ROW_GREY  = (140, 140, 175)   # chua toi luot
+_ROW_WHITE = (225, 225, 235)   # co chuoi nuoc di can lam
 
 
-def build_formula_lines():
-    """Tra ve danh sach (kind, *data) mo ta noi dung bang cong thu CFOP,
-    dung de ve trong panel bat/tat bang phim T. kind:
+def _stage_row(label, info):
+    """1 dong (kind='row') the hien 1 buoc/1 cap F2L, dua tren dict
+    {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...]}."""
+    status = info.get('status')
+    if status == 'done':
+        return ('row', label, 'DONE!', _ROW_GREEN)
+    if status == 'moves':
+        return ('row', label, ' '.join(info['moves']), _ROW_WHITE)
+    if status == 'failed':
+        return ('row', label,
+                 '(chưa tìm được trong ngân sách hiện tại -- mở lại bảng (T) để thử lại)',
+                 _ROW_AMBER)
+    return ('row', label, '(chưa tới lượt -- cần xong bước trước)', _ROW_GREY)
+
+
+def build_formula_lines(breakdown):
+    """Tra ve danh sach (kind, *data) mo ta noi dung bang cong thuc CFOP tu
+    KET QUA cfop_ai.full_solve_breakdown(state), dung de ve trong panel
+    bat/tat bang phim T. kind:
       'header' -> (kind, tieu de)
-      'note'   -> (kind, dong van ban thuong)
-      'alg'    -> (kind, ten, chuoi Singmaster)
+      'row'    -> (kind, nhan, noi dung, mau)
       'spacer' -> (kind,)  dong trong nho de tach nhom
     """
     lines = []
     lines.append(('header', "1) CROSS"))
-    for t in _CROSS_NOTE:
-        lines.append(('note', t))
+    lines.append(_stage_row('Cross', breakdown['cross']))
     lines.append(('spacer',))
 
-    lines.append(('header', "2) F2L  (First Two Layers)"))
-    for t in _F2L_NOTE:
-        lines.append(('note', t))
+    lines.append(('header', "2) F2L  (4 cặp góc-cạnh)"))
+    for slot in ('DFR', 'DFL', 'DBR', 'DBL'):
+        lines.append(_stage_row(slot, breakdown['f2l'][slot]))
     lines.append(('spacer',))
 
     lines.append(('header', "3) OLL  (Orientation of Last Layer)"))
-    for t in _OLL_NOTE:
-        lines.append(('note', t))
-    for name, seq in OLL_ALGS_FOR_DISPLAY.items():
-        lines.append(('alg', name, seq))
+    lines.append(_stage_row('OLL', breakdown['oll']))
     lines.append(('spacer',))
 
     lines.append(('header', "4) PLL  (Permutation of Last Layer)"))
-    for t in _PLL_NOTE:
-        lines.append(('note', t))
-    for name, seq in PLL_ALGS_FOR_DISPLAY.items():
-        lines.append(('alg', name, seq))
+    lines.append(_stage_row('PLL', breakdown['pll']))
 
+    return lines
+
+
+def _wrap_text(text, font, max_w):
+    """Chia `text` thanh nhieu dong sao cho moi dong vua voi chieu rong
+    max_w khi render bang `font` (wrap theo tu, cach nhau boi dau cach --
+    phu hop voi chuoi Singmaster vi moi nuoc di la 1 'tu'). Luon tra ve
+    it nhat 1 dong (co the rong)."""
+    words = text.split(' ')
+    lines = []
+    cur = ''
+    for w in words:
+        trial = w if not cur else cur + ' ' + w
+        if not cur or font.size(trial)[0] <= max_w:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    lines.append(cur)
     return lines
 
 
@@ -174,7 +190,7 @@ def main():
     formula_panel_open = False
     formula_scroll      = 0     # độ lệch cuộn hiện tại (px)
     formula_scroll_max   = 0     # cập nhật mỗi frame khi vẽ, dùng để giới hạn cuộn
-    formula_lines        = build_formula_lines()   # nội dung tĩnh, dựng 1 lần
+    formula_lines        = []    # nội dung hiện tại, dựng lại mỗi lần bấm T (xem start_cfop_job('formula'))
 
     # ── CFOP AI (Cross + F2L, chay nen bang thread de khong dong UI) ─────────
     cfop_busy       = False    # True trong khi thread AI dang tinh
@@ -209,6 +225,8 @@ def main():
             try:
                 if kind == 'solve':
                     res = cfop_ai.full_solve(snapshot, retry=retry)
+                elif kind == 'formula':
+                    res = cfop_ai.full_solve_breakdown(snapshot, retry=retry)
                 else:
                     res = cfop_ai.hint(snapshot, retry=retry)
                 cfop_result_q.put((kind, res, None))
@@ -305,6 +323,10 @@ def main():
                 }
                 cfop_note = msgs.get(res['reached'], f"AI: đã đi {len(res['all_moves'])} nước")
                 cfop_note_timer = 220
+            elif kind == 'formula':
+                formula_lines  = build_formula_lines(res)
+                formula_scroll = 0
+                formula_panel_open = True
             else:   # hint
                 hint_label = res['label']
                 hint_moves_str = ' '.join(res['moves']) if res['moves'] else None
@@ -590,8 +612,7 @@ def main():
                         bar_active = True
 
                     elif ev.key == K_t:
-                        formula_panel_open = True
-                        formula_scroll = 0
+                        start_cfop_job('formula')
 
                     elif ev.key == K_a:
                         start_cfop_job('solve')
@@ -885,52 +906,51 @@ def main():
             name_col_w = max(70, int(88 * lo.s))
             row_gap    = max(2, int(3 * lo.s))
             spacer_h   = max(6, int(10 * lo.s))
+            text_x0    = content_rect.x + 10 + name_col_w
+            wrap_w     = max(50, content_rect.width - 10 - name_col_w - 10)
 
-            # ── Pass 1: tính tổng chiều cao nội dung để giới hạn cuộn ────────
-            total_h = 0
-            for row in formula_lines:
-                kind = row[0]
-                if kind == 'header':
-                    total_h += lo.bfont.get_height() + int(14 * lo.s)
-                elif kind == 'note':
-                    total_h += lo.sfont.get_height() + row_gap
-                elif kind == 'alg':
-                    total_h += lo.mfont.get_height() + row_gap
-                elif kind == 'spacer':
-                    total_h += spacer_h
-
-            formula_scroll_max = max(0, total_h - content_rect.height)
-            formula_scroll = max(0, min(formula_scroll, formula_scroll_max))
-
-            # ── Pass 2: vẽ, chỉ trong vùng content_rect (clip) ───────────────
-            prev_clip = screen.get_clip()
-            screen.set_clip(content_rect)
-            y = content_rect.y - formula_scroll
+            # ── Pre-pass: dựng danh sách item cần vẽ (đã wrap chuỗi dài) ─────
+            draw_items = []
             for row in formula_lines:
                 kind = row[0]
                 if kind == 'header':
                     h = lo.bfont.get_height() + int(14 * lo.s)
-                    if y + h >= content_rect.y and y <= content_rect.bottom:
-                        txt = lo.bfont.render(row[1], True, GOLD)
-                        screen.blit(txt, (content_rect.x, y))
-                    y += h
-                elif kind == 'note':
-                    h = lo.sfont.get_height() + row_gap
-                    if y + h >= content_rect.y and y <= content_rect.bottom:
-                        txt = lo.sfont.render(row[1], True, HINT)
-                        screen.blit(txt, (content_rect.x + 10, y))
-                    y += h
-                elif kind == 'alg':
-                    h = lo.mfont.get_height() + row_gap
-                    if y + h >= content_rect.y and y <= content_rect.bottom:
-                        _, name, seq = row
-                        n_txt = lo.mfont.render(name, True, GOLD)
-                        s_txt = lo.mfont.render(seq, True, (225, 225, 235))
-                        screen.blit(n_txt, (content_rect.x + 10, y))
-                        screen.blit(s_txt, (content_rect.x + 10 + name_col_w, y))
-                    y += h
+                    draw_items.append({'kind': 'header', 'text': row[1], 'h': h})
                 elif kind == 'spacer':
-                    y += spacer_h
+                    draw_items.append({'kind': 'spacer', 'h': spacer_h})
+                elif kind == 'row':
+                    _, label, text, color = row
+                    wrapped = _wrap_text(text, lo.mfont, wrap_w)
+                    h0 = lo.mfont.get_height() + row_gap
+                    draw_items.append({'kind': 'row', 'label': label,
+                                        'text': wrapped[0], 'color': color, 'h': h0})
+                    for extra in wrapped[1:]:
+                        draw_items.append({'kind': 'rowcont', 'text': extra,
+                                            'color': color, 'h': h0})
+
+            total_h = sum(it['h'] for it in draw_items)
+            formula_scroll_max = max(0, total_h - content_rect.height)
+            formula_scroll = max(0, min(formula_scroll, formula_scroll_max))
+
+            # ── Vẽ, chỉ trong vùng content_rect (clip) ───────────────────────
+            prev_clip = screen.get_clip()
+            screen.set_clip(content_rect)
+            y = content_rect.y - formula_scroll
+            for it in draw_items:
+                h = it['h']
+                if y + h >= content_rect.y and y <= content_rect.bottom:
+                    if it['kind'] == 'header':
+                        txt = lo.bfont.render(it['text'], True, GOLD)
+                        screen.blit(txt, (content_rect.x, y))
+                    elif it['kind'] == 'row':
+                        n_txt = lo.mfont.render(it['label'], True, GOLD)
+                        s_txt = lo.mfont.render(it['text'], True, it['color'])
+                        screen.blit(n_txt, (content_rect.x + 10, y))
+                        screen.blit(s_txt, (text_x0, y))
+                    elif it['kind'] == 'rowcont':
+                        s_txt = lo.mfont.render(it['text'], True, it['color'])
+                        screen.blit(s_txt, (text_x0, y))
+                y += h
             screen.set_clip(prev_clip)
 
         pygame.display.flip()
