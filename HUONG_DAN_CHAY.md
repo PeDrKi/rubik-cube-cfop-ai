@@ -26,8 +26,12 @@ pip install numpy pytest pygame kociemba matplotlib scipy
 
 ## 3. Chạy lần đầu — build cache Pattern Database (PDB)
 
-`solver/cache/` trong gói này **rỗng** (đã xoá `.pkl` để gói nhẹ). Lần
-chạy đầu tiên sẽ tự build lại cache (vài giây đến vài phút, chỉ 1 lần).
+`solver/cache/` trong gói này **đã có sẵn** các file `.pkl` (~13MB —
+build từ trước, đóng gói kèm để chạy nhanh ngay lần đầu). Nếu muốn xoá
+đi để kiểm tra đường build-từ-đầu hoạt động đúng (`rm solver/cache/*.pkl`),
+đã verify: build lại từ rỗng mất khoảng **6 giây** cho Cross PDB
+(190.080 trạng thái, tự động, không cần thao tác gì thêm), các PDB nhỏ
+hơn (F2L pair) build gần như tức thời khi `full_solve()` cần tới.
 
 ## 4. Chạy giao diện chính
 

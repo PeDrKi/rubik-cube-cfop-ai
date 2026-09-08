@@ -336,6 +336,34 @@ Compile lại sạch cả 2 bản sau khi sửa (pdflatex 15 trang / xelatex 17
 trang, 0 lỗi). Chạy lại 319 test sau khi sửa `oll_algorithms.py` —
 không có gì bị phá vỡ.
 
+## CẬP NHẬT MỚI NHẤT 9 — Fresh-clone test (giải nén sạch, chạy lại từ đầu)
+
+Giải nén lại chính file zip sẽ giao cho người dùng vào thư mục hoàn
+toàn sạch (không cache, không `__pycache__`, không `.aux`/`.log` sót
+lại), chạy đúng theo từng bước `HUONG_DAN_CHAY.md` từ đầu đến cuối.
+
+**Phát hiện 1 chỗ docs sai:** mục §3 khẳng định `solver/cache/` "rỗng,
+đã xoá `.pkl`" — thực tế gói nộp **có sẵn** ~13MB cache. Đã sửa lại
+đúng thực tế, đồng thời **verify luôn cả đường build-từ-đầu** (xoá hết
+`.pkl`, build lại thật): Cross PDB build từ rỗng mất **~6 giây**, ra
+đúng 190.080 trạng thái / max depth 8 (khớp con số đã verify trước đó
+— xác nhận cache cũ và cache build-lại-từ-đầu cho kết quả giống hệt
+nhau, không có sai lệch ẩn).
+
+**Đã chạy lại toàn bộ, từ môi trường sạch:**
+- 319 test (`test_solver.py` + `test_cube_engine.py`) — pass 100%
+- `python3 -m solver.oll_algorithms` — in đúng `57/57`
+- `demo_ai_search.py`, `weight_sensitivity.py` — chạy xong, số liệu khớp
+- `analyze_results.py`, `compute_icc.py`, `recompute_hli_exact.py`,
+  `compute_exact_correlation.py` — tất cả khớp chính xác với paper
+- Compile lại cả `main.tex` (pdflatex) và `main_vi.tex` (xelatex) từ
+  đầu — sạch, đúng 15/17 trang
+- Xác nhận đúng bẫy đã cảnh báo trong docs: chạy nhầm `pdflatex
+  main_vi.tex` thật sự báo lỗi fatal `fontspec` như mô tả
+
+Không phát hiện thêm lỗi nào khác ngoài mục cache nói trên. Đây là lần
+chạy thử cuối cùng mô phỏng đúng trải nghiệm người nhận gói lần đầu.
+
 ## Việc còn lại (đã cập nhật sau CẬP NHẬT MỚI NHẤT 7)
 
 Giai đoạn 3 **đã xong** (28 CSV thật, đã phân tích, đã verify độc lập —
@@ -360,9 +388,10 @@ Việc còn mở, theo mức ưu tiên:
 5. (Tuỳ chọn, không bắt buộc) Đối chiếu nốt 15 công thức OLL còn lại
    (hợp lệ về chức năng nhưng chưa gán được số cộng đồng — xem CẬP
    NHẬT MỚI NHẤT 8) nếu muốn paper nêu con số cao hơn 40/57.
-6. "Fresh-clone test": giải nén gói ở máy sạch, chạy đúng theo từng
-   bước `HUONG_DAN_CHAY.md` từ đầu đến cuối — phép thử cuối cùng trước
-   khi nộp.
+6. ~~"Fresh-clone test": giải nén gói ở máy sạch, chạy đúng theo từng
+   bước `HUONG_DAN_CHAY.md` từ đầu đến cuối.~~ **Đã xong** — xem CẬP
+   NHẬT MỚI NHẤT 9 (1 lỗi docs tìm được và đã sửa: mục cache).
 
 Không còn việc "code/phân tích tự động" nào bắt buộc phải làm trước khi
-nộp — các mục còn lại chủ yếu là quyết định nội dung/soát lỗi cuối.
+nộp — các mục còn lại (1, 2, 5) chủ yếu là quyết định nội dung/điều tra
+sâu thêm, không còn gì chặn việc nộp bài.
