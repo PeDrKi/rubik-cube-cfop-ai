@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["rubik-core", "rubik-app", "rubik-vision", "rubik-vision-ml"]
+
+[profile.release]
+opt-level = 3
+lto = true
