@@ -1,0 +1,11 @@
+[package]
+name = "rubik-app"
+version = "0.1.0"
+edition = "2021"
+description = "Ứng dụng Rubik's Cube 3D tương tác"
+
+[dependencies]
+rubik-core = { path = "../rubik-core" }
+three-d = { version = "0.17", features = ["egui-gui"] }
+rand = "0.8"
+winit = "0.28"

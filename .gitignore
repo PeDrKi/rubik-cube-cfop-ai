@@ -1,0 +1,35 @@
+# ── Rust ─────────────────────────────────────────────────────────────────────
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock: GIỮ trong repo (workspace có binary) — không ignore.
+
+# ── Python (giai đoạn CFOP AI trước khi port sang Rust) ───────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+# Pattern Database cache (BFS build ra .pkl, sinh lại được)
+solver/cache/*.pkl
+**/cache/*.pkl
+
+# ── Build artifacts / bản đóng gói ───────────────────────────────────────────
+*.zip
+dist/
+build/
+
+# ── OS / editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~
