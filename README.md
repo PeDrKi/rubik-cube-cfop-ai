@@ -97,3 +97,29 @@ Các bảng hoán vị **không được chép tay** mà suy ra thực nghiệm 
 - ~1% trường hợp AI không tìm được lời giải — bấm `Space` xáo lại.
 - Chưa có phím tắt riêng cho M/E/S, nước wide, hay xoay toàn khối
   (`x`/`y`/`z`); nhưng công thức chứa chúng vẫn chạy được qua thanh nhập.
+
+## Chạy offline & độc lập
+
+**Lúc chạy: hoàn toàn offline.** Ứng dụng không có bất kỳ mã mạng nào —
+không tải gì, không gửi gì. Đã kiểm chứng: chép riêng file thực thi sang
+một thư mục trống (không có mã nguồn, không có thư mục `assets`, không
+cần cargo) và nó chạy đầy đủ, kể cả font tiếng Việt (font được nhúng
+thẳng vào file thực thi qua `include_bytes!`).
+
+Pattern database cũng được dựng lúc chạy (~1 giây) chứ không tải về.
+
+**Lúc biên dịch: cần mạng đúng một lần** để cargo tải các thư viện phụ
+thuộc (three-d, egui, winit…). Sau lần đó, cargo lưu vào bộ đệm máy và
+có thể build offline bằng `cargo build --release --offline`. File
+`Cargo.lock` đi kèm giúp bản dựng lặp lại được đúng phiên bản.
+
+Muốn build hoàn toàn offline ngay từ đầu (máy chưa từng tải), chạy
+`cargo vendor` trên một máy có mạng rồi mang cả thư mục `vendor/` sang.
+
+**Phân phối cho người khác:** chỉ cần gửi file thực thi. Trên Windows là
+`rubik-app.exe` (một file duy nhất). Máy nhận không cần cài Rust.
+
+**Thư viện hệ thống cần có** (đều là thứ sẵn có trên máy thường):
+- Windows: `opengl32.dll` — có sẵn trong Windows
+- Linux: OpenGL (mesa) + X11 hoặc Wayland
+- Không cần cài thêm gì cho người dùng cuối
