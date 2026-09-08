@@ -2,7 +2,8 @@
 main.py — Rubik's Cube Simulator
 6-Face View (cột trái) và 3D View (cột phải).
 Tích hợp CFOP AI (Cross + F2L, phase MVP): phím A = auto-solve, H = hint,
-Tab = copy nhanh gợi ý hiện tại xuống thanh công thức (Singmaster).
+Tab = copy nhanh gợi ý hiện tại xuống thanh công thức (Singmaster),
+T = mở/đóng bảng công thức tham khảo Cross→F2L→OLL→PLL.
 """
 
 import pygame
@@ -21,6 +22,8 @@ from cube_engine import (make_solved, scramble_cube, cube_solved,
 from renderer_3d import Rx, Ry, draw_cube_3d, hit_test_3d, ANIMATABLE_BASES
 from draw_helpers import draw_panels, panel_hit, draw_bar
 from solver import cfop_ai
+from solver.oll_algorithms import OLL_ALGS_FOR_DISPLAY
+from solver.pll_algorithms import PLL_ALGS_FOR_DISPLAY
 
 
 ANIM_DUR      = 0.13   # giây, 3D move animation (ở tốc độ x1)
@@ -29,6 +32,60 @@ UNDO_MAX      = 120     # giới hạn độ sâu undo
 MIN_W, MIN_H  = 800, 520   # kích thước cửa sổ tối thiểu, tránh UI vỡ hình khi resize nhỏ
 SPEED_STEPS   = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]   # các mức tốc độ animation
 SPEED_DEFAULT_IDX = SPEED_STEPS.index(1.0)
+
+
+# ── Bảng công thức CFOP (Cross -> F2L -> OLL -> PLL), hiển thị khi bấm T ────
+_CROSS_NOTE = [
+    "Bước trực giác (intuitive) — không có bảng công thức cố định.",
+    "AI dùng A*/IDA* search để tìm lời giải ngắn nhất cho 4 cạnh Cross.",
+    "Mẹo tự giải: đưa 4 cạnh Cross khớp màu tâm 4 mặt bên (không chỉ mặt D).",
+]
+_F2L_NOTE = [
+    "Bước trực giác — không tra bảng công thức cố định (khác OLL/PLL).",
+    "AI dùng A* search ghép từng cặp góc + cạnh (corner-edge pair) trực",
+    "tiếp vào 4 khe (slot) F2L, tận dụng các finger-trick phổ biến.",
+]
+_OLL_NOTE = [
+    "Cơ sở dữ liệu hiện có (chưa đủ 57/57 trường hợp OLL chuẩn):",
+]
+_PLL_NOTE = [
+    "Đầy đủ 21/21 trường hợp PLL chuẩn, đã kiểm chứng bằng code.",
+]
+
+
+def build_formula_lines():
+    """Tra ve danh sach (kind, *data) mo ta noi dung bang cong thu CFOP,
+    dung de ve trong panel bat/tat bang phim T. kind:
+      'header' -> (kind, tieu de)
+      'note'   -> (kind, dong van ban thuong)
+      'alg'    -> (kind, ten, chuoi Singmaster)
+      'spacer' -> (kind,)  dong trong nho de tach nhom
+    """
+    lines = []
+    lines.append(('header', "1) CROSS"))
+    for t in _CROSS_NOTE:
+        lines.append(('note', t))
+    lines.append(('spacer',))
+
+    lines.append(('header', "2) F2L  (First Two Layers)"))
+    for t in _F2L_NOTE:
+        lines.append(('note', t))
+    lines.append(('spacer',))
+
+    lines.append(('header', "3) OLL  (Orientation of Last Layer)"))
+    for t in _OLL_NOTE:
+        lines.append(('note', t))
+    for name, seq in OLL_ALGS_FOR_DISPLAY.items():
+        lines.append(('alg', name, seq))
+    lines.append(('spacer',))
+
+    lines.append(('header', "4) PLL  (Permutation of Last Layer)"))
+    for t in _PLL_NOTE:
+        lines.append(('note', t))
+    for name, seq in PLL_ALGS_FOR_DISPLAY.items():
+        lines.append(('alg', name, seq))
+
+    return lines
 
 
 def _bar_index_at_x(text, mouse_x, text_start_x, font):
@@ -112,6 +169,12 @@ def main():
     hint_copy_rect   = None   # pygame.Rect cua nut "Copy -> thanh cong thuc"
                                # (None neu khong co hint dang hien thi), duoc
                                # ve lai moi frame, dung de hit-test click.
+
+    # ── Bảng công thức CFOP (mở/đóng bằng phím T) ─────────────────────────────
+    formula_panel_open = False
+    formula_scroll      = 0     # độ lệch cuộn hiện tại (px)
+    formula_scroll_max   = 0     # cập nhật mỗi frame khi vẽ, dùng để giới hạn cuộn
+    formula_lines        = build_formula_lines()   # nội dung tĩnh, dựng 1 lần
 
     # ── CFOP AI (Cross + F2L, chay nen bang thread de khong dong UI) ─────────
     cfop_busy       = False    # True trong khi thread AI dang tinh
@@ -265,6 +328,16 @@ def main():
                 zoom_ratio = zoom / lo.ZOOM0
                 zoom = lo.ZOOM0 * zoom_ratio
 
+            elif formula_panel_open and ev.type == MOUSEBUTTONDOWN and ev.button in (4, 5):
+                step = max(30, int(60 * lo.s))
+                if ev.button == 4:
+                    formula_scroll = max(0, formula_scroll - step)
+                else:
+                    formula_scroll = min(formula_scroll_max, formula_scroll + step)
+
+            elif formula_panel_open and ev.type in (MOUSEBUTTONDOWN, MOUSEBUTTONUP, MOUSEMOTION):
+                pass   # panel công thức đang mở -- chặn tương tác chuột với cube/bar phía sau
+
             elif ev.type == MOUSEBUTTONDOWN and ev.button == 1:
                 if hint_copy_rect and hint_copy_rect.collidepoint(mx, my):
                     # Chep gợi ý hien tai vao thanh Singmaster va focus vao do
@@ -339,6 +412,23 @@ def main():
                     bar_status     = None
                     bar_cursor     = len(bar_text)
                     bar_sel_anchor = None
+
+                elif formula_panel_open:
+                    step = max(30, int(60 * lo.s))
+                    if ev.key in (K_t, K_ESCAPE):
+                        formula_panel_open = False
+                    elif ev.key == K_UP:
+                        formula_scroll = max(0, formula_scroll - step)
+                    elif ev.key == K_DOWN:
+                        formula_scroll = min(formula_scroll_max, formula_scroll + step)
+                    elif ev.key == K_PAGEUP:
+                        formula_scroll = max(0, formula_scroll - step * 5)
+                    elif ev.key == K_PAGEDOWN:
+                        formula_scroll = min(formula_scroll_max, formula_scroll + step * 5)
+                    elif ev.key == K_HOME:
+                        formula_scroll = 0
+                    elif ev.key == K_END:
+                        formula_scroll = formula_scroll_max
 
                 elif bar_active:
                     shift = bool(mods & KMOD_SHIFT)
@@ -496,8 +586,12 @@ def main():
                     elif ev.key in (K_DOWN, K_LEFT) and sel_face:
                         enqueue(sel_face + "'")
 
-                    elif ev.key in (K_SLASH, K_t):
+                    elif ev.key == K_SLASH:
                         bar_active = True
+
+                    elif ev.key == K_t:
+                        formula_panel_open = True
+                        formula_scroll = 0
 
                     elif ev.key == K_a:
                         start_cfop_job('solve')
@@ -689,6 +783,7 @@ def main():
             ("A",      "AI tự giải (Cross→F2L→OLL→PLL)"),
             ("H",      "AI gợi ý bước tiếp"),
             ("Tab",    "Copy gợi ý -> thanh công thức"),
+            ("T",      "Bảng công thức Cross→F2L→OLL→PLL"),
         ]:
             ks = lo.sfont.render(k, True, GOLD)
             vs = lo.sfont.render(f"  {v}", True, HINT)
@@ -754,6 +849,89 @@ def main():
         if solved_flash > 0:
             t = lo.bfont.render("✓  SOLVED!", True, (60, 230, 100))
             screen.blit(t, (lo.CX3 - t.get_width() // 2, lo.CY3 - 14))
+
+        if formula_panel_open:
+            # ── Lớp phủ mờ toàn màn hình ────────────────────────────────────
+            overlay = pygame.Surface((lo.W, lo.H), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 190))
+            screen.blit(overlay, (0, 0))
+
+            panel_w = min(int(lo.W * 0.82), int(860 * max(lo.s, 1.0)))
+            panel_h = min(int(lo.H * 0.86), int(720 * max(lo.s, 1.0)))
+            panel_w = max(panel_w, min(560, lo.W - 20))
+            panel_h = max(panel_h, min(420, lo.H - 20))
+            panel_x = (lo.W - panel_w) // 2
+            panel_y = (lo.H - panel_h) // 2
+
+            pygame.draw.rect(screen, (20, 20, 30),
+                              (panel_x, panel_y, panel_w, panel_h), border_radius=10)
+            pygame.draw.rect(screen, GOLD,
+                              (panel_x, panel_y, panel_w, panel_h), width=2, border_radius=10)
+
+            title = lo.bfont.render("Bảng công thức CFOP:  Cross → F2L → OLL → PLL", True, GOLD)
+            screen.blit(title, (panel_x + 18, panel_y + 14))
+            header_h = title.get_height() + 30
+
+            footer_txt = lo.sfont.render(
+                "Nhấn T hoặc Esc để đóng   •   ↑/↓, PgUp/PgDn hoặc lăn chuột để cuộn",
+                True, HINT)
+            footer_h = footer_txt.get_height() + 16
+            screen.blit(footer_txt, (panel_x + 18, panel_y + panel_h - footer_h + 4))
+
+            content_rect = pygame.Rect(
+                panel_x + 18, panel_y + header_h,
+                panel_w - 36, panel_h - header_h - footer_h - 6)
+
+            name_col_w = max(70, int(88 * lo.s))
+            row_gap    = max(2, int(3 * lo.s))
+            spacer_h   = max(6, int(10 * lo.s))
+
+            # ── Pass 1: tính tổng chiều cao nội dung để giới hạn cuộn ────────
+            total_h = 0
+            for row in formula_lines:
+                kind = row[0]
+                if kind == 'header':
+                    total_h += lo.bfont.get_height() + int(14 * lo.s)
+                elif kind == 'note':
+                    total_h += lo.sfont.get_height() + row_gap
+                elif kind == 'alg':
+                    total_h += lo.mfont.get_height() + row_gap
+                elif kind == 'spacer':
+                    total_h += spacer_h
+
+            formula_scroll_max = max(0, total_h - content_rect.height)
+            formula_scroll = max(0, min(formula_scroll, formula_scroll_max))
+
+            # ── Pass 2: vẽ, chỉ trong vùng content_rect (clip) ───────────────
+            prev_clip = screen.get_clip()
+            screen.set_clip(content_rect)
+            y = content_rect.y - formula_scroll
+            for row in formula_lines:
+                kind = row[0]
+                if kind == 'header':
+                    h = lo.bfont.get_height() + int(14 * lo.s)
+                    if y + h >= content_rect.y and y <= content_rect.bottom:
+                        txt = lo.bfont.render(row[1], True, GOLD)
+                        screen.blit(txt, (content_rect.x, y))
+                    y += h
+                elif kind == 'note':
+                    h = lo.sfont.get_height() + row_gap
+                    if y + h >= content_rect.y and y <= content_rect.bottom:
+                        txt = lo.sfont.render(row[1], True, HINT)
+                        screen.blit(txt, (content_rect.x + 10, y))
+                    y += h
+                elif kind == 'alg':
+                    h = lo.mfont.get_height() + row_gap
+                    if y + h >= content_rect.y and y <= content_rect.bottom:
+                        _, name, seq = row
+                        n_txt = lo.mfont.render(name, True, GOLD)
+                        s_txt = lo.mfont.render(seq, True, (225, 225, 235))
+                        screen.blit(n_txt, (content_rect.x + 10, y))
+                        screen.blit(s_txt, (content_rect.x + 10 + name_col_w, y))
+                    y += h
+                elif kind == 'spacer':
+                    y += spacer_h
+            screen.set_clip(prev_clip)
 
         pygame.display.flip()
 

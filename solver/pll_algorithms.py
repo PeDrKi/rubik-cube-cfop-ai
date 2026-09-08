@@ -143,6 +143,11 @@ def verify_and_build_table():
 
 PLL_TABLE, VERIFIED_ALG_NAMES = verify_and_build_table()
 
+# Bang cong thuc PLL "sach" (ten -> chuoi Singmaster goc, khong doi guong/
+# nghich dao) chi gom cac thuat toan DA KIEM CHUNG, dung de hien thi trong
+# UI (bang tra cuu cong thuc). Day du 21/21 truong hop PLL chuan.
+PLL_ALGS_FOR_DISPLAY = {name: _RAW_ALGS[name] for name in VERIFIED_ALG_NAMES}
+
 AUF_OPTIONS = (('', []), ('U', ['U']), ('U2', ['U2']), ("U'", ["U'"]))
 
 

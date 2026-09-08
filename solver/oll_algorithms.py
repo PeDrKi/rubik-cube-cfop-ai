@@ -109,6 +109,12 @@ def verify_and_build_table():
 
 OLL_TABLE, VERIFIED_ALG_NAMES, REJECTED_ALG_NAMES = verify_and_build_table()
 
+# Bang cong thuc OLL "sach" (ten -> chuoi Singmaster goc, khong doi guong/
+# nghich dao) chi gom cac thuat toan DA KIEM CHUNG, dung de hien thi trong
+# UI (bang tra cuu cong thuc). Luu y: hien tai CHUA phai 57/57 case day du,
+# xem docstring dau file.
+OLL_ALGS_FOR_DISPLAY = {name: _RAW_ALGS[name] for name in VERIFIED_ALG_NAMES}
+
 
 def solve_oll_lookup(full):
     """Tra bang truc tiep (KHONG AUF -- goi ham nay 4 lan voi 4 ban xoay
