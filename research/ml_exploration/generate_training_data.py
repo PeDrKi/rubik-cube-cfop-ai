@@ -1,6 +1,11 @@
 """
-solver/ml/generate_training_data.py
-=====================================
+research/ml_exploration/generate_training_data.py
+====================================================
+(Đã chuyển từ solver/ml/ sang research/ml_exploration/ khi sắp xếp lại
+thư mục — đây là hướng THỬ NGHIỆM, không nằm trong pipeline solver chính
+mà main.py dùng, nên thuộc research/ cho nhất quán với các hướng thử
+nghiệm khác. Xem docs/CFOP_AI_README.md mục "Đã thử hướng ... học máy".)
+
 Sinh du lieu huan luyen cho mo hinh hoc "phan du" (residual) cua heuristic
 OLL pha goc (buoc kho nhat da gap trong qua trinh phat trien).
 

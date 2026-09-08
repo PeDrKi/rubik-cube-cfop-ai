@@ -4,8 +4,13 @@ test_app_logic2.py
 Test cho app_logic.py (các hàm thuần tách từ main.py, KHÔNG cần pygame --
 khác với test_app_logic.py vốn test formula_panel.py và cần stub pygame).
 
-Chạy trực tiếp: python3 test_app_logic2.py
+Chạy trực tiếp: python3 tests/test_app_logic2.py
 """
+
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ^ xem ghi chu tuong tu trong test_cube_engine.py
 
 import app_logic as al
 
@@ -147,6 +152,83 @@ def test_rescale_zoom_handles_zero_old_zoom0():
     # Truong hop bien (khong xay ra thuc te vi Layout luon tra ve ZOOM0 >
     # 0, nhung phong thu tranh chia cho 0 lam crash app)
     assert al.rescale_zoom(old_zoom=50.0, old_zoom0=0.0, new_zoom0=120.0) == 120.0
+
+
+# ── bar_scroll_offset ─────────────────────────────────────────────────────
+
+def test_bar_scroll_offset_no_scroll_when_text_fits():
+    text = "R U R'"
+    assert al.bar_scroll_offset(text, cursor_pos=6, available_w=500,
+                                 font_size_fn=_mono_size) == 0
+
+
+def test_bar_scroll_offset_scrolls_to_keep_cursor_visible():
+    text = "R U R' U' " * 10   # dai
+    available_w = 100
+    cursor_pos = len(text)   # con tro o cuoi (vd vua go/dan xong)
+    off = al.bar_scroll_offset(text, cursor_pos, available_w, _mono_size)
+    assert off > 0
+    cursor_w = _mono_size(text[:cursor_pos])[0]
+    # sau khi cuon, con tro phai nam DUNG O MEP PHAI vung nhin thay
+    assert abs((cursor_w - off) - available_w) < 1e-6
+
+
+def test_bar_scroll_offset_none_cursor_defaults_to_end():
+    """cursor_pos=None (bar khong active) -> coi nhu cursor o CUOI text,
+    tu nhien hien phan DUOI chuoi (thuong la phan vua go/dan gan nhat)
+    thay vi bi ket o dau chuoi dai."""
+    text = "R U R' U' " * 10
+    off_none = al.bar_scroll_offset(text, None, available_w=100, font_size_fn=_mono_size)
+    off_end = al.bar_scroll_offset(text, len(text), available_w=100, font_size_fn=_mono_size)
+    assert off_none == off_end
+
+
+def test_bar_scroll_offset_cursor_in_middle_of_long_text():
+    text = "R U R' U' " * 10
+    # cursor o giua -- van phai nam trong vung nhin thay [off, off+available_w]
+    cursor_pos = len(text) // 2
+    available_w = 100
+    off = al.bar_scroll_offset(text, cursor_pos, available_w, _mono_size)
+    cursor_w = _mono_size(text[:cursor_pos])[0]
+    assert off <= cursor_w <= off + available_w
+
+
+def test_bar_scroll_offset_empty_text():
+    assert al.bar_scroll_offset("", cursor_pos=0, available_w=100,
+                                 font_size_fn=_mono_size) == 0
+
+
+# ── truncate_with_ellipsis ───────────────────────────────────────────────
+
+def test_truncate_with_ellipsis_short_text_unchanged():
+    text = "R U R'"
+    out, truncated = al.truncate_with_ellipsis(text, max_w=500, font_size_fn=_mono_size)
+    assert out == text
+    assert truncated is False
+
+
+def test_truncate_with_ellipsis_long_text_gets_cut():
+    text = "R U R' U' " * 10
+    out, truncated = al.truncate_with_ellipsis(text, max_w=100, font_size_fn=_mono_size)
+    assert truncated is True
+    assert out.endswith('…')
+    assert _mono_size(out)[0] <= 100
+
+
+def test_truncate_with_ellipsis_result_never_exceeds_max_w():
+    """Kiem tra bat bien quan trong nhat: KHONG BAO GIO tra ve chuoi rong
+    hon max_w khi render -- day chinh la bug goc (hint_moves_str render
+    khong gioi han) can tranh lap lai."""
+    text = "R U R' U' R2 F' U R U' F B2 D2 L' R B U' D R2 L2"
+    for max_w in (10, 30, 60, 100, 200, 400, 1000):
+        out, _ = al.truncate_with_ellipsis(text, max_w, _mono_size)
+        assert _mono_size(out)[0] <= max_w, f"max_w={max_w}: '{out}' vuot qua gioi han"
+
+
+def test_truncate_with_ellipsis_tiny_budget_returns_just_ellipsis():
+    out, truncated = al.truncate_with_ellipsis("R U R'", max_w=1, font_size_fn=_mono_size)
+    assert truncated is True
+    assert out == '…'
 
 
 # ── speed_idx_up / speed_idx_down ─────────────────────────────────────────

@@ -44,11 +44,16 @@ Nút **"Copy → bar"** cạnh dòng gợi ý chép công thức gợi ý vào t
 ## 5. Chạy test suite
 
 ```bash
-python3 -m pytest test_solver.py test_cube_engine.py -q
+python3 -m pytest tests/test_solver.py tests/test_cube_engine.py -q
 ```
-Kết quả mong đợi: `319 passed` (113 trong `test_solver.py` + 206 trong
-`test_cube_engine.py`). Mất khoảng 10-15 giây (không tính lần đầu build
-cache PDB, xem mục 3).
+Kết quả mong đợi: `101 passed` (50 trong `tests/test_solver.py` + 51 trong
+`tests/test_cube_engine.py`). Mất khoảng 10-15 giây (không tính lần đầu
+build cache PDB, xem mục 3).
+
+> Lưu ý: bản trước của tài liệu này từng ghi "319 passed" — con số đó
+> KHÔNG đúng với bộ test hiện có (đã kiểm chứng lại: 101). Xem
+> `docs/README_TEST_APP.md` để chạy toàn bộ 5 file test (152 test, gồm cả
+> 3 file kiểm tra tầng app/UI thêm sau này).
 
 ## 5b. Bảng công thức OLL (55/55 đã kiểm chứng)
 
@@ -75,7 +80,8 @@ lo làm hỏng bảng hiện có.
 công thức × 4 AUF = 220 case, dùng đúng trạng thái nghịch đảo mà công
 thức được thiết kế để giải, không phải áp thuận rồi hỏi "có khớp bảng
 không") giờ đạt **220/220 = 100%** — xem
-`test_solver.py::TestOLLAlgorithms::test_own_generating_set_round_trip`.
+`test_solver.py::TestOLLAlgorithms::test_own_generating_set_round_trip`
+(nay ở `tests/test_solver.py`).
 Bản test cũ (98.2%, 224/228) kiểm tra sai đối tượng (áp công thức
 THEO CHIỀU THUẬN rồi hỏi "có tình cờ khớp bảng không", không phải "có
 giải đúng trạng thái mình được thiết kế để giải không") — đã sửa lại
@@ -96,7 +102,7 @@ Luôn chạy từ **thư mục gốc project** bằng `python3 -m`:
 
 ```bash
 # Demo nhanh: xem AI search Cross/F2L hoạt động ra sao
-python3 demo_ai_search.py
+python3 scripts/demo_ai_search.py
 
 # Experiment 1: so sánh AI-CFOP (Nhóm A) vs Kociemba (Nhóm B)
 python3 -m research.run_experiment --n 100 --f2l-nodes-per-depth 40000 \

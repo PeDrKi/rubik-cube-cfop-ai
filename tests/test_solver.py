@@ -24,6 +24,11 @@ suite chay xong trong vai phut, DUNG budget mac dinh cua solver (khong
 lam yeu di do de "test cho de pass").
 """
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ^ xem ghi chu tuong tu trong test_cube_engine.py
+
 import random
 
 import numpy as np

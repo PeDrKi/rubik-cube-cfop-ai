@@ -1,5 +1,6 @@
-import sys, time, random
-sys.path.insert(0, '.')
+import sys, os, time, random
+# xem ghi chu tuong tu trong benchmark.py
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from cube_engine import make_solved, do_move, ALL_MOVES, random_scramble_moves
 from solver.full_state import from_facelets
 from solver.cross_solver import solve_cross, get_pdb

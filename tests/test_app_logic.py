@@ -12,23 +12,39 @@ pygame.display/Surface, nen kiem chung duoc ma khong can mo cua so that.
 
 CHAY THU NAO:
   - Neu may co pygame that (vd may dev cua ban):
-        python3 -m pytest test_app_logic.py -q
-    (hoac python3 test_app_logic.py de chay bang runner noi bo, khong can
-    pytest that).
+        python3 -m pytest tests/test_app_logic.py -q
+    (hoac python3 tests/test_app_logic.py de chay bang runner noi bo,
+    khong can pytest that).
   - Trong moi truong KHONG co pygame (vd sandbox nay, khong co internet de
-    pip install pygame): dat 1 pygame GIA (chi Rect/font/locals toi thieu,
-    xem README_TEST_APP.md di kem) vao PYTHONPATH TRUOC thu muc du an, vi
-    du:
-        PYTHONPATH=/path/to/fake_pygame_stub:. python3 test_app_logic.py
+    pip install pygame): file nay TU DONG them tests/fake_pygame_stub/
+    (nam CUNG thu muc voi file nay) vao sys.path neu `import pygame that`
+    that bai -- xem bootstrap ngay duoi day. Khong can tu tay set
+    PYTHONPATH nua (khac ban truoc chuyen vao tests/), nhung van chay duoc
+    neu ban tu set PYTHONPATH=./tests/fake_pygame_stub:. (xem
+    docs/README_TEST_APP.md).
     Muc dich cua stub CHI la cho main.py import duoc (main() that su -- vong
     lap game -- KHONG duoc goi va KHONG duoc test o day, no can pygame that
-    100% de co y nghia; xem README_TEST_APP.md).
+    100% de co y nghia; xem docs/README_TEST_APP.md).
 
 Cac ham can renderer that (_draw_formula_panel_content, _wrap_text voi
 font that, _try_open_formula_window) KHONG test o day -- do la ly do phan
-"kien truc" (xem REFACTOR_NOTES.md) de nghi tach main() thanh module rieng
-de co the mock/test sau nay.
+"kien truc" (xem docs/REFACTOR_NOTES.md) de nghi tach main() thanh module
+rieng de co the mock/test sau nay.
 """
+
+import os
+import sys
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_THIS_DIR)
+sys.path.insert(0, _ROOT)   # tim cube_engine/solver/formula_panel... o root
+
+try:
+    import pygame   # noqa: F401  (chi de kiem tra co pygame that khong)
+except ImportError:
+    # Khong co pygame that -> tu dong dung stub CUNG thu muc (tests/fake_pygame_stub/)
+    # thay vi bat nguoi dung phai tu set PYTHONPATH thu cong.
+    sys.path.insert(0, os.path.join(_THIS_DIR, 'fake_pygame_stub'))
 
 import formula_panel as fp
 

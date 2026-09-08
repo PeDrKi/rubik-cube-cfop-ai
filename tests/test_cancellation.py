@@ -11,6 +11,11 @@ ham test_* trong file nay), vi moi truong sandbox khong co internet de
 van chay binh thuong (khong dung tinh nang pytest nao ngoai assert).
 """
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ^ xem ghi chu tuong tu trong test_cube_engine.py
+
 import random
 import threading
 import time

@@ -5,6 +5,13 @@ Ghi lại cách từng **hạn chế/rủi ro** nêu ra khi đánh giá app mô 
 `solver/`) đã được xử lý. Không đụng tới phần nghiên cứu (`research/`,
 `paper/`).
 
+> **Lưu ý về đường dẫn (sau đợt sắp xếp lại thư mục):** các đoạn dưới đây
+> viết theo đường dẫn CŨ tại thời điểm sửa (vd `test_app_logic.py`,
+> `fake_pygame_stub/`) — cố tình giữ nguyên như nhật ký lịch sử, không
+> viết lại. Đường dẫn THỰC TẾ hiện tại: mọi file `test_*.py` và
+> `fake_pygame_stub/` nay nằm trong `tests/`. Xem `README.md` (root) cho
+> sơ đồ thư mục hiện hành.
+
 ## 1. `main.py` monolithic (1372 dòng, 1 hàm `main()` với hàng chục biến `nonlocal`)
 
 **Đã làm:**
@@ -179,13 +186,53 @@ không giảm được gì trong 130-250ms đã đo (phần lớn latency không
 đó). Nói cách khác: đã đo trước khi "tối ưu" để tránh sửa nhầm chỗ không
 phải nút thắt cổ chai thật sự.
 
+## 8. (Phát hiện qua demo thật, ảnh chụp màn hình) Công thức dài tràn ra ngoài UI
+
+**Bối cảnh:** người dùng tự chạy app thật (điều mình không làm được trong
+sandbox) và gửi ảnh chụp màn hình cho thấy 1 gợi ý PLL dài (~33 nước)
+tràn ra khỏi cả hộp gợi ý AI lẫn thanh Singmaster bar — cả 2 nơi trước đó
+`render()` toàn bộ chuỗi trên 1 dòng, không giới hạn/clip.
+
+**Đã làm:**
+- Thêm `app_logic.bar_scroll_offset()` — tính offset cuộn ngang sao cho
+  con trỏ LUÔN nằm trong vùng nhìn thấy (giống ô nhập liệu thông thường).
+  `cursor_pos=None` (bar không active) mặc định coi như cursor ở cuối
+  text, nên tự nhiên hiện phần ĐUÔI chuỗi (thường là phần vừa dán vào qua
+  nút "Copy -> bar"/Tab) thay vì bị kẹt ở đầu chuỗi dài.
+- Thêm `app_logic.truncate_with_ellipsis()` — cắt + thêm "…" cho vùng
+  CHIỀU CAO CỐ ĐỊNH không wrap được (hộp gợi ý AI trong `main.py`, cả
+  dòng `hint_label` lẫn `hint_moves_str` — phát hiện `hint_label` cũng có
+  case dài tương tự khi soát lại `cfop_ai.py`, vd
+  `"OLL - Định hướng 4 cạnh (chưa tìm được, bấm H lại...)"`).
+- `draw_helpers.py::draw_bar()`: dùng `set_clip()` giới hạn vùng vẽ text
+  trong thanh bar, luôn chừa `right_margin` cho icon ✓/✗ (dù đang hiện
+  hay không, tránh nhấp nháy đè lên text khi status đổi giữa các frame),
+  thêm tam giác nhỏ báo hiệu còn nội dung bị cuộn khuất bên trái.
+- `main.py`: 2 dòng hint (`hl_txt`, `hm_txt`) đều cắt theo `cfop_box`
+  width trước khi render — nút "Copy -> bar" vẫn cho lấy TOÀN BỘ chuỗi
+  gốc chưa cắt (`hint_moves_str` không đổi, chỉ phần HIỂN THỊ bị cắt).
+- **Cố tình bỏ 1 bản nháp phức tạp**: lúc đầu viết hiệu ứng "mờ dần"
+  (gradient alpha) cho phần bị cuộn khuất, nhưng code đó dùng vòng lặp vẽ
+  từng cột pixel + xử lý alpha thủ công — quá phức tạp để tự tin đúng khi
+  KHÔNG kiểm chứng được bằng mắt. Thay bằng 1 tam giác đặc đơn giản, dễ
+  xác nhận đúng hơn nhiều dù kém tinh tế hơn.
+
+Thêm **9 test mới** cho `bar_scroll_offset()`/`truncate_with_ellipsis()`
+(`test_app_logic2.py`, tổng cộng giờ 32 test trong file này) — trong đó
+`test_truncate_with_ellipsis_result_never_exceeds_max_w()` kiểm tra đúng
+bất biến đã bị vi phạm trong bug gốc (kết quả không bao giờ được vượt
+quá `max_w` khi render).
+
+**Vẫn cần bạn xác nhận lại bằng mắt:** giống mọi thay đổi UI khác, mình
+chỉ verify được bằng test logic thuần (offset/truncate tính đúng theo
+toán), KHÔNG thể tự chạy pygame thật để xem giao diện có đẹp/đúng vị trí
+pixel như kỳ vọng không. Nhờ bạn chạy lại app, thử 1 gợi ý PLL dài (hoặc
+gõ tay 1 chuỗi dài vào Singmaster bar) để xác nhận không còn tràn ra
+ngoài.
+
 ---
 
-**Tổng kết kiểm chứng:** toàn bộ thay đổi trên (cả 2 vòng sửa) đã chạy
+**Tổng kết kiểm chứng:** toàn bộ thay đổi trên (cả 3 vòng sửa) đã chạy
 qua: `test_cube_engine.py` (51 test), `test_solver.py` (50 test),
 `test_cancellation.py` (8 test), `test_app_logic.py` (11 test),
-`test_app_logic2.py` (23 test) — **143/143 pass**, không có test cũ nào
-bị hỏng do các thay đổi này (đã chạy thật qua `/tmp/runtests.py` vì môi
-trường review không cài được pytest thật, và đã thử lại `pip install
-pygame`/`apt-get install python3-pygame` ở vòng 2 để xác nhận vẫn không
-có Internet — không phải khẳng định suông).
+`test_app_logic2.py` (32 test) — **152/152 pass**.

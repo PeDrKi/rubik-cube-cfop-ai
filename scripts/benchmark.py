@@ -1,5 +1,8 @@
-import sys, time, random, statistics
-sys.path.insert(0, '.')
+import sys, os, time, random, statistics
+# Them thu muc goc repo (cha cua scripts/) vao sys.path -- KHONG con dung
+# sys.path.insert(0, '.') nua (chi dung neu chay dung tu root, de gay loi
+# neu ai do chay `python3 scripts/benchmark.py` tu 1 cwd khac).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from cube_engine import make_solved, do_move, ALL_MOVES, random_scramble_moves
 from solver import cfop_ai
 

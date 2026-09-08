@@ -88,6 +88,49 @@ def rescale_zoom(old_zoom, old_zoom0, new_zoom0):
 
 
 # ── Điều khiển tốc độ animation (phím [ và ]) ────────────────────────────
+# ── Cuộn ngang thanh Singmaster bar theo con trỏ ─────────────────────────
+def bar_scroll_offset(text, cursor_pos, available_w, font_size_fn):
+    """Trả về offset ngang (px) sao cho con trỏ (cursor_pos) LUÔN nằm
+    trong vùng nhìn thấy rộng `available_w`, giống hành vi ô nhập liệu
+    thông thường -- khắc phục lỗi chuỗi công thức dài tràn ra ngoài thanh
+    bar (khi cursor_pos=None, coi như cursor ở cuối text -- tự nhiên hiện
+    phần ĐUÔI chuỗi, thường là phần vừa gõ/dán vào).
+
+    font_size_fn: callable nhận str, trả (width, height) -- xem
+    bar_index_at_x() ở trên về lý do dùng callable thay vì đối tượng Font.
+    """
+    if cursor_pos is None:
+        cursor_pos = len(text)
+    full_w = font_size_fn(text)[0]
+    if full_w <= available_w:
+        return 0
+    cursor_w = font_size_fn(text[:cursor_pos])[0]
+    if cursor_w > available_w:
+        return cursor_w - available_w
+    return 0
+
+
+def truncate_with_ellipsis(text, max_w, font_size_fn, ellipsis='…'):
+    """Cắt `text` (nếu cần) sao cho vừa `max_w` khi render, thêm `ellipsis`
+    ở cuối nếu bị cắt. Dùng cho vùng CHIỀU CAO CỐ ĐỊNH (không wrap được,
+    vd hộp gợi ý AI) -- khác với wrap_text() trong formula_panel.py (dùng
+    cho vùng có thể cuộn dọc). Trả về (text_da_cat, bi_cat: bool)."""
+    if font_size_fn(text)[0] <= max_w:
+        return text, False
+    ell_w = font_size_fn(ellipsis)[0]
+    budget = max_w - ell_w
+    if budget <= 0:
+        return ellipsis, True
+    lo_i, hi_i = 0, len(text)
+    while lo_i < hi_i:
+        mid = (lo_i + hi_i + 1) // 2
+        if font_size_fn(text[:mid])[0] <= budget:
+            lo_i = mid
+        else:
+            hi_i = mid - 1
+    return text[:lo_i] + ellipsis, True
+
+
 def speed_idx_down(idx):
     """Giảm 1 bậc tốc độ, kẹp ở 0 (không âm)."""
     return max(0, idx - 1)

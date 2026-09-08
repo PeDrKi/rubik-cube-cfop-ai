@@ -15,6 +15,14 @@ xuyen suot bo test nay de kiem chung KHONG CAN so sanh voi 1 nguon "dung
 san" nao khac (self-consistent theo ly thuyet nhom).
 """
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ^ them thu muc goc repo (cha cua tests/) vao sys.path -- CAN THIET vi file
+# nay nam trong tests/ nhung can import cube_engine/solver/... o root. Bootstrap
+# nay lam file chay dung DU invoke kieu nao (python3 tests/test_x.py tu bat
+# ky cwd nao, hay python3 -m pytest tests/ tu root) -- xem docs/README_TEST_APP.md.
+
 import random
 
 import numpy as np

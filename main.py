@@ -871,11 +871,25 @@ def main():
             ay += int(15 * lo.s)
 
         if hint_label:
-            hl_txt = lo.sfont.render(f"Gợi ý: {hint_label}", True, (230, 190, 255))
+            # Cung 1 loi nhu hint_moves_str (xem ghi chu ben duoi): mot vai
+            # label (vd OLL/PLL khi chua tim duoc) kha dai, cat bot + "…"
+            # thay vi de tran ra ngoai cfop_box.
+            max_hl_w = cfop_box.right - ax - 6
+            hl_display, _ = al.truncate_with_ellipsis(
+                f"Gợi ý: {hint_label}", max_hl_w, lo.sfont.size)
+            hl_txt = lo.sfont.render(hl_display, True, (230, 190, 255))
             screen.blit(hl_txt, (ax, ay))
             ay += int(15 * lo.s)
             if hint_moves_str:
-                hm_txt = lo.sfont.render(f"  {hint_moves_str}", True, (255, 255, 255))
+                # SỬA LỖI: hm_txt truoc day render TOAN BO chuoi tren 1
+                # dong khong gioi han -- voi cong thuc dai (vd PLL ~30+
+                # nuoc) se tran ra khoi cfop_box (chieu cao CO DINH, khong
+                # wrap duoc nhieu dong). Cat bot + "…" thay vi wrap, nut
+                # "Copy -> bar" van cho phep lay TOAN BO chuoi day du.
+                max_hm_w = cfop_box.right - ax - max(8, int(10 * lo.s)) - 6
+                hm_display, hm_truncated = al.truncate_with_ellipsis(
+                    f"  {hint_moves_str}", max_hm_w, lo.sfont.size)
+                hm_txt = lo.sfont.render(hm_display, True, (255, 255, 255))
                 screen.blit(hm_txt, (ax, ay))
 
                 # ── Nút "Copy -> thanh công thức" ──────────────────────────

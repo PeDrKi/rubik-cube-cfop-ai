@@ -53,7 +53,7 @@ bằng search.
 Tất cả **không đảm bảo tối ưu tuyệt đối số nước** (đổi lấy tốc độ — phù hợp
 MVP), nhưng **luôn đúng** khi tìm ra lời giải (đã stress-test hàng chục
 scramble ngẫu nhiên + test tất định, 100% chính xác trên facelet thật —
-xem `test_solver.py`).
+xem `tests/test_solver.py`).
 
 ## File map
 
@@ -72,7 +72,7 @@ solver/
   pll_solver.py         giải PLL 2-look (A* + PDB chính xác)
   cfop_ai.py            API cấp cao: full_solve(state), hint(state), stage_of(state)
 cache/                  PDB đã build, cache ra đĩa (.pkl) — build 1 lần
-test_solver.py           unit + stress test
+tests/test_solver.py     unit + stress test
 ```
 
 ## Đã thử hướng "tự huấn luyện mô hình học máy" — và tại sao dừng lại
@@ -82,8 +82,9 @@ Có cân nhắc hướng đi xa hơn: huấn luyện 1 mô hình (Gradient Boost
 heuristic admissible hiện tại và khoảng cách thực — với kỳ vọng nắm được
 tương tác giữa các nhóm quân mà `max(PDB...)` bỏ sót.
 
-**Kiến trúc dự kiến** (file `solver/ml/generate_training_data.py` còn giữ
-lại làm tư liệu): sinh dữ liệu tự động bằng chính solver hiện có (không
+**Kiến trúc dự kiến** (file `research/ml_exploration/generate_training_data.py`
+— đã chuyển từ `solver/ml/` sang `research/` vì đây là hướng THỬ NGHIỆM,
+không nằm trong pipeline solver chính, còn giữ lại làm tư liệu): sinh dữ liệu tự động bằng chính solver hiện có (không
 cần gán nhãn tay) — với mỗi scramble ngẫu nhiên, giải Cross+F2L+OLL-cạnh
 (nhanh, tin cậy), rồi chạy A* có ngân sách để lấy "nhãn đúng" (số bước tối
 thiểu thực tế) cho pha định hướng góc.
@@ -382,6 +383,6 @@ không gian trạng thái quá lớn để lưu toàn bộ visited-set:
 
 ```bash
 pip install -r requirements.txt --break-system-packages
-python -m pytest test_solver.py -q   # co the mat vai phut do 1-2 case OCLL/PLL kho
+python -m pytest tests/test_solver.py -q   # co the mat vai phut do 1-2 case OCLL/PLL kho
 python main.py     # trong app: Space=scramble, A=auto-solve, H=hint
 ```
