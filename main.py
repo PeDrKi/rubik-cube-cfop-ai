@@ -102,7 +102,8 @@ def main():
             stage = cfop_ai.stage_of(state)
         except Exception:
             return '—'
-        return {'cross': 'Cross', 'f2l': 'F2L', 'oll_pll_todo': 'Cross+F2L xong (OLL/PLL: sắp có)'}.get(stage, '—')
+        return {'cross': 'Cross', 'f2l': 'F2L', 'oll': 'OLL',
+                'pll_todo': 'Cross+F2L+OLL xong (PLL: sắp có)'}.get(stage, '—')
 
     def start_cfop_job(kind):
         nonlocal cfop_busy, cfop_job_kind
@@ -203,10 +204,13 @@ def main():
                 cfop_note_timer = 200
             elif kind == 'solve':
                 apply_cfop_solution(res['all_moves'])
-                if res['reached'] == 'f2l_done':
-                    cfop_note = f"AI: đã giải Cross + F2L ({len(res['all_moves'])} nước)"
-                else:
-                    cfop_note = "AI: giải được Cross + một phần F2L (cặp khó, thử lại 'A' lần nữa)"
+                msgs = {
+                    'oll_done':    f"AI: đã giải Cross + F2L + OLL ({len(res['all_moves'])} nước) — chờ PLL!",
+                    'oll_partial': "AI: xong Cross+F2L, OLL còn dở (case khó, thử lại 'A')",
+                    'f2l_done':    f"AI: đã giải Cross + F2L ({len(res['all_moves'])} nước)",
+                    'f2l_partial': "AI: giải được Cross + một phần F2L (cặp khó, thử lại 'A' lần nữa)",
+                }
+                cfop_note = msgs.get(res['reached'], f"AI: đã đi {len(res['all_moves'])} nước")
                 cfop_note_timer = 220
             else:   # hint
                 hint_label = res['label']

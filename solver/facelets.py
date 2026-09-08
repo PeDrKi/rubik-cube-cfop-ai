@@ -89,3 +89,9 @@ def pair_solved(state, slot):
 def f2l_solved_slots(state):
     """Danh sách các slot F2L đã hoàn thành (theo F2L_ORDER)."""
     return [s for s in F2L_ORDER if pair_solved(state, s)]
+
+
+def oll_solved(state):
+    """Mặt U đồng màu (không quan tâm hoán vị các quân lớp U -- đó là PLL)."""
+    u = state['U']
+    return bool((u == 'U').all())

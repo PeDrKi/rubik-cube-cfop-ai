@@ -139,7 +139,10 @@ def solve_f2l(state, slots=None, depths=(8, 10, 12, 14), nodes_per_depth=120_000
     full = from_facelets(state)
     all_moves = []
     per_slot = {}
-    done = []
+    # quan trong: neu chi giai 1 slot cu the (VD tu hint()), cac slot KHAC
+    # da xong truoc do (khong nam trong `slots`) van phai duoc coi la "done"
+    # de search khong vo tinh pha vo chung.
+    done = [s for s in F2L_ORDER if s not in slots and pair_ok(full, s)]
     for slot in slots:
         if pair_ok(full, slot):
             per_slot[slot] = []
