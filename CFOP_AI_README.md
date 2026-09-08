@@ -101,6 +101,37 @@ phòng) đã tối ưu — đã kiểm chứng xử lý tốt đa số trường
 scramble ngẫu nhiên test nhanh <0.5s), chỉ còn hiếm case khó mất nhiều thời
 gian hơn (không còn crash).
 
+## Cập nhật: thêm đối xứng gương → tăng độ phủ bảng tra PLL từ 35% lên 62.8%
+
+Rà soát lại phát hiện độ phủ 35% (101/288 trạng thái hợp lệ) thấp hơn nhiều
+so với kỳ vọng chỉ vì "thiếu 1 công thức" — nguyên nhân thật: 19 công thức
+chỉ cho **25 pattern độc lập** (không phải 38 như tính đơn giản), vì nhiều
+cặp thuận/nghịch trùng nhau.
+
+**Giải pháp:** thêm **đối xứng gương** (phản chiếu qua mặt phẳng chứa trục
+U/D và F/B, tức hoán đổi L↔R). Phép đối xứng gương là phép biến đổi
+"improper" (định thức -1), nên **đảo ngược chiều quay của MỌI mặt** (không
+chỉ riêng L/R) — quy tắc: R↔L' , R'↔L, U↔U', F↔F', ... (tất cả đảo chiều).
+
+**Đã kiểm chứng bằng code trước khi dùng** (không suy diễn lý thuyết đơn
+thuần): áp quy tắc đối xứng gương lên cả 19 công thức, kiểm tra lại đúng 3
+điều kiện cũ (giữ hướng, giữ Cross+F2L) — **19/19 đều hợp lệ** và cho
+pattern **khác** bản gốc, xác nhận kỹ thuật đúng và hữu ích.
+
+**Kết quả đo lại:**
+- Số pattern trong bảng: 25 → **45** (gần gấp đôi, không cần thêm công
+  thức mới nào).
+- Độ phủ trên toàn bộ 288 trạng thái PLL hợp lệ: 35% → **62.8%**.
+- Test thực tế trên 20 scramble: tỉ lệ dùng đúng 1 công thức CFOP thật
+  (tra bảng tức thời) tăng từ 50% → **65%**.
+
+**Giới hạn còn lại:** vẫn chưa đạt 100% (thiếu Z-perm hoàn toàn — đã thử
+tìm bằng search thuần túy với IDA* 6 triệu node/240s vẫn chưa ra, có thể
+cần >16 nước khi không dùng M-slice/D — và một số góc AUF+gương vẫn chưa
+phủ hết). ~37% case còn lại vẫn dùng macro-search dự phòng (luôn đúng,
+chỉ dài hơn). Đây là điểm dừng hợp lý — cải thiện thêm nữa (tìm ra Z-perm,
+hoặc thêm các công thức phụ khác) là hướng phát triển tiếp theo.
+
 ## Cập nhật: triển khai đầy đủ bảng tra 21 công thức PLL chuẩn (theo yêu cầu)
 
 Theo yêu cầu "chỉ dùng 1 công thức trong 21 công thức PLL" — đã triển khai

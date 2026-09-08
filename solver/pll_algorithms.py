@@ -22,6 +22,27 @@ dua vao san xuat) -- xem verify_and_build_table().
 from cube_engine import make_solved, do_move
 from .full_state import from_facelets, apply_move, cross_f2l_ok
 
+# ── Doi guong (phan chieu qua mat phang chua truc U/D va F/B, hoan doi
+# L<->R) ─────────────────────────────────────────────────────────────────
+# Phep doi guong DAO NGUOC chieu quay cua MOI mat (khong chi rieng L/R) vi
+# phan chieu la 1 phep bien doi "improper" (dinh thuc -1), lam dao nguoc
+# chieu (handedness) cua TOAN BO khong gian. Da KIEM CHUNG BANG CODE (xem
+# CFOP_AI_README.md): ca 19/19 thuat toan khi doi guong deu VAN HOP LE
+# (giu nguyen huong + Cross+F2L), va cho pattern KHAC ban goc -- tang gap
+# doi so pattern nhan dien duoc ma KHONG can them thuat toan moi.
+_MIRROR_MAP = {
+    'R': "L'", "R'": 'L', 'R2': 'L2',
+    'L': "R'", "L'": 'R', 'L2': 'R2',
+    'U': "U'", "U'": 'U', 'U2': 'U2',
+    'D': "D'", "D'": 'D', 'D2': 'D2',
+    'F': "F'", "F'": 'F', 'F2': 'F2',
+    'B': "B'", "B'": 'B', 'B2': 'B2',
+}
+
+
+def _mirror_seq(seq):
+    return [_MIRROR_MAP[m] for m in seq]
+
 # ── 20 thuat toan PLL chuan (thieu Z-perm) ────────────────────────────────
 _RAW_ALGS = {
     'Aa': "R' F R' B2 R F' R' B2 R2",
@@ -71,25 +92,35 @@ def _pattern_of(seq):
     return cp[0:4], ep[0:4], valid
 
 
+def _add_variant(table, seq):
+    """Them 1 bien the (chuoi nuoc da xac dinh la hop le) vao bang, ca
+    chieu thuan lan chieu nghich cua no."""
+    cp, ep, valid = _pattern_of(seq)
+    if not valid:
+        return False
+    table[(cp, ep)] = _inv(seq)
+    inv_seq = _inv(seq)
+    icp, iep, ivalid = _pattern_of(inv_seq)
+    if ivalid:
+        table[(icp, iep)] = seq
+    return True
+
+
 def verify_and_build_table():
-    """Kiem chung TAT CA thuat toan trong _RAW_ALGS, chi giu lai nhung cai
-    HOP LE, roi xay bang tra cuu 2 chieu (thuan + nghich) tu (pattern) ->
-    (chuoi nuoc giai). Chay 1 lan khi import module."""
+    """Kiem chung TAT CA thuat toan trong _RAW_ALGS (va ban DOI GUONG cua
+    tung cai), chi giu lai nhung cai HOP LE, roi xay bang tra cuu 4 chieu
+    (thuan / nghich / guong / guong-nghich) tu (pattern) -> (chuoi nuoc
+    giai). Doi guong giup TANG GAP DOI so pattern nhan dien duoc MA KHONG
+    CAN THEM THUAT TOAN MOI (da kiem chung: 19/19 thuat toan khi doi guong
+    van hop le va cho pattern KHAC ban goc -- xem CFOP_AI_README.md).
+    Chay 1 lan khi import module."""
     table = {}
     verified_names = []
     for name, seqstr in _RAW_ALGS.items():
         seq = seqstr.split()
-        cp, ep, valid = _pattern_of(seq)
-        if not valid:
-            continue   # loai bo thuat toan sai (khong dua vao san xuat)
-        verified_names.append(name)
-        # chieu thuan: cube dang o pattern (cp,ep) -> giai bang inv(seq)
-        table[(cp, ep)] = _inv(seq)
-        # chieu nghich: cube dang o pattern cua inv(seq) -> giai bang seq
-        inv_seq = _inv(seq)
-        icp, iep, ivalid = _pattern_of(inv_seq)
-        if ivalid:
-            table[(icp, iep)] = seq
+        if _add_variant(table, seq):
+            verified_names.append(name)
+            _add_variant(table, _mirror_seq(seq))
     return table, verified_names
 
 
