@@ -151,6 +151,19 @@ Bổ sung sau khi hoàn tất Giai đoạn 3, giải quyết điểm yếu "OLL 
 `corner_source == 'named'` trong `cfop_ai.py` không đổi ý nghĩa, tương
 thích ngược hoàn toàn (176/176 test vẫn pass sau mỗi bước sửa).
 
+## CẬP NHẬT MỚI NHẤT 4 — Đổi bảng màu move_recorder.html theo yêu cầu
+
+Theo yêu cầu người dùng: F=Xanh lá → suy ra R=Cam, L=Đỏ (đã kiểm chứng
+bằng toán: đây là phép xoay 180° hợp lệ quanh trục F-B, định thức +1,
+không phải đối xứng gương bất khả thi). Bảng màu đầy đủ mới:
+U=Vàng, D=Trắng, F=Xanh lá, B=Xanh dương, R=Cam, L=Đỏ.
+
+Chỉ sửa `research/phase3_survey/move_recorder.html` (`FACE_COLOR` +
+chú thích hướng dẫn) — đây là nơi DUY NHẤT trong dự án có định nghĩa
+màu sticker cụ thể (app `main.py` chính chỉ dùng ký tự U/D/L/R/F/B,
+không render màu). Logic xoay cube (JS engine) không đổi, đã test lại
+khớp Python và không phá vỡ gì (176/176 test vẫn pass).
+
 ## Venue dự kiến — xem chi tiết mục 9 trong `HUONG_DAN_CHAY.md`
 
 Hầu hết deadline 2026 (CoG, ICAPS/HAXP) đã qua tại thời điểm dự án thực
