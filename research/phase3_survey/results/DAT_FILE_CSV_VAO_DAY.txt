@@ -1,0 +1,6 @@
+Đặt các file CSV kết quả khảo sát (do rating_tool.html xuất ra, mỗi
+người tham gia 1 file) vào thư mục này, sau đó chạy:
+
+    python3 -m research.phase3_survey.analyze_results
+
+Xem chi tiết quy trình đầy đủ trong ../DESIGN.md.

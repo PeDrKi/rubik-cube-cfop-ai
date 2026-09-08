@@ -69,6 +69,8 @@ def _full_solve_raw(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_0
     oll_moves = []
     pll_moves = []
     reached = 'f2l_partial'
+    oll_pll_stage_count = 0
+    oll_pll_named_count = 0
 
     if f2l_done:
         reached = 'f2l_done'
@@ -77,6 +79,13 @@ def _full_solve_raw(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_0
             oll_moves = oll_res['moves']
             for mv in oll_moves:
                 do_move(st, mv)
+        # Pha A (canh) luon la search trong cai dat nay -> khong tinh vao
+        # pattern-conformity (khong co "case ten" nao de so sanh). Chi pha
+        # B (goc, Sune/Anti-Sune) moi co khai niem named/search ro rang.
+        if oll_res.get('corner_source') is not None:
+            oll_pll_stage_count += 1
+            if oll_res['corner_source'] == 'named':
+                oll_pll_named_count += 1
         oll_done_flag = oll_solved(st)
         reached = 'oll_done' if oll_done_flag else 'oll_partial'
 
@@ -86,6 +95,10 @@ def _full_solve_raw(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_0
                 pll_moves = pll_res['moves']
                 for mv in pll_moves:
                     do_move(st, mv)
+            if pll_res.get('source') is not None:
+                oll_pll_stage_count += 1
+                if pll_res['source'] == 'named':
+                    oll_pll_named_count += 1
             reached = 'solved' if cube_solved(st) else 'pll_partial'
 
     return {
@@ -96,6 +109,8 @@ def _full_solve_raw(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_0
         'pll_moves': pll_moves,
         'all_moves': cross_moves + f2l_res['moves'] + oll_moves + pll_moves,
         'reached': reached,
+        'oll_pll_stage_count': oll_pll_stage_count,
+        'oll_pll_named_count': oll_pll_named_count,
     }
 
 

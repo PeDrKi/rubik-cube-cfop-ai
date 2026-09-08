@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Khảo sát: Đánh giá bài giải Rubik's Cube</title>
+<style>
+  :root {
+    --bg: #14141c; --panel: #1e1e2a; --border: #33333f;
+    --text: #e8e8f0; --muted: #9494a8; --accent: #7c9eff; --accent2: #ffd479;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    max-width: 720px; margin: 0 auto; padding: 24px 16px 80px;
+    line-height: 1.55;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 24px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 16px;
+  }
+  .moves {
+    font-family: "SF Mono", Consolas, monospace; font-size: 1.05rem;
+    background: #0d0d13; border-radius: 8px; padding: 14px;
+    letter-spacing: 0.5px; word-spacing: 6px; line-height: 1.9;
+    margin: 12px 0; user-select: text;
+  }
+  .progress { color: var(--muted); font-size: 0.85rem; margin-bottom: 10px; }
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 18px; }
+  .progress-fill { height: 100%; background: var(--accent); transition: width .3s; }
+  label.q { display: block; font-weight: 600; margin: 18px 0 8px; }
+  .scale { display: flex; gap: 8px; margin-bottom: 6px; }
+  .scale button {
+    flex: 1; padding: 12px 4px; border-radius: 8px; border: 1px solid var(--border);
+    background: #26263380; color: var(--text); cursor: pointer; font-size: 0.9rem;
+  }
+  .scale button:hover { border-color: var(--accent); }
+  .scale button.sel { background: var(--accent); color: #10101a; border-color: var(--accent); font-weight: 700; }
+  .scale-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.78rem; margin-bottom: 4px; }
+  textarea {
+    width: 100%; background: #0d0d13; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px; font-family: inherit; font-size: 0.92rem; min-height: 54px; resize: vertical;
+  }
+  .nav { display: flex; justify-content: space-between; margin-top: 20px; gap: 10px; }
+  button.big {
+    padding: 12px 22px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 0.95rem; font-weight: 600;
+  }
+  button.primary { background: var(--accent); color: #10101a; }
+  button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .consent, .done, .demo { }
+  .demo label { display: block; margin: 14px 0 6px; font-weight: 600; }
+  select {
+    width: 100%; padding: 10px; border-radius: 8px; background: #0d0d13;
+    color: var(--text); border: 1px solid var(--border); font-size: 0.95rem;
+  }
+  .hint { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+  code { background: #0d0d13; padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Khảo sát: Đánh giá bài giải Rubik's Cube</h1>
+<div class="sub">Nghiên cứu tính "giống người" của lời giải AI — không thu thập thông tin định danh cá nhân.</div>
+
+<div id="app"></div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let STIMULI = null;       // load tu stimuli.json
+let order = [];           // thu tu index da xao tron
+let cur = -1;              // -1 = man hinh consent, -2 = man demographic
+let answers = {};          // display_id -> {human, natural, comment}
+let demo = { experience: '', avg_time: '' };
+
+const app = document.getElementById('app');
+
+// ============================================================
+// LOAD stimuli.json (phai de cung thu muc voi file HTML nay)
+// ============================================================
+fetch('stimuli.json').then(r => {
+  if (!r.ok) throw new Error('not found');
+  return r.json();
+}).then(data => {
+  STIMULI = data;
+  order = STIMULI.stimuli.map((_, i) => i);
+  shuffle(order);
+  render();
+}).catch(err => {
+  app.innerHTML = `<div class="card">
+    <strong>Không tìm thấy file <code>stimuli.json</code>.</strong><br><br>
+    Hãy đảm bảo file <code>stimuli.json</code> nằm CÙNG thư mục với file
+    <code>rating_tool.html</code> này, sau đó mở lại trang.<br><br>
+    <span class="hint">(Lỗi: ${err.message} — nếu mở file trực tiếp bằng
+    trình duyệt (file://) mà vẫn lỗi, thử chạy 1 local server đơn giản, vd:
+    <code>python3 -m http.server</code> trong thư mục chứa 2 file này, rồi
+    mở http://localhost:8000/rating_tool.html)</span>
+  </div>`;
+});
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function render() {
+  if (cur === -1) return renderConsent();
+  if (cur === -2) return renderDemographics();
+  if (cur === order.length) return renderDone();
+  renderStimulus();
+}
+
+function renderConsent() {
+  app.innerHTML = `
+  <div class="card consent">
+    <h2 style="margin-top:0">Thông tin & Đồng ý tham gia</h2>
+    <p>Khảo sát này thuộc một đề tài nghiên cứu về mức độ "giống người"
+    của lời giải Rubik's Cube do AI sinh ra. Bạn sẽ xem
+    <strong>${'{{N}}'}</strong> chuỗi nước đi (không có video/hình ảnh) và
+    đánh giá theo cảm nhận cá nhân.</p>
+    <ul>
+      <li>Thời gian dự kiến: 10–20 phút.</li>
+      <li>Không thu thập tên, email hay bất kỳ thông tin định danh nào.</li>
+      <li>Bạn có thể dừng bất cứ lúc nào; dữ liệu chưa xuất file sẽ không
+        được lưu ở đâu cả (mọi thứ chỉ nằm trong trình duyệt của bạn).</li>
+      <li>Cuối khảo sát, bạn tự tải file kết quả (CSV) về máy và gửi lại
+        cho người tổ chức nghiên cứu.</li>
+    </ul>
+    <p><strong>Điều kiện tham gia:</strong> bạn cần biết giải Rubik's Cube
+    bằng phương pháp CFOP và đọc hiểu ký hiệu Singmaster
+    (<code>R U R' U'</code>...).</p>
+    <div class="nav">
+      <span></span>
+      <button class="big primary" onclick="startDemo()">Tôi đồng ý & đủ điều kiện, bắt đầu</button>
+    </div>
+  </div>`;
+  app.innerHTML = app.innerHTML.replace('{{N}}', STIMULI ? STIMULI.stimuli.length : '...');
+}
+
+function startDemo() { cur = -2; render(); }
+
+function renderDemographics() {
+  app.innerHTML = `
+  <div class="card demo">
+    <h2 style="margin-top:0">Vài thông tin ngắn (không định danh)</h2>
+    <label>Mức kinh nghiệm CFOP của bạn</label>
+    <select id="exp">
+      <option value="">-- chọn --</option>
+      <option value="beginner_cfop">Mới học CFOP (< 6 tháng)</option>
+      <option value="intermediate">Trung bình (biết đủ 2-look OLL/PLL)</option>
+      <option value="advanced">Thành thạo (biết phần lớn full OLL/PLL)</option>
+    </select>
+    <label>Thời gian giải trung bình (ao5)</label>
+    <select id="time">
+      <option value="">-- chọn --</option>
+      <option value="gt60">Trên 60 giây</option>
+      <option value="30_60">30–60 giây</option>
+      <option value="20_30">20–30 giây</option>
+      <option value="15_20">15–20 giây</option>
+      <option value="lt15">Dưới 15 giây</option>
+    </select>
+    <div class="nav">
+      <span></span>
+      <button class="big primary" id="next-btn" onclick="submitDemo()" disabled>Bắt đầu đánh giá</button>
+    </div>
+  </div>`;
+  const check = () => {
+    const e = document.getElementById('exp').value;
+    const t = document.getElementById('time').value;
+    document.getElementById('next-btn').disabled = !(e && t);
+  };
+  document.getElementById('exp').addEventListener('change', check);
+  document.getElementById('time').addEventListener('change', check);
+}
+
+function submitDemo() {
+  demo.experience = document.getElementById('exp').value;
+  demo.avg_time = document.getElementById('time').value;
+  cur = 0;
+  render();
+}
+
+function renderStimulus() {
+  const idx = order[cur];
+  const s = STIMULI.stimuli[idx];
+  const a = answers[s.display_id] || { human: null, natural: null, comment: '' };
+  const pct = Math.round((cur / order.length) * 100);
+
+  app.innerHTML = `
+  <div class="progress">Bài ${cur + 1} / ${order.length}</div>
+  <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+  <div class="card">
+    <div style="font-weight:700; color:var(--accent2); margin-bottom:6px;">${s.display_id}</div>
+    <div class="moves">${s.moves_str}</div>
+
+    <label class="q">1. Bạn nghĩ khả năng đây là do MỘT NGƯỜI THẬT tự giải
+      (không phải máy tính/AI) là bao nhiêu?</label>
+    <div class="scale-labels"><span>Chắc chắn là máy</span><span>Chắc chắn là người</span></div>
+    <div class="scale" id="scale-human">
+      ${[1,2,3,4,5].map(v => `<button data-v="${v}" onclick="setAnswer('human',${v})" class="${a.human===v?'sel':''}">${v}</button>`).join('')}
+    </div>
+
+    <label class="q">2. (Tuỳ chọn) Các nước đi có cảm giác "tự nhiên"/quen tay (finger-trick) không?</label>
+    <div class="scale-labels"><span>Hoàn toàn không</span><span>Rất tự nhiên</span></div>
+    <div class="scale" id="scale-natural">
+      ${[1,2,3,4,5].map(v => `<button data-v="${v}" onclick="setAnswer('natural',${v})" class="${a.natural===v?'sel':''}">${v}</button>`).join('')}
+    </div>
+
+    <label class="q">3. (Tuỳ chọn) Điều gì khiến bạn nghĩ vậy?</label>
+    <textarea id="comment" oninput="setComment(this.value)" placeholder="Có thể bỏ trống...">${a.comment || ''}</textarea>
+
+    <div class="nav">
+      <button class="big secondary" onclick="prevStim()" ${cur===0?'disabled':''}>← Quay lại</button>
+      <button class="big primary" onclick="nextStim()" ${a.human===null||a.human===undefined?'disabled':''}>Tiếp theo →</button>
+    </div>
+  </div>`;
+}
+
+function currentDisplayId() {
+  return STIMULI.stimuli[order[cur]].display_id;
+}
+
+function setAnswer(field, value) {
+  const id = currentDisplayId();
+  if (!answers[id]) answers[id] = { human: null, natural: null, comment: '' };
+  answers[id][field] = value;
+  renderStimulus();
+}
+
+function setComment(value) {
+  const id = currentDisplayId();
+  if (!answers[id]) answers[id] = { human: null, natural: null, comment: '' };
+  answers[id].comment = value;
+}
+
+function nextStim() { cur++; render(); }
+function prevStim() { cur--; render(); }
+
+function renderDone() {
+  app.innerHTML = `
+  <div class="card done">
+    <h2 style="margin-top:0">Hoàn thành — cảm ơn bạn!</h2>
+    <p>Bấm nút dưới đây để tải file kết quả (CSV), sau đó gửi file này lại
+    cho người tổ chức nghiên cứu.</p>
+    <button class="big primary" onclick="downloadCSV()">Tải kết quả (CSV)</button>
+  </div>`;
+}
+
+function downloadCSV() {
+  const rows = [['display_id', 'internal_group_HIDDEN', 'human_rating', 'natural_rating', 'comment', 'exp_level', 'avg_time']];
+  // Luu y: internal_group chi de sau nay nguoi phan tich doi chieu, KHONG
+  // hien thi cho nguoi cham trong luc lam khao sat (da an trong toan bo qua
+  // trinh o tren, chi xuat vao CSV luc export cuoi cung).
+  STIMULI.stimuli.forEach(s => {
+    const a = answers[s.display_id] || {};
+    rows.push([
+      s.display_id, s.internal_group, a.human ?? '', a.natural ?? '',
+      (a.comment || '').replace(/\n/g, ' ').replace(/"/g, "'"),
+      demo.experience, demo.avg_time
+    ]);
+  });
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const rand = Math.random().toString(36).slice(2, 8);
+  a.href = url;
+  a.download = `khao_sat_ket_qua_${rand}.csv`;
+  a.click();
+}
+</script>
+</body>
+</html>

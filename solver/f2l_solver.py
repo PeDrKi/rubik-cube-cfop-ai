@@ -57,7 +57,7 @@ def _mismatch_penalty(full, done_slots):
     return bad
 
 
-def _heuristic(full, slot, done_slots):
+def _heuristic(full, slot, done_slots, path=(), trigger_bonus_fn=None, lam=0.0):
     ep, eo, cp, co = full
     ci = CM.SLOT_INDEX[slot]
     ei = EM.SLOT_INDEX[F2L_EDGE_OF[slot]]
@@ -67,14 +67,26 @@ def _heuristic(full, slot, done_slots):
     # nhanh lam hong Cross / cac cap truoc do (search khong con toi uu
     # tuyet doi nhung nhanh & thuc te hon nhieu cho MVP)
     penalty = 2 * _mismatch_penalty(full, done_slots)
-    return base + penalty
+    h = base + penalty
+    # ── [NGHIEN CUU] Trigger-biased search (xem research/trigger_biased_search.py) ──
+    # Neu duoc cung cap, tru bot mot luong (lam * so nuoc thuoc trigger da
+    # biet trong `path`) de A* uu tien cac nhanh "giong nguoi" hon, DOI LAY
+    # co the mat mot phan toi uu ve so nuoc. Mac dinh trigger_bonus_fn=None,
+    # lam=0.0 -> h khong doi, HANH VI GOC KHONG ANH HUONG.
+    if trigger_bonus_fn is not None and lam:
+        h = h - lam * trigger_bonus_fn(path)
+    return h
 
 
-def _solve_pair(full_start, slot, done_slots, max_nodes=120_000, max_depth=13, moves=NO_D_MOVES):
+def _solve_pair(full_start, slot, done_slots, max_nodes=120_000, max_depth=13, moves=NO_D_MOVES,
+                 trigger_bonus_fn=None, lam=0.0):
     """A*/greedy-best-first tim chuoi nuoc (khong dung D) dua slot ve dung
     vi tri, uu tien manh giu nguyen Cross va cac slot trong done_slots.
     Tra ve list moves hoac None neu khong tim thay trong ngan sach cho phep.
-    `moves`: thu tu duyet nuoc di -- co the xao tron cho lan 'thu lai'."""
+    `moves`: thu tu duyet nuoc di -- co the xao tron cho lan 'thu lai'.
+
+    `trigger_bonus_fn`, `lam`: xem _heuristic() -- [NGHIEN CUU], mac dinh
+    khong anh huong hanh vi goc."""
 
     def goal(full):
         if not cross_ok(full):
@@ -87,7 +99,7 @@ def _solve_pair(full_start, slot, done_slots, max_nodes=120_000, max_depth=13, m
     if goal(full_start):
         return []
 
-    h0 = _heuristic(full_start, slot, done_slots)
+    h0 = _heuristic(full_start, slot, done_slots, (), trigger_bonus_fn, lam)
     counter = 0
     # (f, g, counter, state, path, last_face)
     heap = [(h0, 0, counter, full_start, (), None)]
@@ -115,7 +127,7 @@ def _solve_pair(full_start, slot, done_slots, max_nodes=120_000, max_depth=13, m
                 if goal(nxt):
                     return list(npath)
                 counter += 1
-                h = _heuristic(nxt, slot, done_slots)
+                h = _heuristic(nxt, slot, done_slots, npath, trigger_bonus_fn, lam)
                 heapq.heappush(heap, (ng + h, ng, counter, nxt, npath, face))
     return None
 
@@ -132,22 +144,26 @@ def _move_order(shuffled):
 
 
 def _solve_pair_ladder(full, slot, done, depths=(8, 10, 12, 14), nodes_per_depth=120_000,
-                        shuffled=False):
+                        shuffled=False, trigger_bonus_fn=None, lam=0.0):
     for depth in depths:
         mvs = _solve_pair(full, slot, done, max_nodes=nodes_per_depth, max_depth=depth,
-                           moves=_move_order(shuffled))
+                           moves=_move_order(shuffled), trigger_bonus_fn=trigger_bonus_fn, lam=lam)
         if mvs is not None:
             return mvs
     return None
 
 
-def solve_f2l(state, slots=None, depths=(8, 10, 12, 14), nodes_per_depth=120_000, retry=False):
+def solve_f2l(state, slots=None, depths=(8, 10, 12, 14), nodes_per_depth=120_000, retry=False,
+              trigger_bonus_fn=None, lam=0.0):
     """
     Giai F2L tu trang thai facelet hien tai (Cross phai da xong truoc do).
     Tra ve dict: {'moves': [...tat ca nuoc noi tiep...],
                   'per_slot': {slot: [moves] hoac None neu that bai},
                   'solved_slots': [...]}
     Khong thay doi state truyen vao. retry=True: xem _move_order().
+
+    trigger_bonus_fn, lam: [NGHIEN CUU] xem research/trigger_biased_search.py.
+    Mac dinh None/0.0 -> HANH VI Y HET BAN GOC (khong anh huong test cu).
     """
     slots = slots or F2L_ORDER
     full = from_facelets(state)
@@ -163,7 +179,7 @@ def solve_f2l(state, slots=None, depths=(8, 10, 12, 14), nodes_per_depth=120_000
             done.append(slot)
             continue
         mvs = _solve_pair_ladder(full, slot, done, depths=depths, nodes_per_depth=nodes_per_depth,
-                                  shuffled=retry)
+                                  shuffled=retry, trigger_bonus_fn=trigger_bonus_fn, lam=lam)
         per_slot[slot] = mvs
         if mvs is None:
             break   # giu MVP: dung lai o cap dau tien khong giai duoc

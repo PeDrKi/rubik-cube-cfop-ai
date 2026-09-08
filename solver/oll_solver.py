@@ -224,20 +224,36 @@ def solve_oll(state, retry=False):
     Giai OLL (2-look) tu trang thai facelet hien tai (Cross+F2L phai da xong).
     Tra ve dict:
       {'edge_moves': [...] hoac None, 'corner_moves': [...] hoac None,
-       'moves': edge_moves + corner_moves}
+       'moves': edge_moves + corner_moves,
+       'edge_source': 'search' (pha A luon la search, khong co thuat toan
+                       ten trong cai dat nay),
+       'corner_source': 'named' (giai bang Sune/Anti-Sune, thuat toan co
+                         ten chuan) hoac 'search' (fallback hiem gap)}
     Khong thay doi state truyen vao. retry=True: xao tron thu tu nuoc di.
     """
     full = from_facelets(state)
 
     edge_moves = _solve_phase_A_ladder(full, shuffled=retry)
     if edge_moves is None:
-        return {'edge_moves': None, 'corner_moves': None, 'moves': None}
+        return {'edge_moves': None, 'corner_moves': None, 'moves': None,
+                'edge_source': None, 'corner_source': None}
     for mv in edge_moves:
         full = apply_move(full, mv)
 
+    # Kiem tra rieng xem OCLL macro (Sune/Anti-Sune co ten) co giai duoc
+    # khong -- de gan nhan 'named' chinh xac (khong doan boi do dai nuoc).
+    corner_source = None
+    if not retry:
+        _test = _solve_ocll_macro(full)
+        corner_source = 'named' if _test is not None else None
+
     corner_moves = _solve_phase_B_ladder(full, shuffled=retry)
     if corner_moves is None:
-        return {'edge_moves': edge_moves, 'corner_moves': None, 'moves': edge_moves}
+        return {'edge_moves': edge_moves, 'corner_moves': None, 'moves': edge_moves,
+                'edge_source': 'search', 'corner_source': None}
+    if corner_source is None:
+        corner_source = 'search'
 
     return {'edge_moves': edge_moves, 'corner_moves': corner_moves,
-            'moves': edge_moves + corner_moves}
+            'moves': edge_moves + corner_moves,
+            'edge_source': 'search', 'corner_source': corner_source}

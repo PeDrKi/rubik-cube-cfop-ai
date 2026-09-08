@@ -1,0 +1,9 @@
+mở Terminal: python -m http.server
+sau khi thấy dòng Serving HTTP on :: port 8000 (http://[::]:8000/) ...
+thì hãy mở trình duyệt và nhập: http://localhost:8000/rating_tool.html
+
+(đảm bảo stimuli.json nằm cùng thư mục với rating_tool.html)
+
+kết quả khảo sát sẽ được copy vào thư mục results/
+
+sau khi có kết quả hãy chạy :python -m research.phase3_survey.analyze_results
