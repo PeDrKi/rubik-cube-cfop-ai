@@ -73,6 +73,29 @@ cache/                  PDB đã build, cache ra đĩa (.pkl) — build 1 lần
 test_solver.py           unit + stress test
 ```
 
+## Cập nhật: IDA* thuần gây "treo" bất ngờ ở vài case → chuyển sang lai A*+IDA*
+
+Sau khi chuyển hẳn sang IDA*, phát hiện thêm vấn đề: IDA* **không lưu
+trạng thái đã duyệt** (memoization), nên với heuristic chưa thật sát, một
+số case *nhìn có vẻ đơn giản* (h ban đầu nhỏ) lại khiến IDA* phải **duyệt
+lại toàn bộ cây tìm kiếm ở mỗi mức ngưỡng độ sâu** — nhược điểm lý thuyết
+kinh điển của IDA* ("re-expansion"). Thực tế đã gặp: 1 case OLL-cạnh có
+h₀=4 (trông rất dễ) khiến IDA* thuần treo hơn 4 phút không ra kết quả.
+
+**Giải pháp cuối cùng — kết hợp cả hai:**
+- **A* (có nhớ) làm ưu tiên chính** — nhanh, dự đoán được thời gian, nhờ
+  memoization không duyệt lại. Ngân sách giới hạn ở mức an toàn RAM đã
+  kiểm chứng (~300k node ~3GB).
+- **IDA* chỉ là phương án dự phòng cuối** — dùng khi A* hết ngân sách mà
+  vẫn chưa ra, đảm bảo **không bao giờ crash** dù chậm.
+
+Đã test: 15/15 scramble ngẫu nhiên khác đều được A* giải trong <0.5s (tier
+đầu tiên) — xác nhận đây là hành vi **phổ biến**, còn case treo lâu chỉ là
+**ngoại lệ hiếm** với các scramble có tương tác cạnh/Cross/F2L đặc biệt
+khó tách rời. Đây là giới hạn thực sự của cách tiếp cận "tìm kiếm từ đầu"
+so với cách người chơi thật dùng 57 công thức OLL đã thuộc lòng sẵn cho
+từng trường hợp cụ thể — xem mục "Giới hạn hiện tại" bên dưới.
+
 ## Cập nhật quan trọng: A* → IDA* (khắc phục OOM và tăng tỉ lệ giải được)
 
 Trong quá trình tối ưu, phát hiện A* (heapq + dict `best_g` lưu mọi trạng

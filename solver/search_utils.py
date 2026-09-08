@@ -24,6 +24,7 @@ TAI SAO CAN IDA* THAY VI A*:
 """
 
 from .full_state import apply_move
+import heapq
 
 # Sentinel tra ve tu dfs() khi tim thay loi giai hoac het ngan sach.
 _FOUND = -1
@@ -41,6 +42,55 @@ def move_order(moves, shuffled):
     mv = list(moves)
     random.shuffle(mv)
     return mv
+
+
+def a_star(full_start, goal_fn, heuristic_fn, max_nodes, max_depth, moves):
+    """
+    A* CO NHO (heapq + dict best_g) -- uu tien thuat toan nay hon IDA* khi
+    co the, vi memoization tranh duoc viec DUYET LAI cung 1 nhanh nhieu
+    lan. IDA* (search_utils.ida_star) khong luu visited-state nen VAN CO
+    THE CHAM HON A* rat nhieu cho cac truong hop heuristic chua that sat
+    (du van dung, van bi loi tinh nang re-expansion kinh dien cua IDA*) --
+    da phat hien thuc te: 1 case h0=4 (tuong doi de) bi IDA* treo qua lau
+    trong khi A* co nho giai duoc nhanh.
+
+    max_nodes duoc GIOI HAN O MUC AN TOAN CHO RAM (da do thuc te qua
+    /proc/meminfo: may chi ~4GB, ~300k node A* ~ 3GB) -- neu vuot qua se
+    dung lai va tra ve None (khong bao gio ep chay toi khi het RAM).
+    """
+    if goal_fn(full_start):
+        return []
+
+    h0 = heuristic_fn(full_start)
+    counter = 0
+    heap = [(h0, 0, counter, full_start, (), None)]
+    best_g = {full_start: 0}
+    nodes = 0
+
+    while heap:
+        f, g, _, cur, path, last_face = heapq.heappop(heap)
+        if g > best_g.get(cur, 1 << 30):
+            continue
+        if g >= max_depth:
+            continue
+        nodes += 1
+        if nodes > max_nodes:
+            return None
+        for mv in moves:
+            face = mv[0]
+            if face == last_face:
+                continue
+            nxt = apply_move(cur, mv)
+            ng = g + 1
+            if ng < best_g.get(nxt, 1 << 30):
+                best_g[nxt] = ng
+                npath = path + (mv,)
+                if goal_fn(nxt):
+                    return list(npath)
+                counter += 1
+                h = heuristic_fn(nxt)
+                heapq.heappush(heap, (ng + h, ng, counter, nxt, npath, face))
+    return None
 
 
 def ida_star(full_start, goal_fn, heuristic_fn, max_threshold, moves, node_budget):
