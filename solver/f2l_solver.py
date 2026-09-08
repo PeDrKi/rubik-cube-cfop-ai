@@ -42,11 +42,10 @@ def _mismatch_penalty(full, done_slots):
     tranh pha vo phan da giai -- chap nhan mat tinh toi uu tuyet doi de doi
     lay toc do, phu hop MVP)."""
     ep, eo, cp, co = full
-    bad = 0
-    for name in CROSS_EDGE_NAMES:
-        i = EM.SLOT_INDEX[name]
-        if ep[i] != i or eo[i] != 0:
-            bad += 1
+    # Cross = canh 4-7 co dinh (xem edge_model.SLOT_NAMES) -> so sanh thang
+    # chi so (nhanh hon vong lap tra dict theo ten, xem full_state.py).
+    bad = 0 if (ep[4] == 4 and ep[5] == 5 and ep[6] == 6 and ep[7] == 7
+                and eo[4] == 0 and eo[5] == 0 and eo[6] == 0 and eo[7] == 0) else 1
     for s in done_slots:
         ci = CM.SLOT_INDEX[s]
         if cp[ci] != ci or co[ci] != 0:

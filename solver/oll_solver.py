@@ -30,10 +30,10 @@ mat <2s/pha o da so truong hop).
 
 import heapq
 
-from .full_state import from_facelets, apply_move, cross_ok, pair_ok, NO_D_MOVES
+from .full_state import (from_facelets, apply_move, NO_D_MOVES, cross_f2l_ok,
+                          u_edges_oriented, u_corners_oriented)
 from . import edge_model as EM
 from . import corner_model as CM
-from .facelets import F2L_ORDER
 from .pdb_builder import build_pdb_edges_group_anyperm, build_pdb_corners_group_anyperm
 
 U_EDGES = ('UF', 'UB', 'UL', 'UR')
@@ -57,14 +57,11 @@ def _corner_pdb():
     return _CORNER_PDB
 
 
-def edges_oriented(full):
-    ep, eo, cp, co = full
-    return all(eo[EM.SLOT_INDEX[n]] == 0 for n in U_EDGES)
-
-
-def corners_oriented(full):
-    ep, eo, cp, co = full
-    return all(co[CM.SLOT_INDEX[n]] == 0 for n in U_CORNERS)
+# edges_oriented/corners_oriented: alias sang ban toi uu (khong tra dict
+# theo ten, so sanh thang chi so) trong full_state.py -- xem benchmark
+# trong CFOP_AI_README.md (~1.5x nhanh hon ban vong lap cu).
+edges_oriented = u_edges_oriented
+corners_oriented = u_corners_oriented
 
 
 def oll_done(full):
@@ -72,9 +69,7 @@ def oll_done(full):
 
 
 def _cross_f2l_penalty(full):
-    bad = 0 if cross_ok(full) else 1
-    bad += sum(1 for s in F2L_ORDER if not pair_ok(full, s))
-    return bad
+    return 0 if cross_f2l_ok(full) else 1
 
 
 def _edge_key(full):
@@ -131,7 +126,7 @@ def _solve_phase_A(full, max_nodes=200_000, max_depth=10):
     epdb = _edge_pdb()
 
     def goal(f):
-        return cross_ok(f) and all(pair_ok(f, s) for s in F2L_ORDER) and edges_oriented(f)
+        return cross_f2l_ok(f) and edges_oriented(f)
 
     def heuristic(f):
         base = epdb.get(_edge_key(f), 8)
@@ -145,12 +140,10 @@ def _solve_phase_B(full, max_nodes=200_000, max_depth=13):
     cpdb = _corner_pdb()
 
     def edge_penalty(f):
-        ep, eo, cp, co = f
-        return sum(1 for n in U_EDGES if eo[EM.SLOT_INDEX[n]] != 0)
+        return 0 if edges_oriented(f) else 1
 
     def goal(f):
-        return (cross_ok(f) and all(pair_ok(f, s) for s in F2L_ORDER)
-                and edges_oriented(f) and corners_oriented(f))
+        return cross_f2l_ok(f) and edges_oriented(f) and corners_oriented(f)
 
     def heuristic(f):
         base = cpdb.get(_corner_key(f), 8)
@@ -177,6 +170,20 @@ def _solve_phase_B_ladder(full):
         if mvs is not None:
             return mvs
     return None
+
+
+def solve_oll_edges_only(state):
+    """Chi giai pha A (dinh huong canh). Dung cho hint() de tranh tinh
+    thua pha B khi chua can toi (xem ghi chu trong cfop_ai.hint())."""
+    full = from_facelets(state)
+    return _solve_phase_A_ladder(full)
+
+
+def solve_oll_corners_only(state):
+    """Chi giai pha B (dinh huong goc), GIA SU canh da huong dung san.
+    Dung cho hint() de tranh tinh thua pha A."""
+    full = from_facelets(state)
+    return _solve_phase_B_ladder(full)
 
 
 def solve_oll(state):

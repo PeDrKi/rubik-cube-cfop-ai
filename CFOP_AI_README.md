@@ -73,6 +73,25 @@ cache/                  PDB đã build, cache ra đĩa (.pkl) — build 1 lần
 test_solver.py           unit + stress test
 ```
 
+## Tối ưu đã thực hiện
+
+- **Tốc độ:** các hàm kiểm tra trạng thái trong hot-path của A* (`cross_ok`,
+  `pair_ok`, `cross_f2l_ok`, `u_edges_oriented`, ...) được viết lại thành so
+  sánh chỉ số nguyên trực tiếp (dựa vào thứ tự `SLOT_NAMES` cố định) thay vì
+  vòng lặp tra cứu theo tên qua dict — nhanh hơn ~1.5x (đã benchmark, xem
+  `solver/full_state.py`), vì đây là hàm được gọi nhiều nhất trong toàn bộ
+  quá trình tìm kiếm.
+- **Tốc độ (thiết kế):** `hint()` trước đây gọi `solve_oll()`/`solve_pll()`
+  **nguyên khối** (tính cả 2 pha) dù chỉ cần 1 pha — khiến hint bị "ăn theo"
+  độ khó của pha không liên quan. Đã tách `solve_oll_edges_only()` /
+  `solve_oll_corners_only()` / `solve_pll_corners_only()` /
+  `solve_pll_edges_only()` để `hint()` chỉ tính đúng phần cần thiết.
+- **UI:** panel trạng thái AI được neo vị trí **cố định** từ đáy màn hình
+  (độc lập với chiều cao thay đổi của History phía trên) để không bao giờ
+  đè lên danh sách phím tắt; có khung nền riêng biệt và 4 badge tiến trình
+  Cross/F2L/OLL/PLL (✓ xong / ● đang làm / ○ chưa tới) để nhìn là biết ngay
+  đang ở bước nào.
+
 ## Giới hạn hiện tại & đánh đổi hiệu năng (rõ ràng cho báo cáo đồ án)
 
 - F2L/OLL/PLL dùng A* có trọng số (không tối ưu tuyệt đối số nước) để đổi

@@ -97,14 +97,6 @@ def main():
     cfop_note       = None     # thong bao ngan (vd "Da giai xong Cross+F2L")
     cfop_note_timer = 0
 
-    def cfop_stage_label():
-        try:
-            stage = cfop_ai.stage_of(state)
-        except Exception:
-            return '—'
-        return {'cross': 'Cross', 'f2l': 'F2L', 'oll': 'OLL', 'pll': 'PLL',
-                'done': 'Đã giải xong! 🎉'}.get(stage, '—')
-
     def start_cfop_job(kind):
         nonlocal cfop_busy, cfop_job_kind
         if cfop_busy:
@@ -411,6 +403,8 @@ def main():
 
         # history
         hy = lo.PY0 + lo.LBL_H + 3 * (lo.PANEL + lo.LBL_H + 5) + 14
+        hy_limit = lo.BAR_Y - max(60, int(123 * lo.s)) - max(10, int(14 * lo.s)) \
+            - max(70, int(108 * lo.s)) - int(4 * lo.s)
         if history:
             screen.blit(
                 lo.sfont.render("History:", True, (90, 90, 130)),
@@ -418,39 +412,66 @@ def main():
             )
             hy += int(16 * lo.s)
             for h in reversed(history):
+                if hy + int(15 * lo.s) > hy_limit:
+                    break
                 screen.blit(
                     lo.sfont.render(h, True, (150, 150, 195)),
                     (lo.LEFT_X + 16, hy)
                 )
                 hy += int(15 * lo.s)
 
-        # ── CFOP AI: giai đoạn hiện tại / gợi ý / trạng thái đang tính ────────
-        ay = hy + int(6 * lo.s)
-        stage_txt = lo.sfont.render(f"CFOP: {cfop_stage_label()}", True, (150, 200, 255))
-        screen.blit(stage_txt, (lo.LEFT_X + 10, ay))
-        ay += int(16 * lo.s)
+        # ── CFOP AI panel: vi tri CO DINH neo tu day (doc lap voi chieu cao
+        # thay doi cua History o tren) -> khong bao gio de len shortcuts. ────
+        shortcuts_top_y = lo.BAR_Y - max(60, int(123 * lo.s))
+        CFOP_H = max(70, int(108 * lo.s))
+        cfop_top = shortcuts_top_y - max(10, int(14 * lo.s)) - CFOP_H
+        cfop_box = pygame.Rect(lo.LEFT_X + 6, cfop_top, lo.LEFT_W - 12, CFOP_H)
+        pygame.draw.rect(screen, (24, 26, 38), cfop_box, border_radius=6)
+        pygame.draw.rect(screen, (55, 58, 80), cfop_box, width=1, border_radius=6)
+
+        ax = cfop_box.x + 10
+        ay = cfop_box.y + 8
+
+        # Badge tien do 4 buoc CFOP (✓ = xong, ● = dang lam, ○ = chua toi)
+        try:
+            _stage = cfop_ai.stage_of(state)
+        except Exception:
+            _stage = None
+        _order = ['cross', 'f2l', 'oll', 'pll']
+        _cur_idx = _order.index(_stage) if _stage in _order else 4
+        bx = ax
+        for i, label in enumerate(['Cross', 'F2L', 'OLL', 'PLL']):
+            if _stage == 'done' or i < _cur_idx:
+                mark, col = '✓', (90, 220, 130)
+            elif i == _cur_idx:
+                mark, col = '●', (255, 210, 0)
+            else:
+                mark, col = '○', (90, 90, 115)
+            btxt = lo.sfont.render(f"{mark} {label}", True, col)
+            screen.blit(btxt, (bx, ay))
+            bx += btxt.get_width() + max(10, int(14 * lo.s))
+        ay += int(18 * lo.s)
 
         if cfop_busy:
             dots = '.' * (1 + (pygame.time.get_ticks() // 300) % 3)
             busy_txt = lo.sfont.render(f"AI đang tính{dots}", True, (255, 210, 0))
-            screen.blit(busy_txt, (lo.LEFT_X + 10, ay))
+            screen.blit(busy_txt, (ax, ay))
             ay += int(15 * lo.s)
         elif cfop_note:
             note_txt = lo.sfont.render(cfop_note, True, (120, 220, 140))
-            screen.blit(note_txt, (lo.LEFT_X + 10, ay))
+            screen.blit(note_txt, (ax, ay))
             ay += int(15 * lo.s)
 
         if hint_label:
             hl_txt = lo.sfont.render(f"Gợi ý: {hint_label}", True, (230, 190, 255))
-            screen.blit(hl_txt, (lo.LEFT_X + 10, ay))
+            screen.blit(hl_txt, (ax, ay))
             ay += int(15 * lo.s)
             if hint_moves_str:
                 hm_txt = lo.sfont.render(f"  {hint_moves_str}", True, (255, 255, 255))
-                screen.blit(hm_txt, (lo.LEFT_X + 10, ay))
-                ay += int(15 * lo.s)
+                screen.blit(hm_txt, (ax, ay))
 
         # phím tắt hint
-        sy = lo.BAR_Y - max(60, int(123 * lo.s))
+        sy = shortcuts_top_y
         for k, v in [
             ("Space",  "Scramble"),
             ("Ctrl+Z", "Undo"),
@@ -459,7 +480,7 @@ def main():
             ("Esc",    "Quit"),
             ("F11",    "Fullscreen"),
             ("/",      "Type moves"),
-            ("A",      "AI giải Cross+F2L"),
+            ("A",      "AI tự giải (Cross→F2L→OLL→PLL)"),
             ("H",      "AI gợi ý bước tiếp"),
         ]:
             ks = lo.sfont.render(k, True, GOLD)

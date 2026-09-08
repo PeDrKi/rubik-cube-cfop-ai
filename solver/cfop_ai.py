@@ -19,8 +19,10 @@ from cube_engine import cube_solved
 from .facelets import cross_solved, F2L_ORDER, pair_solved, f2l_solved_slots, oll_solved
 from .cross_solver import solve_cross
 from .f2l_solver import solve_f2l
-from .oll_solver import solve_oll, edges_oriented, corners_oriented
-from .pll_solver import solve_pll, corners_home, edges_home
+from .oll_solver import (solve_oll, edges_oriented, corners_oriented,
+                          solve_oll_edges_only, solve_oll_corners_only)
+from .pll_solver import (solve_pll, corners_home, edges_home,
+                          solve_pll_corners_only, solve_pll_edges_only)
 from .full_state import from_facelets
 
 
@@ -122,17 +124,20 @@ def hint(state):
         return {'stage': 'f2l', 'label': f'F2L - cặp {target}', 'moves': mvs}
 
     if stage == 'oll':
+        # Quan trong (toi uu toc do): chi goi PHA CAN THIET, khong goi
+        # solve_oll() nguyen khoi -- vi solve_oll() se tinh CA 2 pha, va
+        # pha khong can cung co the roi vao case kho (~1 phut), lang phi
+        # thoi gian vo ich khi hint() chi can 1 pha.
         full = from_facelets(state)
-        oll_res = solve_oll(state)
         if not edges_oriented(full):
-            mvs = oll_res['edge_moves']
+            mvs = solve_oll_edges_only(state)
             if mvs is None:
                 return {'stage': 'oll_edges',
                         'label': 'OLL - Định hướng 4 cạnh (chưa tìm được trong ngân sách)',
                         'moves': []}
             return {'stage': 'oll_edges', 'label': 'OLL - Định hướng 4 cạnh', 'moves': mvs}
         else:
-            mvs = oll_res['corner_moves']
+            mvs = solve_oll_corners_only(state)
             if mvs is None:
                 return {'stage': 'oll_corners',
                         'label': 'OLL - Định hướng 4 góc (chưa tìm được trong ngân sách, thử lại)',
@@ -140,17 +145,17 @@ def hint(state):
             return {'stage': 'oll_corners', 'label': 'OLL - Định hướng 4 góc', 'moves': mvs}
 
     if stage == 'pll':
+        # Cung ly do toc do nhu OLL o tren: chi goi dung pha can.
         full = from_facelets(state)
-        pll_res = solve_pll(state)
         if not corners_home(full):
-            mvs = pll_res['corner_moves']
+            mvs = solve_pll_corners_only(state)
             if mvs is None:
                 return {'stage': 'pll_corners',
                         'label': 'PLL - Hoán vị 4 góc (chưa tìm được, thử lại)',
                         'moves': []}
             return {'stage': 'pll_corners', 'label': 'PLL - Hoán vị 4 góc', 'moves': mvs}
         else:
-            mvs = pll_res['edge_moves']
+            mvs = solve_pll_edges_only(state)
             if mvs is None:
                 return {'stage': 'pll_edges',
                         'label': 'PLL - Hoán vị 4 cạnh (case khó, thử lại)',

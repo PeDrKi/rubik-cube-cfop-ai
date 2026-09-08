@@ -20,10 +20,10 @@ giua cac quan -- search van tu do dung U khi can, khong can xu ly rieng.
 
 import heapq
 
-from .full_state import from_facelets, apply_move, cross_ok, pair_ok, NO_D_MOVES
+from .full_state import (from_facelets, apply_move, NO_D_MOVES, cross_f2l_ok,
+                          u_corners_home, u_edges_home)
 from . import edge_model as EM
 from . import corner_model as CM
-from .facelets import F2L_ORDER
 from .pdb_builder import build_pdb_edges, build_pdb_corners
 
 U_EDGES = ('UF', 'UB', 'UL', 'UR')
@@ -47,16 +47,10 @@ def _corner_pdb():
     return _CORNER_PDB
 
 
-def corners_home(full):
-    ep, eo, cp, co = full
-    return all(cp[CM.SLOT_INDEX[n]] == CM.SLOT_INDEX[n] and co[CM.SLOT_INDEX[n]] == 0
-               for n in U_CORNERS)
-
-
-def edges_home(full):
-    ep, eo, cp, co = full
-    return all(ep[EM.SLOT_INDEX[n]] == EM.SLOT_INDEX[n] and eo[EM.SLOT_INDEX[n]] == 0
-               for n in U_EDGES)
+# corners_home/edges_home: alias sang ban toi uu (so sanh thang chi so,
+# khong tra dict theo ten) trong full_state.py -- xem CFOP_AI_README.md.
+corners_home = u_corners_home
+edges_home = u_edges_home
 
 
 def pll_done(full):
@@ -64,9 +58,7 @@ def pll_done(full):
 
 
 def _cross_f2l_penalty(full):
-    bad = 0 if cross_ok(full) else 1
-    bad += sum(1 for s in F2L_ORDER if not pair_ok(full, s))
-    return bad
+    return 0 if cross_f2l_ok(full) else 1
 
 
 def _corner_key(full):
@@ -122,7 +114,7 @@ def _solve_phase_A(full, max_nodes, max_depth):
     cpdb = _corner_pdb()
 
     def goal(f):
-        return cross_ok(f) and all(pair_ok(f, s) for s in F2L_ORDER) and corners_home(f)
+        return cross_f2l_ok(f) and corners_home(f)
 
     def heuristic(f):
         return cpdb.get(_corner_key(f), 10) + 3 * _cross_f2l_penalty(f)
@@ -138,8 +130,7 @@ def _solve_phase_B(full, max_nodes, max_depth):
         return 0 if corners_home(f) else 1
 
     def goal(f):
-        return (cross_ok(f) and all(pair_ok(f, s) for s in F2L_ORDER)
-                and corners_home(f) and edges_home(f))
+        return cross_f2l_ok(f) and corners_home(f) and edges_home(f)
 
     def heuristic(f):
         return epdb.get(_edge_key(f), 10) + 3 * _cross_f2l_penalty(f) + 4 * corner_penalty(f)
@@ -157,6 +148,20 @@ def _ladder(solve_fn, full, tiers):
 
 _TIERS_A = ((60_000, 8), (150_000, 10), (300_000, 12))
 _TIERS_B = ((60_000, 8), (150_000, 10), (300_000, 12))
+
+
+def solve_pll_corners_only(state):
+    """Chi giai pha A (hoan vi goc). Dung cho hint() de tranh tinh thua
+    pha B khi chua can toi."""
+    full = from_facelets(state)
+    return _ladder(_solve_phase_A, full, _TIERS_A)
+
+
+def solve_pll_edges_only(state):
+    """Chi giai pha B (hoan vi canh), GIA SU goc da dung nha san. Dung cho
+    hint() de tranh tinh thua pha A."""
+    full = from_facelets(state)
+    return _ladder(_solve_phase_B, full, _TIERS_B)
 
 
 def solve_pll(state):
