@@ -19,6 +19,12 @@ nguồn sự thật duy nhất.
 
 ## Chạy
 
+**Cách nhanh nhất:** bấm đúp vào **`CHAY.bat`** (Windows) hoặc chạy
+`./chay.sh` (Linux/macOS). File này tự kiểm tra Rust đã cài chưa và báo
+lỗi rõ ràng nếu thiếu.
+
+Hoặc chạy thủ công:
+
 ```bash
 cargo run --release -p rubik-app   # mở ứng dụng
 cargo test --release               # chạy 21 test (~5 phút)
@@ -49,7 +55,11 @@ lệ cửa sổ trong khoảng 300–430pt. Panel **cuộn được** khi cửa 
 | Kéo chuột trái | Xoay góc nhìn |
 | Cuộn chuột | Thu phóng |
 | `U D F B L R` | Xoay lớp tương ứng |
-| `Shift` + phím trên | Nước nghịch đảo (`U'`, `R'`...) |
+| `Shift` + phím trên | Nước nghịch đảo (`U'`, `R'`…) |
+| `Ctrl` + phím trên | Nước wide, xoay 2 lớp (`u`, `r`…) |
+| `Alt` + phím trên | Nước đúp 180° (`U2`, `R2`…) |
+| `M` `E` `S` | Xoay lớp giữa |
+| `X` `Y` `Z` | Xoay cả khối |
 | Click sticker → phím mũi tên | Chọn mặt rồi xoay (↑→ thuận, ↓← nghịch) |
 | `Space` | Xáo ngẫu nhiên 25 nước |
 | `Enter` | AI tự giải từ trạng thái hiện tại |

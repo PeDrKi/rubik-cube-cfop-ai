@@ -161,6 +161,8 @@ fn build_cube_mesh(state: &CubeState, anim: Option<(char, f32)>) -> CpuMesh {
 struct PendingMove {
     mv: char,
     prime: bool,
+    /// Nước đúp: xoay liền 180° trong 1 lần, áp 2 lần khi xong.
+    double: bool,
     target: f32,
     current: f32,
     speed: f32,
@@ -168,15 +170,19 @@ struct PendingMove {
 
 /// Parse "R", "R'", "R2" thanh 1-2 muc hang doi (mv, prime). R2 tach thanh
 /// 2 vong quay 90 do cung chieu (dung vi R2 = R,R = R',R' ve mat trang thai).
-fn queue_move(queue: &mut VecDeque<(char, bool)>, mv_str: &str) {
+fn queue_move(queue: &mut VecDeque<(char, bool, bool)>, mv_str: &str) {
     let base = mv_str.chars().next().unwrap();
+    // Nước đúp (R2) đưa vào hàng đợi thành MỘT mục xoay 180°, không tách
+    // thành 2 lần 90° -- nếu tách, số mục trong hàng đợi sẽ nhiều hơn số
+    // nước của lời giải, khiến thanh tiến trình đếm lệch (VD lời giải 67
+    // nước nhưng hiện "31/78"). Xoay liền 180° cũng đúng cách người chơi
+    // thật thực hiện.
     if mv_str.ends_with('2') {
-        queue.push_back((base, false));
-        queue.push_back((base, false));
+        queue.push_back((base, false, true));
     } else if mv_str.ends_with('\'') {
-        queue.push_back((base, true));
+        queue.push_back((base, true, false));
     } else {
-        queue.push_back((base, false));
+        queue.push_back((base, false, false));
     }
 }
 
@@ -234,7 +240,7 @@ fn main() {
 
     let mut state = CubeState::solved();
     let mut pending: Option<PendingMove> = None;
-    let mut queue: VecDeque<(char, bool)> = VecDeque::new();
+    let mut queue: VecDeque<(char, bool, bool)> = VecDeque::new();
     let mut status = "Sẵn sàng".to_string();
     let mut formula_text = String::new();
     let mut hint_label: Option<String> = None;
@@ -254,6 +260,8 @@ fn main() {
     let mut last_hint_failed: bool = false;
     let mut retry_counter: u64 = 0;
     let mut anim_speed: f32 = 10.0;
+    // Cờ cho MainEventsCleared biết có cần vẽ khung mới hay không.
+    let mut needs_redraw = true;
     let mut sel_face: Option<char> = None;
     let mut total_queued: usize = 0;
     // Bảng công thức (phím T): None = đang đóng.
@@ -263,6 +271,10 @@ fn main() {
     let mut library_open = false;
     let mut library_query = String::new();
     let mut library_tab_pll = false;
+    // Chế độ học từng bước: bấm 1 nút là tính + thực hiện đúng 1 chặng
+    // CFOP rồi dừng, kèm bảng tiến độ 6 chặng.
+    let mut step_mode = false;
+    let mut auto_apply_hint = false;
 
     // Luu 1 snapshot state HIEN TAI (truoc khi thay doi) vao undo_stack,
     // kem gioi han do sau -- dung dung 1 lan cho MOI "hanh dong" (giong
@@ -289,7 +301,12 @@ fn main() {
 
     event_loop.run(move |event, _, control_flow| match event {
         WinitEvent::MainEventsCleared => {
-            winit_window.request_redraw();
+            // CHỈ yêu cầu vẽ lại khi thực sự cần. Trước đây gọi vô điều
+            // kiện ở đây nên vòng lặp chạy hết tốc lực (~97% CPU) dù đặt
+            // ControlFlow::WaitUntil ở chỗ khác -- đo thực tế mới lộ ra.
+            if needs_redraw {
+                winit_window.request_redraw();
+            }
         }
         WinitEvent::RedrawRequested(_) => {
             let mut frame_input = frame_input_generator.generate(&context);
@@ -319,6 +336,7 @@ fn main() {
             let mut close_formula = false;
             let mut request_table = false;
             let mut request_library = false;
+            let mut request_step = false;
             let mut close_library = false;
             let mut load_into_bar: Option<String> = None;
             let is_busy = job_rx.is_some();
@@ -450,6 +468,93 @@ fn main() {
                                         request_table = true;
                                     }
                                 });
+                                ui.add_space(6.0);
+                                if ui
+                                    .selectable_label(
+                                        step_mode,
+                                        egui::RichText::new("🎓  Chế độ học từng bước").size(13.0),
+                                    )
+                                    .on_hover_text(
+                                        "Thay vì giải một mạch, mỗi lần chỉ làm 1 chặng CFOP rồi dừng",
+                                    )
+                                    .clicked()
+                                {
+                                    step_mode = !step_mode;
+                                }
+                                if step_mode {
+                                    ui.add_space(7.0);
+                                    // Bảng tiến độ 6 chặng: đọc thẳng từ
+                                    // trạng thái khối nên luôn đúng, kể cả
+                                    // khi người dùng tự xoay tay.
+                                    let fs = rubik_core::full_state::from_facelets(&state);
+                                    let cross_ok = rubik_core::full_state::cross_ok(&fs);
+                                    let f2l_done = rubik_core::full_state::F2L_ORDER
+                                        .iter()
+                                        .filter(|&&s| rubik_core::full_state::pair_ok(&fs, s))
+                                        .count();
+                                    let oll_ok = rubik_core::full_state::u_edges_oriented(&fs)
+                                        && rubik_core::full_state::u_corners_oriented(&fs);
+                                    let all_ok = state.is_solved();
+                                    let stage_now = if !cross_ok {
+                                        0
+                                    } else if f2l_done < 4 {
+                                        1
+                                    } else if !oll_ok {
+                                        2
+                                    } else if !all_ok {
+                                        3
+                                    } else {
+                                        4
+                                    };
+                                    let items = [
+                                        ("Cross", cross_ok, String::new()),
+                                        ("F2L", f2l_done == 4, format!("{f2l_done}/4")),
+                                        ("OLL", oll_ok, String::new()),
+                                        ("PLL", all_ok, String::new()),
+                                    ];
+                                    for (i, (name, done, extra)) in items.iter().enumerate() {
+                                        ui.horizontal(|ui| {
+                                            let (icon, col) = if *done {
+                                                ("✔", theme::SUCCESS)
+                                            } else if i == stage_now {
+                                                ("▶", theme::ACCENT)
+                                            } else {
+                                                ("·", theme::TEXT_DIM)
+                                            };
+                                            ui.label(
+                                                egui::RichText::new(icon).size(12.5).color(col),
+                                            );
+                                            ui.label(
+                                                egui::RichText::new(*name)
+                                                    .size(12.5)
+                                                    .color(if i == stage_now && !*done {
+                                                        theme::TEXT
+                                                    } else {
+                                                        col
+                                                    }),
+                                            );
+                                            if !extra.is_empty() {
+                                                ui.label(
+                                                    egui::RichText::new(extra)
+                                                        .size(11.5)
+                                                        .color(theme::TEXT_DIM),
+                                                );
+                                            }
+                                        });
+                                    }
+                                    ui.add_space(7.0);
+                                    ui.add_enabled_ui(!is_busy && !is_animating && !all_ok, |ui| {
+                                        if theme::primary_button(
+                                            ui,
+                                            "⏭  Bước tiếp theo",
+                                            "Tính và thực hiện đúng 1 chặng rồi dừng",
+                                        )
+                                        .clicked()
+                                        {
+                                            request_step = true;
+                                        }
+                                    });
+                                }
                                 ui.add_space(6.0);
                                 if theme::wide_button(
                                     ui,
@@ -800,6 +905,18 @@ fn main() {
             if request_library {
                 library_open = !library_open;
             }
+            if request_step && job_rx.is_none() && queue.is_empty() && pending.is_none() {
+                rubik_core::cancel::clear();
+                auto_apply_hint = true;
+                let state_copy = state;
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let h = rubik_core::hint::compute_hint(&state_copy, None);
+                    let _ = tx.send(JobResult::Hint(h));
+                });
+                job_rx = Some(rx);
+                status = "Đang tính bước tiếp theo…".to_string();
+            }
             if request_table && job_rx.is_none() && queue.is_empty() && pending.is_none() {
                 if formula_table.is_some() {
                     formula_open = !formula_open;
@@ -925,7 +1042,12 @@ fn main() {
             // OrbitControl xu ly, danh dau handled=true neu trung mat de
             // KHONG bi hieu nham thanh keo xoay camera (giong Python:
             // click trung sticker = chon mat, khong trung = keo camera).
-            if pending.is_none() && !editing_formula {
+            // Chỉ dựng lưới phục vụ bắt chuột KHI THỰC SỰ có cú click --
+            // trước đây dựng lại mỗi khung hình dù không ai bấm, rất tốn.
+            let has_click = frame_input.events.iter().any(|e| {
+                matches!(e, Event::MousePress { button: MouseButton::Left, handled: false, .. })
+            });
+            if has_click && pending.is_none() && !editing_formula {
                 let pick_cpu_mesh = build_cube_mesh(&state, None);
                 let pick_mesh = Mesh::new(&context, &pick_cpu_mesh);
                 let pick_model = Gm::new(pick_mesh, ColorMaterial::default());
@@ -955,14 +1077,51 @@ fn main() {
                         continue;
                     }
                     match kind {
+                        // 6 mặt cơ bản. Kèm phím bổ trợ:
+                        //   Shift = nước ngược (U')
+                        //   Ctrl  = nước wide, xoay 2 lớp (u, r…)
+                        //   Alt   = nước đúp 180° (U2) -- nạp 2 lần 90°
                         Key::U | Key::D | Key::F | Key::B | Key::L | Key::R => {
                             let base = match kind {
                                 Key::U => 'U', Key::D => 'D', Key::F => 'F',
                                 Key::B => 'B', Key::L => 'L', Key::R => 'R',
                                 _ => unreachable!(),
                             };
+                            // Ctrl -> chữ thường = nước wide (move_spec đã
+                            // hỗ trợ sẵn u/d/f/b/l/r).
+                            let mv = if modifiers.ctrl || modifiers.command {
+                                base.to_ascii_lowercase()
+                            } else {
+                                base
+                            };
                             push_undo!();
-                            queue.push_back((base, modifiers.shift));
+                            queue.push_back((mv, modifiers.shift, modifiers.alt));
+                        }
+                        // Lớp giữa: M (giữa L-R), E (giữa U-D), S (giữa F-B).
+                        Key::M => {
+                            push_undo!();
+                            queue.push_back(('M', modifiers.shift, false));
+                        }
+                        Key::E => {
+                            push_undo!();
+                            queue.push_back(('E', modifiers.shift, false));
+                        }
+                        Key::S => {
+                            push_undo!();
+                            queue.push_back(('S', modifiers.shift, false));
+                        }
+                        // Xoay CẢ KHỐI: x (quanh trục R), y (quanh U), z (quanh F).
+                        Key::X => {
+                            push_undo!();
+                            queue.push_back(('x', modifiers.shift, false));
+                        }
+                        Key::Y => {
+                            push_undo!();
+                            queue.push_back(('y', modifiers.shift, false));
+                        }
+                        Key::Z if !(modifiers.ctrl || modifiers.command) => {
+                            push_undo!();
+                            queue.push_back(('z', modifiers.shift, false));
                         }
                         Key::Space => {
                             push_undo!();
@@ -1072,13 +1231,13 @@ fn main() {
                         Key::ArrowUp | Key::ArrowRight => {
                             if let Some(face) = sel_face {
                                 push_undo!();
-                                queue.push_back((face, false));
+                                queue.push_back((face, false, false));
                             }
                         }
                         Key::ArrowDown | Key::ArrowLeft => {
                             if let Some(face) = sel_face {
                                 push_undo!();
-                                queue.push_back((face, true));
+                                queue.push_back((face, true, false));
                             }
                         }
                         _ => {}
@@ -1130,6 +1289,17 @@ fn main() {
                             };
                             hint_label = Some(h.label);
                             hint_moves = h.moves;
+                            if auto_apply_hint {
+                                auto_apply_hint = false;
+                                if !hint_moves.is_empty() {
+                                    push_undo!();
+                                    queue.clear();
+                                    for m in &hint_moves {
+                                        queue_move(&mut queue, m);
+                                    }
+                                    total_queued = queue.len();
+                                }
+                            }
                         }
                     }
                     job_rx = None;
@@ -1140,9 +1310,20 @@ fn main() {
                 total_queued = queue.len();
             }
             if pending.is_none() {
-                if let Some((mv, prime)) = queue.pop_front() {
-                    let target = if prime { std::f32::consts::FRAC_PI_2 } else { -std::f32::consts::FRAC_PI_2 };
-                    pending = Some(PendingMove { mv, prime, target, current: 0.0, speed: anim_speed });
+                if let Some((mv, prime, double)) = queue.pop_front() {
+                    let quarter = std::f32::consts::FRAC_PI_2;
+                    let mag = if double { 2.0 * quarter } else { quarter };
+                    let target = if prime { mag } else { -mag };
+                    pending = Some(PendingMove {
+                        mv,
+                        prime,
+                        double,
+                        target,
+                        current: 0.0,
+                        // Nước đúp quay gấp đôi góc nên tăng tốc để không
+                        // mất gấp đôi thời gian.
+                        speed: if double { anim_speed * 1.6 } else { anim_speed },
+                    });
                 }
             }
 
@@ -1156,7 +1337,13 @@ fn main() {
             });
             if let Some(p) = &pending {
                 if p.current == p.target {
-                    let mv_str = if p.prime { format!("{}'", p.mv) } else { p.mv.to_string() };
+                    let mv_str = if p.double {
+                        format!("{}2", p.mv)
+                    } else if p.prime {
+                        format!("{}'", p.mv)
+                    } else {
+                        p.mv.to_string()
+                    };
                     state.do_move(&mv_str);
                     move_count += 1;
                     pending = None;
@@ -1187,10 +1374,31 @@ fn main() {
                 .unwrap();
 
             gl.swap_buffers().unwrap();
-            *control_flow = ControlFlow::Poll;
-            winit_window.request_redraw();
+
+            // Chỉ chạy hết tốc lực KHI CẦN (đang xoay khối, đang tính, hoặc
+            // giao diện đang có hoạt ảnh). Lúc rảnh thì ngủ chờ sự kiện --
+            // trước đây luôn Poll + request_redraw nên ngốn ~97% CPU dù
+            // không làm gì. Đây là thay đổi quan trọng nhất cho máy yếu.
+            let busy_now = pending.is_some()
+                || !queue.is_empty()
+                || job_rx.is_some()
+;
+            needs_redraw = busy_now;
+            if busy_now {
+                *control_flow = ControlFlow::Poll;
+                winit_window.request_redraw();
+            } else {
+                // Vẫn thức dậy định kỳ (~20 lần/giây) để kịp nhận kết quả
+                // luồng nền và giữ con trỏ chuột phản hồi mượt.
+                *control_flow = ControlFlow::WaitUntil(
+                    std::time::Instant::now() + std::time::Duration::from_millis(50),
+                );
+            }
         }
         WinitEvent::WindowEvent { ref event, .. } => {
+            // Có tương tác -> cần vẽ lại ngay.
+            needs_redraw = true;
+            winit_window.request_redraw();
             frame_input_generator.handle_winit_window_event(event);
             match event {
                 WinitWindowEvent::Resized(physical_size) => {
