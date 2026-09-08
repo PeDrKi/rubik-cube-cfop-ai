@@ -1,15 +1,22 @@
 """
 solver/pll_algorithms.py
 ==========================
-Co so du lieu 20/21 thuat toan PLL chuan (dung ky hieu Singmaster, khong
-dung slice M/wide/rotation de tuong thich voi engine hien co).
+Co so du lieu DAY DU 21/21 thuat toan PLL chuan (dung ky hieu Singmaster,
+khong dung slice M/wide/rotation de tuong thich voi engine hien co).
 
 QUAN TRONG: MOI thuat toan duoi day DA DUOC KIEM CHUNG BANG CODE khi module
 nay duoc import lan dau (xem verify_and_build_table() o cuoi file) -- KHONG
 tin vao tri nho don thuan. Trong qua trinh xay dung, 2/22 cong thuc nho ban
 dau (Ab, Z) sai (loi nho/ghi lai), da duoc phat hien NGAY LAP TUC nho buoc
-kiem chung nay va sua (Ab) hoac loai bo (Z, chua tim duoc ban dung trong
-thoi gian cho phep -- xem CFOP_AI_README.md).
+kiem chung nay va da SUA XONG ca hai:
+  - Ab: dung dung nghich dao (_inv) cua chuoi Aa -- ve mat ly thuyet Ab-perm
+    LA hoan vi nghich dao chinh xac cua Aa-perm (cung 1 corner co dinh, chu
+    ky 3 goc con lai theo chieu nguoc lai), da kiem chung bang code cho ra
+    dung 1 chu ky 3 goc, canh khong doi.
+  - Z: thay bang bien the KHONG dung M-slice (engine nay khong ho tro nuoc
+    slice) lay tu nguon cong dong speedsolving.com (bien the "hard to
+    memorize but fast", quy doi tu M-notation sang R/U don thuan), da kiem
+    chung bang code cho ra dung 2 cap hoan vi canh, goc khong doi.
 
 Tieu chuan kiem chung cho moi thuat toan X (ap dung tu trang thai da giai):
   1. Chi thay doi hoan vi 4 goc + 4 canh lop U (khong dung nuoc D).
@@ -46,6 +53,11 @@ def _mirror_seq(seq):
 # ── 20 thuat toan PLL chuan (thieu Z-perm) ────────────────────────────────
 _RAW_ALGS = {
     'Aa': "R' F R' B2 R F' R' B2 R2",
+    # Ab = nghich dao chinh xac cua Aa (_inv("R' F R' B2 R F' R' B2 R2")).
+    # Ve mat toan hoc, Ab-perm CHINH LA hoan vi nghich dao cua Aa-perm (cung
+    # co dinh 1 goc, 3-cycle 3 goc con lai theo chieu nguoc). Da kiem chung
+    # bang code: chi hoan vi 3 goc, canh khong doi, giu Cross+F2L.
+    'Ab': "R2 B2 R F R' B2 R F' R",
     'E':  "R B' R F2 R' B R F2 R2",
     'Ua': "R U' R U R U R U' R' U' R2",
     'Ub': "R2 U R U R' U' R' U' R' U R'",
@@ -64,6 +76,11 @@ _RAW_ALGS = {
     'V':  "R' U R' U' B' R' B2 U' B' U B' R B R",
     'Na': "R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'",
     'Nb': "R' U R U' R' F' U' F R U R' F R' F' R U' R",
+    # Z-perm ban KHONG dung M-slice (engine nay chi ho tro R/L/U/D/F/B don
+    # thuan, khong co nuoc slice M). Quy doi tu bien the M-notation "hard to
+    # memorize but fast" luu truyen tren cong dong speedsolving.com. Da kiem
+    # chung bang code: chi hoan doi 2 cap canh, goc khong doi, giu Cross+F2L.
+    'Z':  "U2 R U R' U R' U' R' U R U' R' U' R2 U R",
 }
 
 
