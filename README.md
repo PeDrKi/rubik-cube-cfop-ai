@@ -54,6 +54,8 @@ lệ cửa sổ trong khoảng 300–430pt. Panel **cuộn được** khi cửa 
 | `Space` | Xáo ngẫu nhiên 25 nước |
 | `Enter` | AI tự giải từ trạng thái hiện tại |
 | `H` | Gợi ý 1 bước tiếp theo (không giải hết) |
+| `T` | Bảng công thức: lời giải ván hiện tại, tách theo từng chặng CFOP |
+| `V` | Tra công thức chuẩn: toàn bộ 55 OLL + 21 PLL, có tìm kiếm |
 | `Esc` | Hủy khi đang tính |
 | `Ctrl+Z` | Hoàn tác |
 | `F11` | Toàn màn hình |

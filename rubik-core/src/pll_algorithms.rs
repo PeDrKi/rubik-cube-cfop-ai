@@ -142,3 +142,9 @@ pub fn solve_pll_lookup_named(full: FullState) -> (Option<Vec<&'static str>>, Op
     }
     (None, None)
 }
+
+/// Toàn bộ công thức thô (tên, chuỗi Singmaster) — dùng cho bảng tra cứu
+/// trong giao diện. Trả về đúng dữ liệu gốc, không qua xử lý.
+pub fn all_algorithms() -> &'static [(&'static str, &'static str)] {
+    RAW_ALGS
+}

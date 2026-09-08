@@ -184,6 +184,7 @@ fn queue_move(queue: &mut VecDeque<(char, bool)>, mv_str: &str) {
 enum JobResult {
     Solve(Option<Vec<String>>),
     Hint(rubik_core::hint::Hint),
+    Breakdown(rubik_core::breakdown::Breakdown),
 }
 
 fn main() {
@@ -255,6 +256,13 @@ fn main() {
     let mut anim_speed: f32 = 10.0;
     let mut sel_face: Option<char> = None;
     let mut total_queued: usize = 0;
+    // Bảng công thức (phím T): None = đang đóng.
+    let mut formula_table: Option<rubik_core::breakdown::Breakdown> = None;
+    let mut formula_open = false;
+    // Bảng tra công thức chuẩn (55 OLL + 21 PLL) — phím V.
+    let mut library_open = false;
+    let mut library_query = String::new();
+    let mut library_tab_pll = false;
 
     // Luu 1 snapshot state HIEN TAI (truoc khi thay doi) vao undo_stack,
     // kem gioi han do sau -- dung dung 1 lan cho MOI "hanh dong" (giong
@@ -308,6 +316,11 @@ fn main() {
             let mut request_solve = false;
             let mut request_scramble = false;
             let mut request_undo = false;
+            let mut close_formula = false;
+            let mut request_table = false;
+            let mut request_library = false;
+            let mut close_library = false;
+            let mut load_into_bar: Option<String> = None;
             let is_busy = job_rx.is_some();
             let is_animating = pending.is_some();
             let is_solved_now = state.is_solved();
@@ -425,6 +438,28 @@ fn main() {
                                         }
                                     });
                                 });
+                                ui.add_space(6.0);
+                                ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
+                                    if theme::wide_button(
+                                        ui,
+                                        "📋  Bảng công thức",
+                                        "Xem lời giải tách theo từng chặng CFOP — Phím tắt: T",
+                                    )
+                                    .clicked()
+                                    {
+                                        request_table = true;
+                                    }
+                                });
+                                ui.add_space(6.0);
+                                if theme::wide_button(
+                                    ui,
+                                    "📖  Tra công thức chuẩn",
+                                    "Toàn bộ 55 công thức OLL + 21 PLL — Phím tắt: V",
+                                )
+                                .clicked()
+                                {
+                                    request_library = true;
+                                }
                             });
                             ui.add_space(10.0);
 
@@ -557,6 +592,8 @@ fn main() {
                                 row(ui, "Space", "xáo ngẫu nhiên 25 nước");
                                 row(ui, "Enter", "AI tự giải");
                                 row(ui, "H", "gợi ý 1 bước");
+                                row(ui, "T", "bảng công thức cho ván này");
+                                row(ui, "V", "tra toàn bộ công thức chuẩn");
                                 row(ui, "Esc", "huỷ khi đang tính");
                                 row(ui, "Ctrl+Z", "hoàn tác");
                                 row(ui, "F11", "toàn màn hình");
@@ -573,9 +610,211 @@ fn main() {
                             });
                             }); // het ScrollArea
                         });
+
+                    // ── Bảng công thức (phím T) ─────────────────────────
+                    // Cửa sổ nổi, KHÔNG chặn thao tác khác (giống bản Python:
+                    // "không modal") -- vẫn xoay được khối, vẫn gõ được.
+                    if formula_open {
+                        if let Some(bd) = &formula_table {
+                            let mut open = true;
+                            egui::Window::new("Bảng công thức CFOP")
+                                .open(&mut open)
+                                .default_width(390.0)
+                                .default_pos(egui::pos2(left_w + 24.0, 24.0))
+                                .collapsible(false)
+                                .frame(
+                                    egui::Frame::none()
+                                        .fill(theme::BG_PANEL)
+                                        .rounding(egui::Rounding::same(10.0))
+                                        .inner_margin(egui::Margin::same(13.0))
+                                        .stroke(egui::Stroke::new(1.0, theme::BG_CARD_HI)),
+                                )
+                                .show(gui_context, |ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "Tổng cộng {} nước",
+                                            bd.total_moves()
+                                        ))
+                                        .size(12.5)
+                                        .color(theme::TEXT_DIM),
+                                    );
+                                    ui.add_space(8.0);
+                                    egui::ScrollArea::vertical()
+                                        .max_height(430.0)
+                                        .auto_shrink([false, true])
+                                        .show(ui, |ui| {
+                                            stage_row(ui, "1) CROSS", "Cross", &bd.cross);
+                                            ui.add_space(9.0);
+                                            ui.label(
+                                                egui::RichText::new("2) F2L  (4 cặp góc–cạnh)")
+                                                    .size(11.5)
+                                                    .strong()
+                                                    .color(theme::ACCENT),
+                                            );
+                                            for (slot, st) in &bd.f2l {
+                                                stage_row(ui, "", slot, st);
+                                            }
+                                            ui.add_space(9.0);
+                                            stage_row(ui, "3) OLL  (định hướng lớp cuối)", "OLL", &bd.oll);
+                                            ui.add_space(9.0);
+                                            stage_row(ui, "4) PLL  (hoán vị lớp cuối)", "PLL", &bd.pll);
+                                        });
+                                });
+                            if !open {
+                                close_formula = true;
+                            }
+                        }
+                    }
+
+                    // ── Bảng tra toàn bộ công thức chuẩn (phím V) ───────
+                    if library_open {
+                        let mut open = true;
+                        egui::Window::new("Tra công thức chuẩn")
+                            .open(&mut open)
+                            .default_width(420.0)
+                            .default_pos(egui::pos2(left_w + 40.0, 60.0))
+                            .collapsible(false)
+                            .frame(
+                                egui::Frame::none()
+                                    .fill(theme::BG_PANEL)
+                                    .rounding(egui::Rounding::same(10.0))
+                                    .inner_margin(egui::Margin::same(13.0))
+                                    .stroke(egui::Stroke::new(1.0, theme::BG_CARD_HI)),
+                            )
+                            .show(gui_context, |ui| {
+                                let oll = rubik_core::oll_algorithms::all_algorithms();
+                                let pll = rubik_core::pll_algorithms::all_algorithms();
+                                ui.horizontal(|ui| {
+                                    if ui
+                                        .selectable_label(!library_tab_pll, format!("OLL ({})", oll.len()))
+                                        .clicked()
+                                    {
+                                        library_tab_pll = false;
+                                    }
+                                    if ui
+                                        .selectable_label(library_tab_pll, format!("PLL ({})", pll.len()))
+                                        .clicked()
+                                    {
+                                        library_tab_pll = true;
+                                    }
+                                });
+                                ui.add_space(7.0);
+                                ui.add_sized(
+                                    [ui.available_width(), 25.0],
+                                    egui::TextEdit::singleline(&mut library_query)
+                                        .hint_text("Tìm theo tên hoặc nước đi… VD: Sune, R U R'"),
+                                );
+                                ui.add_space(8.0);
+
+                                let list = if library_tab_pll { pll } else { oll };
+                                let q = library_query.trim().to_lowercase();
+                                let filtered: Vec<&(&str, &str)> = list
+                                    .iter()
+                                    .filter(|(n, m)| {
+                                        q.is_empty()
+                                            || n.to_lowercase().contains(&q)
+                                            || m.to_lowercase().contains(&q)
+                                    })
+                                    .collect();
+
+                                ui.label(
+                                    egui::RichText::new(format!("{} công thức", filtered.len()))
+                                        .size(11.0)
+                                        .color(theme::TEXT_DIM),
+                                );
+                                ui.add_space(5.0);
+
+                                egui::ScrollArea::vertical()
+                                    .max_height(400.0)
+                                    .auto_shrink([false, true])
+                                    .show(ui, |ui| {
+                                        for (name, moves) in filtered {
+                                            egui::Frame::none()
+                                                .fill(theme::BG_CARD)
+                                                .rounding(egui::Rounding::same(7.0))
+                                                .inner_margin(egui::Margin::symmetric(9.0, 7.0))
+                                                .show(ui, |ui| {
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(
+                                                            egui::RichText::new(*name)
+                                                                .size(12.5)
+                                                                .strong()
+                                                                .color(theme::INFO),
+                                                        );
+                                                        ui.with_layout(
+                                                            egui::Layout::right_to_left(
+                                                                egui::Align::Center,
+                                                            ),
+                                                            |ui| {
+                                                                if ui
+                                                                    .small_button("Dùng")
+                                                                    .on_hover_text(
+                                                                        "Nạp vào ô công thức bên trái",
+                                                                    )
+                                                                    .clicked()
+                                                                {
+                                                                    load_into_bar =
+                                                                        Some(moves.to_string());
+                                                                }
+                                                            },
+                                                        );
+                                                    });
+                                                    ui.label(
+                                                        egui::RichText::new(*moves)
+                                                            .monospace()
+                                                            .size(12.0)
+                                                            .color(theme::ACCENT),
+                                                    );
+                                                });
+                                            ui.add_space(5.0);
+                                        }
+                                    });
+                            });
+                        if !open {
+                            close_library = true;
+                        }
+                    }
+
+                    // Chặn phím tắt toàn cục khi BẤT KỲ ô nhập nào của egui
+                    // đang nhận bàn phím (ô công thức ở panel, ô tìm kiếm
+                    // trong bảng tra…). Trước đây chỉ chặn riêng ô công
+                    // thức, nên gõ vào ô tìm kiếm bị hiểu nhầm thành phím
+                    // tắt (gõ "Sune" làm chữ "u" xoay mặt U) -- lỗi thật đã
+                    // phát hiện khi thử.
+                    if gui_context.wants_keyboard_input() {
+                        editing_formula = true;
+                    }
                 },
             );
 
+            if close_formula {
+                formula_open = false;
+            }
+            if close_library {
+                library_open = false;
+            }
+            if let Some(mvs) = load_into_bar.take() {
+                formula_text = mvs;
+                status = "Đã nạp công thức — bấm Áp dụng để chạy".to_string();
+            }
+            if request_library {
+                library_open = !library_open;
+            }
+            if request_table && job_rx.is_none() && queue.is_empty() && pending.is_none() {
+                if formula_table.is_some() {
+                    formula_open = !formula_open;
+                } else {
+                    rubik_core::cancel::clear();
+                    let state_copy = state;
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    std::thread::spawn(move || {
+                        let b = rubik_core::breakdown::full_solve_breakdown(&state_copy);
+                        let _ = tx.send(JobResult::Breakdown(b));
+                    });
+                    job_rx = Some(rx);
+                    status = "Đang lập bảng công thức…".to_string();
+                }
+            }
             if request_cancel {
                 rubik_core::cancel::request();
                 status = "Đang huỷ…".to_string();
@@ -780,8 +1019,37 @@ fn main() {
                                 status = "Đợi khối xoay xong đã".to_string();
                             }
                         }
+                        // T = mở/đóng bảng công thức (toàn bộ lời giải
+                        // tách theo từng chặng CFOP), giống phím T bản Python.
+                        Key::T => {
+                            if formula_open {
+                                formula_open = false;
+                            } else if job_rx.is_none() && queue.is_empty() && pending.is_none() {
+                                if formula_table.is_some() {
+                                    formula_open = true;
+                                } else {
+                                    rubik_core::cancel::clear();
+                                    let state_copy = state;
+                                    let (tx, rx) = std::sync::mpsc::channel();
+                                    std::thread::spawn(move || {
+                                        let b = rubik_core::breakdown::full_solve_breakdown(&state_copy);
+                                        let _ = tx.send(JobResult::Breakdown(b));
+                                    });
+                                    job_rx = Some(rx);
+                                    status = "Đang lập bảng công thức…".to_string();
+                                }
+                            }
+                        }
+                        // V = mở/đóng bảng tra toàn bộ công thức chuẩn.
+                        Key::V => {
+                            library_open = !library_open;
+                        }
                         Key::Escape => {
-                            if job_rx.is_some() {
+                            if library_open {
+                                library_open = false;
+                            } else if formula_open {
+                                formula_open = false;
+                            } else if job_rx.is_some() {
                                 rubik_core::cancel::request();
                                 status = "Đang huỷ…".to_string();
                             }
@@ -839,6 +1107,11 @@ fn main() {
                             } else {
                                 "Không tìm được lời giải — thử xáo lại".to_string()
                             };
+                        }
+                        JobResult::Breakdown(b) => {
+                            status = format!("Bảng công thức: {} nước", b.total_moves());
+                            formula_table = Some(b);
+                            formula_open = true;
                         }
                         JobResult::Hint(h) => {
                             last_hint_stage = Some(h.stage);
@@ -1063,4 +1336,74 @@ fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: Option<char
             );
         }
     }
+}
+
+/// Vẽ 1 dòng chặng trong bảng công thức. `header` để trống nếu không cần
+/// tiêu đề nhóm riêng (VD các cặp F2L nằm chung dưới 1 tiêu đề).
+fn stage_row(
+    ui: &mut egui::Ui,
+    header: &str,
+    label: &str,
+    st: &rubik_core::breakdown::StageStatus,
+) {
+    use rubik_core::breakdown::StageStatus as S;
+    if !header.is_empty() {
+        ui.label(
+            egui::RichText::new(header)
+                .size(11.5)
+                .strong()
+                .color(theme::ACCENT),
+        );
+    }
+    ui.horizontal_wrapped(|ui| {
+        ui.label(
+            egui::RichText::new(format!("{label}"))
+                .size(12.5)
+                .strong()
+                .color(theme::TEXT),
+        );
+        match st {
+            S::Done => {
+                ui.label(
+                    egui::RichText::new("✔ đã xong sẵn")
+                        .size(12.0)
+                        .color(theme::SUCCESS),
+                );
+            }
+            S::Moves { moves, case_name } => {
+                if let Some(n) = case_name {
+                    ui.label(
+                        egui::RichText::new(format!("[{n}]"))
+                            .size(11.0)
+                            .color(theme::INFO),
+                    );
+                }
+                ui.label(
+                    egui::RichText::new(moves.join(" "))
+                        .monospace()
+                        .size(12.5)
+                        .color(theme::ACCENT),
+                );
+                ui.label(
+                    egui::RichText::new(format!("({} nước)", moves.len()))
+                        .size(11.0)
+                        .color(theme::TEXT_DIM),
+                );
+            }
+            S::Failed => {
+                ui.label(
+                    egui::RichText::new("chưa tìm được — thử mở lại bảng (T)")
+                        .size(12.0)
+                        .color(theme::DANGER),
+                );
+            }
+            S::Pending => {
+                ui.label(
+                    egui::RichText::new("chưa tới lượt — cần xong bước trước")
+                        .size(12.0)
+                        .color(theme::TEXT_DIM),
+                );
+            }
+        }
+    });
 }

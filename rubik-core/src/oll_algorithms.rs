@@ -140,3 +140,9 @@ pub fn solve_oll_with_auf(full: FullState) -> Option<(Vec<&'static str>, Vec<&'s
     }
     None
 }
+
+/// Toàn bộ công thức thô (tên, chuỗi Singmaster) — dùng cho bảng tra cứu
+/// trong giao diện. Trả về đúng dữ liệu gốc, không qua xử lý.
+pub fn all_algorithms() -> &'static [(&'static str, &'static str)] {
+    RAW_ALGS
+}
