@@ -286,7 +286,20 @@ fn main() {
         WinitEvent::RedrawRequested(_) => {
             let mut frame_input = frame_input_generator.generate(&context);
 
-            let left_w = 348.0; // = 4*(3*21+2*2.5+7) so do 6 mat + le the + le panel
+            // ── Tỉ lệ giao diện theo kích thước cửa sổ ──────────────
+            // gui.update() nhận device_pixel_ratio và dùng nó làm
+            // pixels_per_point cho egui, nên nhân thêm `ui_scale` là cách
+            // phóng to/thu nhỏ TOÀN BỘ giao diện (chữ, nút, khoảng cách)
+            // theo cỡ màn hình. Mốc chuẩn: cao 800px = tỉ lệ 1.0.
+            let dpr = frame_input.device_pixel_ratio;
+            let win_h_logical = frame_input.viewport.height as f32 / dpr;
+            let win_w_logical = frame_input.viewport.width as f32 / dpr;
+            let ui_scale = (win_h_logical / 800.0).clamp(0.80, 1.60);
+            let gui_ppp = dpr * ui_scale;
+
+            // Panel rộng theo tỉ lệ cửa sổ, có chặn trên/dưới để không quá
+            // hẹp (vỡ bố cục) hay quá rộng (lấn hết chỗ của khối 3D).
+            let left_w = (win_w_logical / ui_scale * 0.30).clamp(300.0, 430.0);
             let mut submit_formula = false;
             let mut editing_formula = false;
             let mut request_hint = false;
@@ -302,7 +315,7 @@ fn main() {
                 &mut frame_input.events,
                 frame_input.accumulated_time,
                 frame_input.viewport,
-                frame_input.device_pixel_ratio,
+                gui_ppp,
                 |gui_context| {
                     egui::SidePanel::left("faces_panel")
                         .exact_width(left_w)
@@ -313,6 +326,11 @@ fn main() {
                                 .inner_margin(egui::Margin::symmetric(13.0, 12.0)),
                         )
                         .show(gui_context, |ui| {
+                            // Cuộn được khi cửa sổ thấp / nội dung dài hơn
+                            // chiều cao panel (trước đây bị cắt mất phần dưới).
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false; 2])
+                                .show(ui, |ui| {
                             // ── Tiêu đề ứng dụng ────────────────────────
                             ui.horizontal(|ui| {
                                 ui.label(
@@ -553,6 +571,7 @@ fn main() {
                                     .color(theme::TEXT_DIM),
                                 );
                             });
+                            }); // het ScrollArea
                         });
                 },
             );
@@ -649,9 +668,11 @@ fn main() {
             }
 
             // 3D chi chiem phan con lai ben phai panel.
-            let dpi = frame_input.device_pixel_ratio;
             let full = frame_input.viewport;
-            let left_px = (left_w * dpi) as i32;
+            // Panel được vẽ ở tỉ lệ gui_ppp, nên quy đổi bề rộng của nó
+            // sang pixel vật lý PHẢI dùng cùng tỉ lệ đó -- nếu dùng dpr
+            // thô, vùng 3D sẽ lệch khỏi mép panel.
+            let left_px = (left_w * gui_ppp) as i32;
             let cam_viewport = Viewport {
                 x: full.x + left_px,
                 y: full.y,
@@ -973,10 +994,15 @@ fn pick_face(
 }
 
 fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: Option<char>) {
-    let cell = 21.0;
+    // Ô co giãn theo bề rộng thực tế còn lại: sơ đồ gồm 4 cột mặt, mỗi
+    // cột = 3 ô + 2 khe + lề. Giải ngược ra cỡ ô để sơ đồ luôn vừa khít
+    // panel dù cửa sổ to nhỏ thế nào (trước đây cố định 21px nên panel
+    // rộng thì thừa chỗ, panel hẹp thì tràn).
+    let avail = ui.available_width();
     let gap = 2.5;
-    let panel = cell * 3.0 + gap * 2.0;
     let pad = 7.0;
+    let cell = (((avail / 4.0) - pad - 2.0 * gap) / 3.0).clamp(13.0, 30.0);
+    let panel = cell * 3.0 + gap * 2.0;
     let grid_pos: [(char, i32, i32); 6] = [
         ('U', 1, 0),
         ('L', 0, 1), ('F', 1, 1), ('R', 2, 1), ('B', 3, 1),
@@ -1013,7 +1039,7 @@ fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: Option<char
                 let cell_rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cell, cell));
                 painter.rect_filled(
                     cell_rect,
-                    egui::Rounding::same(3.5),
+                    egui::Rounding::same((cell * 0.17).clamp(2.0, 6.0)),
                     egui::Color32::from_rgb(cr, cg, cb),
                 );
             }
@@ -1025,7 +1051,7 @@ fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: Option<char
             center,
             egui::Align2::CENTER_CENTER,
             face,
-            egui::FontId::proportional(11.0),
+            egui::FontId::proportional((cell * 0.52).clamp(8.0, 15.0)),
             egui::Color32::from_black_alpha(150),
         );
 

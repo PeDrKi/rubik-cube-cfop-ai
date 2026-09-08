@@ -38,6 +38,10 @@ năng tách thành thẻ riêng: sơ đồ 6 mặt (có chữ tên mặt, viền
 dấu mặt đang chọn), điều khiển, nhập công thức, kết quả gợi ý, và thanh
 trạng thái kèm tiến trình khi khối đang xoay.
 
+Giao diện **co giãn theo kích thước cửa sổ**: chữ, nút và ô sơ đồ tự
+phóng to/thu nhỏ (mốc chuẩn cửa sổ cao 800px), bề rộng panel bám theo tỉ
+lệ cửa sổ trong khoảng 300–430pt. Panel **cuộn được** khi cửa sổ thấp.
+
 ## Điều khiển
 
 | Phím / thao tác | Chức năng |
