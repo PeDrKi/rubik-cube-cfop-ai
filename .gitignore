@@ -1,0 +1,46 @@
+**/model_out/
+*.joblib
+
+# PDB cache của solver Python (pdb_builder.py tạo lại mỗi lần chạy)
+solver/cache/
+**/solver/cache/
+
+# Rust
+/target/
+**/target/
+**/*.rs.bk
+ket_qua.png
+**/ket_qua*.png
+
+# ─────────────────────────────────────────────────────────────
+#  Python
+# ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+build/
+dist/
+
+# ─────────────────────────────────────────────────────────────
+#  Rác hệ điều hành / trình soạn thảo
+# ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.tmp
