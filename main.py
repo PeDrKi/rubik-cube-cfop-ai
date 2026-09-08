@@ -87,6 +87,9 @@ def main():
     bar_status_timer = 0
     history          = []
     MAX_HIST         = 5
+    hint_copy_rect   = None   # pygame.Rect cua nut "Copy -> thanh cong thuc"
+                               # (None neu khong co hint dang hien thi), duoc
+                               # ve lai moi frame, dung de hit-test click.
 
     # ── CFOP AI (Cross + F2L, chay nen bang thread de khong dong UI) ─────────
     cfop_busy       = False    # True trong khi thread AI dang tinh
@@ -241,7 +244,14 @@ def main():
                 zoom = lo.ZOOM0 * zoom_ratio
 
             elif ev.type == MOUSEBUTTONDOWN and ev.button == 1:
-                if lo.bar_rect().collidepoint(mx, my):
+                if hint_copy_rect and hint_copy_rect.collidepoint(mx, my):
+                    # Chep gợi ý hien tai vao thanh Singmaster va focus vao do
+                    # de nguoi dung xem/sua truoc khi bam Enter thuc thi.
+                    bar_text   = hint_moves_str[:BAR_MAX_LEN]
+                    bar_active = True
+                    bar_status = None
+
+                elif lo.bar_rect().collidepoint(mx, my):
                     bar_active = True
 
                 elif lo.AREA_3D.collidepoint(mx, my):
@@ -484,6 +494,37 @@ def main():
             if hint_moves_str:
                 hm_txt = lo.sfont.render(f"  {hint_moves_str}", True, (255, 255, 255))
                 screen.blit(hm_txt, (ax, ay))
+
+                # ── Nút "Copy -> thanh công thức" ──────────────────────────
+                btn_w = max(90, int(118 * lo.s))
+                btn_h = max(16, int(20 * lo.s))
+                btn_x = ax + hm_txt.get_width() + max(8, int(10 * lo.s))
+                # Nếu nút bị tràn ra ngoài cfop_box, xuống dòng dưới thay vì
+                # đè lên nội dung khác.
+                if btn_x + btn_w > cfop_box.right - 6:
+                    btn_x = ax
+                    ay += int(18 * lo.s)
+                hint_copy_rect = pygame.Rect(btn_x, ay - int(2 * lo.s), btn_w, btn_h)
+                hovered = hint_copy_rect.collidepoint(mx, my)
+                pygame.draw.rect(
+                    screen,
+                    (70, 70, 100) if hovered else (48, 48, 68),
+                    hint_copy_rect, border_radius=max(3, int(5 * lo.s)),
+                )
+                pygame.draw.rect(
+                    screen, GOLD if hovered else (110, 110, 155),
+                    hint_copy_rect, 1, border_radius=max(3, int(5 * lo.s)),
+                )
+                cp_txt = lo.sfont.render("Copy -> bar", True,
+                                         GOLD if hovered else (200, 200, 225))
+                screen.blit(cp_txt, (
+                    hint_copy_rect.centerx - cp_txt.get_width() // 2,
+                    hint_copy_rect.centery - cp_txt.get_height() // 2,
+                ))
+            else:
+                hint_copy_rect = None
+        else:
+            hint_copy_rect = None
 
         # phím tắt hint
         sy = shortcuts_top_y
