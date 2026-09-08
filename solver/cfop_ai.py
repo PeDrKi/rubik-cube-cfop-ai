@@ -151,21 +151,17 @@ def hint(state, retry=False):
             return {'stage': 'oll_corners', 'label': 'OLL - Định hướng 4 góc', 'moves': mvs}
 
     if stage == 'pll':
-        # Cung ly do toc do nhu OLL o tren: chi goi dung pha can.
-        full = from_facelets(state)
-        if not corners_home(full):
-            mvs = solve_pll_corners_only(state, retry=retry)
+        # T-perm/Y-perm giai CA PLL trong 1 buoc (khong tach 2-look nhu
+        # OLL, vi cac thuat toan nay hoan vi goc+canh DONG THOI) -- nhanh
+        # (<0.2s), nen hint tra ve toan bo PLL cung 1 luc thay vi 2 pha.
+        res = solve_pll(state, retry=retry)
+        mvs = res['moves']
+        if not mvs:
             if mvs is None:
-                return {'stage': 'pll_corners',
-                        'label': 'PLL - Hoán vị 4 góc (chưa tìm được, bấm H lại để thử hướng khác)',
+                return {'stage': 'pll',
+                        'label': 'PLL (chưa tìm được, bấm H lại để thử hướng khác)',
                         'moves': []}
-            return {'stage': 'pll_corners', 'label': 'PLL - Hoán vị 4 góc', 'moves': mvs}
-        else:
-            mvs = solve_pll_edges_only(state, retry=retry)
-            if mvs is None:
-                return {'stage': 'pll_edges',
-                        'label': 'PLL - Hoán vị 4 cạnh (chưa tìm được, bấm H lại để thử hướng khác)',
-                        'moves': []}
-            return {'stage': 'pll_edges', 'label': 'PLL - Hoán vị 4 cạnh', 'moves': mvs}
+            # mvs == [] : da o dung PLL roi (hiem khi xay ra o day)
+        return {'stage': 'pll', 'label': 'PLL - Hoán vị cuối cùng', 'moves': mvs}
 
     return {'stage': 'done', 'label': 'Cube đã giải xong! 🎉', 'moves': []}

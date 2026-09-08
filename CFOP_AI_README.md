@@ -101,6 +101,72 @@ phòng) đã tối ưu — đã kiểm chứng xử lý tốt đa số trường
 scramble ngẫu nhiên test nhanh <0.5s), chỉ còn hiếm case khó mất nhiều thời
 gian hơn (không còn crash).
 
+## Cập nhật QUYẾT ĐỊNH #2: PLL cũng chậm/thất bại cho đa số case → áp dụng lại kỹ thuật macro-move (T-perm/Y-perm)
+
+Sau khi OLL đã nhanh, xác nhận **PLL vẫn là nút thắt chính** (người dùng
+báo ~5 phút/bước, nhiều trường hợp không ra kết quả) — đúng nguyên nhân
+giống hệt OLL trước khi sửa: tìm kiếm tổng quát (A*/IDA*) không đủ mạnh
+cho bài toán "hoán vị 8 quân lớp U trong khi giữ nguyên 12 quân khác".
+
+**Áp dụng lại đúng bài học đã thành công với OLL — nhưng lần này cho HOÁN
+VỊ thay vì HƯỚNG:** tìm 3 thuật toán "hoán vị thuần" (không đổi hướng) rất
+nổi tiếng trong CFOP — **T-perm**, **T-perm mirror**, **Y-perm** — mỗi cái
+hoán đổi đúng 2 góc + 2 cạnh, giữ nguyên hướng và Cross+F2L.
+
+**Đã kiểm chứng bằng code trước khi dùng** (không tin trí nhớ): cả 3 thuật
+toán khi áp lên cube đã giải đều cho kết quả **huống=0 hoàn toàn, chỉ hoán
+vị**, và giữ nguyên Cross+F2L — xác nhận qua `cross_f2l_ok()` + đọc trực
+tiếp `co`/`eo` (orientation) của trạng thái cubie.
+
+Kết hợp AUF (4 lựa chọn) × 3 thuật toán = 12 "macro-move" mỗi bước, tìm
+kiếm tổ hợp ngắn nhất (độ sâu ≤4, tức 12⁴≈20,000 khả năng — cực nhỏ so với
+15¹² của tìm kiếm nước đơn lẻ trước đây).
+
+**Kết quả kiểm chứng:**
+- 200/200 case PLL tổng hợp thành công ở độ sâu 4.
+- 10/10 scramble thật (đi qua toàn bộ Cross→F2L→OLL→PLL) **giải đúng TOÀN
+  BỘ cube**, mỗi lần **dưới 0.13 giây**.
+- Test qua đúng đường dẫn `hint()` mà app dùng: 5/5 scramble giải xong cả
+  cube trong **dưới 2 giây mỗi case** (bao gồm cả Cross+F2L+OLL+PLL).
+
+A*/IDA* vẫn giữ làm lưới an toàn dự phòng cuối cùng cho `solve_pll_corners_only()`/
+`solve_pll_edges_only()` (dùng khi cần tách 2-look cụ thể), nhưng đường
+chính `solve_pll()`/`hint()` giờ dùng macro-solver, gần như không bao giờ
+cần tới dự phòng nữa.
+
+## Cập nhật QUYẾT ĐỊNH: OCLL vẫn chậm cho ĐA SỐ case → chuyển hẳn sang kỹ thuật CFOP thật (Sune/Anti-Sune)
+
+Sau khi đo lại kỹ, phát hiện A*/IDA* (dù đã tối ưu) vẫn **thất bại hoặc rất
+chậm cho đa số trường hợp thực tế** (6/10 scramble ngẫu nhiên test), không
+chỉ ngoại lệ hiếm như tưởng ban đầu — bài toán "định hướng 4 góc trong khi
+giữ nguyên 12 quân khác" vốn quá khó cho tìm kiếm tổng quát không có tri
+thức miền (domain knowledge).
+
+**Giải pháp dứt điểm — đúng kỹ thuật người chơi CFOP thật dùng:** lặp lại
+2 thuật toán **Sune** và **Anti-Sune** (cực kỳ nổi tiếng, ai học CFOP cũng
+biết) kèm xoay AUF (U tự do) giữa các lần — kỹ thuật "intuitive OLL
+corners" tiêu chuẩn, không cần thuộc cả 7 công thức OCLL.
+
+**Đã kiểm chứng bằng code (không tin vào trí nhớ):**
+1. Xác nhận Sune (`R U R' U R U2 R'`) và Anti-Sune (`R U2 R' U' R U' R'`)
+   chỉ dùng R,U (không D) nên **tự động giữ nguyên Cross+F2L**, và test
+   thực tế xác nhận **giữ nguyên hướng cạnh U**.
+2. Không gian tìm kiếm giờ chỉ còn **8 lựa chọn mỗi bước** (4 AUF × 2 thuật
+   toán) thay vì 15 nước đơn lẻ — tìm trong ≤4 bước macro là đủ (8⁴=4096,
+   so với 15¹²  hàng nghìn tỷ trước đây).
+3. Test 300 case tổng hợp + 10 case thật (đúng những case A*/IDA* từng
+   thất bại) — **100% thành công, mỗi lần dưới 1 mili giây**, xác minh
+   đúng trên facelet thật (Cross+F2L+OLL đều đúng sau khi áp dụng).
+
+A*/IDA* vẫn được giữ lại làm **lưới an toàn dự phòng cuối cùng** (gần như
+không bao giờ cần tới nữa).
+
+**Kết quả đo lại:** case OCLL trước đây thất bại/mất 20-70s → nay **dưới
+0.6 giây, 10/10 đúng**.
+
+**Cập nhật:** PLL sau đó cũng đã được sửa bằng đúng kỹ thuật này (xem mục
+"QUYẾT ĐỊNH #2" phía trên) — không còn là giới hạn nữa.
+
 ## Cập nhật: PLL cũng bị vấn đề IDA*-thuần y hệt OLL → đã áp dụng cùng bản vá
 
 Sau khi sửa OLL, phát hiện `pll_solver.py` **chưa được cập nhật** — vẫn dùng

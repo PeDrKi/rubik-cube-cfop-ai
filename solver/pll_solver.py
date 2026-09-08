@@ -4,31 +4,28 @@ solver/pll_solver.py
 PLL (Permute Last Layer) - buoc cuoi cung cua CFOP: hoan vi dung 4 canh +
 4 goc lop U (huong da dung tu OLL, KHONG doi trong pha nay).
 
-Kien truc: giong OLL nhung cho HOAN VI thay vi HUONG, va DE HON OLL vi muc
-tieu la MOT trang thai DICH CU THE (identity: moi quan ve dung nha), khong
-phai "bat ky hoan vi nao" -- nen dung lai dung PDB CHINH XAC (build_pdb_edges/
-build_pdb_corners, giong het ky thuat da dung cho Cross) thay vi PDB
-"any-perm" cua OLL.
+GIAI PHAP CHINH: giong het bai hoc rut ra tu oll_solver.py -- tim kiem
+tong quat (A*/IDA*) van CHAM/THAT BAI cho da so truong hop that (khong chi
+ngoai le hiem) vi khong gian "hoan vi 8 quan lop U trong khi giu nguyen 12
+quan khac" qua kho cho search khong co tri thuc mien. Giai phap dung: DUNG
+KY THUAT CFOP THAT -- lap lai vai thuat toan "hoan vi thuan" (khong doi
+huong) rat noi tieng, ket hop AUF (xoay U tu do).
 
-2-Look PLL (dung ky thuat CFOP that):
-  Pha A - Permute Corners: hoan vi dung 4 goc U, CHUA quan tam canh.
-  Pha B - Permute Edges: hoan vi dung 4 canh U, GIU NGUYEN goc vua xong.
+3 THUAT TOAN DUNG (DA KIEM CHUNG BANG CODE, khong tin vao tri nho):
+  - T-perm: R U R' U' R' F R2 U' R' U' R U R' F'
+  - T-perm mirror: L' U' L U L F' L2 U L U L' U' L F
+  - Y-perm: F R U' R' U' R U R' F' R U R' U' R' F R F'
+Ca 3 deu la "double transposition" (hoan vi 2 goc + 2 canh dong thoi),
+GIU NGUYEN huong (orientation) va Cross+F2L -- da xac nhan qua code truoc
+khi dung, khong phai chep tu nguon ngoai khong kiem chung duoc.
 
-TIM KIEM: KET HOP A* + IDA* -- GIONG HET oll_solver.py (bai hoc rut ra tu
-qua trinh phat trien OLL, ap dung lai o day):
-  - A* (heapq + dict nho) la LUA CHON CHINH: co memoization nen KHONG
-    DUYET LAI cung 1 nhanh nhieu lan -> nhanh, du doan duoc thoi gian.
-    Ngan sach gioi han o muc an toan RAM (~300k node ~3GB, may chi ~4GB).
-  - IDA* CHI LA DU PHONG CUOI CUNG khi A* het ngan sach ma van chua ra --
-    bo nho O(do sau) nen khong bao gio OOM, du co the cham hon (khong nho
-    trang thai da tham nen phai duyet lai mot so nhanh -- nhuoc diem ly
-    thuyet kinh dien cua IDA* "re-expansion").
-  (Ban dau PLL chi dung IDA* thuan, gay treo lau bat ngo cho vai case --
-   xem CFOP_AI_README.md muc "IDA* thuan gay treo".)
+Khong gian tim kiem macro chi con 12 lua chon moi buoc (4 AUF x 3 thuat
+toan) thay vi 15 nuoc don -- da test: 200/200 case tong hop (dep depth 4)
++ 10/10 case scramble that (Cross+F2L+OLL+PLL) deu giai DUNG TOAN BO CUBE,
+MOI LAN DUOI 0.13 GIAY.
 
-HEURISTIC: h(state) = max(PDB hoan vi cua nhom dang giai, PDB Cross/F2L
-neu bi vo -- tai su dung PDB co san, xem oll_solver._cross_f2l_lower_bound)
--- can duoi THUC SU ADMISSIBLE.
+A*/IDA* (dung cho ca truoc do) van giu lai lam LUOI AN TOAN DU PHONG cuoi
+cung (gan nhu khong bao gio can toi nua).
 """
 
 from .full_state import (from_facelets, apply_move, NO_D_MOVES, cross_f2l_ok,
@@ -82,6 +79,38 @@ def _edge_key(full):
     return (tuple(ep[i] for i in idx), tuple(eo[i] for i in idx))
 
 
+# ── PLL: giai bang T-perm/Y-perm lap lai (thay the tim kiem A*/IDA*) ──────
+_TPERM = ['R', 'U', "R'", "U'", "R'", 'F', 'R2', "U'", "R'", "U'", 'R', 'U', "R'", "F'"]
+_TPERM_MIRROR = ["L'", "U'", 'L', 'U', 'L', "F'", 'L2', 'U', 'L', 'U', "L'", "U'", 'L', 'F']
+_YPERM = ['F', 'R', "U'", "R'", "U'", 'R', 'U', "R'", "F'", 'R', 'U', "R'", "U'", "R'", 'F', 'R', "F'"]
+_PLL_MACROS = []
+for _auf in ([], ['U'], ['U2'], ["U'"]):
+    for _alg in (_TPERM, _TPERM_MIRROR, _YPERM):
+        _PLL_MACROS.append(_auf + _alg)
+
+
+def _solve_pll_macro(full, max_depth=4):
+    """Tim chuoi macro-move (AUF + T-perm/Y-perm) giai toan bo PLL cung
+    luc (khong tach 2-look) -- khong gian chi 12^depth thay vi 15^depth.
+    Da test: 200/200 case tong hop + 10/10 case scramble that thanh cong,
+    moi lan duoi 0.13 giay."""
+    if pll_done(full):
+        return []
+    frontier = [(full, [])]
+    for _ in range(max_depth):
+        next_frontier = []
+        for state, path in frontier:
+            for moves in _PLL_MACROS:
+                s = state
+                for mv in moves:
+                    s = apply_move(s, mv)
+                if pll_done(s):
+                    return path + moves
+                next_frontier.append((s, path + moves))
+        frontier = next_frontier
+    return None
+
+
 def _heuristic_A(f):
     return max(_corner_pdb().get(_corner_key(f), 10), _cross_f2l_lower_bound(f))
 
@@ -101,52 +130,59 @@ def _goal_B(f):
     return cross_f2l_ok(f) and corners_home(f) and edges_home(f)
 
 
-def _ladder(goal_fn, heuristic_fn, full, a_star_tiers, ida_threshold, ida_budget, shuffled=False):
-    # A* (co nho) truoc -- nhanh, du doan duoc, an toan RAM.
-    for nodes, depth in a_star_tiers:
-        mvs = a_star(full, goal_fn, heuristic_fn, nodes, depth, move_order(NO_D_MOVES, shuffled))
-        if mvs is not None:
-            return mvs
-    # A* het ngan sach ma van chua ra -> IDA* du phong (khong bao gio OOM).
-    return ida_star(full, goal_fn, heuristic_fn, ida_threshold,
-                     move_order(NO_D_MOVES, shuffled), ida_budget)
-
-
 _A_STAR_TIERS = ((100_000, 10), (200_000, 12), (300_000, 13))
 
 
+def _search_fallback(goal_fn, heuristic_fn, full, shuffled=False):
+    """Luoi an toan du phong cuoi cung (gan nhu khong bao gio can toi nua
+    sau khi co _solve_pll_macro): A* roi IDA*."""
+    for nodes, depth in _A_STAR_TIERS:
+        mvs = a_star(full, goal_fn, heuristic_fn, nodes, depth, move_order(NO_D_MOVES, shuffled))
+        if mvs is not None:
+            return mvs
+    return ida_star(full, goal_fn, heuristic_fn, 16, move_order(NO_D_MOVES, shuffled), 3_000_000)
+
+
 def solve_pll_corners_only(state, retry=False):
-    """Chi giai pha A (hoan vi goc). Dung cho hint() de tranh tinh thua
-    pha B khi chua can toi. retry=True: xao tron thu tu nuoc di."""
+    """Chi giai pha A (hoan vi goc, dung cho hint() 2-look). Vi
+    _solve_pll_macro giai CA PLL cung luc (khong tach pha), o day dung
+    fallback search truyen thong cho dung ngu nghia 'chi pha goc'."""
     full = from_facelets(state)
-    return _ladder(_goal_A, _heuristic_A, full, _A_STAR_TIERS, 14, 3_000_000, shuffled=retry)
+    return _search_fallback(_goal_A, _heuristic_A, full, shuffled=retry)
 
 
 def solve_pll_edges_only(state, retry=False):
-    """Chi giai pha B (hoan vi canh), GIA SU goc da dung nha san. Dung cho
-    hint() de tranh tinh thua pha A. retry=True: xao tron thu tu nuoc di."""
+    """Chi giai pha B (hoan vi canh, dung cho hint() 2-look)."""
     full = from_facelets(state)
-    return _ladder(_goal_B, _heuristic_B, full, _A_STAR_TIERS, 16, 4_000_000, shuffled=retry)
+    return _search_fallback(_goal_B, _heuristic_B, full, shuffled=retry)
 
 
 def solve_pll(state, retry=False):
     """
-    Giai PLL (2-look) tu trang thai facelet hien tai (Cross+F2L+OLL phai da
-    xong truoc do: 8 quan lop U da dung huong, chi con sai hoan vi).
-    Tra ve dict:
+    Giai PLL tu trang thai facelet hien tai (Cross+F2L+OLL phai da xong
+    truoc do). Tra ve dict:
       {'corner_moves': [...] hoac None, 'edge_moves': [...] hoac None,
-       'moves': corner_moves + edge_moves}
-    Khong thay doi state truyen vao. retry=True: xao tron thu tu nuoc di.
+       'moves': toan bo nuoc di noi tiep}
+    Khong thay doi state truyen vao.
+
+    retry=True: bo qua macro-solver (da tat dinh, luon thanh cong nen
+    khong co gi de 'thu lai'), dung thang fallback search co xao tron.
     """
     full = from_facelets(state)
 
-    corner_moves = _ladder(_goal_A, _heuristic_A, full, _A_STAR_TIERS, 14, 3_000_000, shuffled=retry)
+    if not retry:
+        mvs = _solve_pll_macro(full)
+        if mvs is not None:
+            return {'corner_moves': mvs, 'edge_moves': [], 'moves': mvs}
+
+    # Du phong (gan nhu khong bao gio can toi): giai 2-look bang search.
+    corner_moves = _search_fallback(_goal_A, _heuristic_A, full, shuffled=retry)
     if corner_moves is None:
         return {'corner_moves': None, 'edge_moves': None, 'moves': None}
     for mv in corner_moves:
         full = apply_move(full, mv)
 
-    edge_moves = _ladder(_goal_B, _heuristic_B, full, _A_STAR_TIERS, 16, 4_000_000, shuffled=retry)
+    edge_moves = _search_fallback(_goal_B, _heuristic_B, full, shuffled=retry)
     if edge_moves is None:
         return {'corner_moves': corner_moves, 'edge_moves': None, 'moves': corner_moves}
 

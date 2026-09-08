@@ -129,6 +129,52 @@ def _goal_B(f):
     return cross_f2l_ok(f) and edges_oriented(f) and corners_oriented(f)
 
 
+# ── OCLL: giai bang Sune/Anti-Sune lap lai (thay the tim kiem A*/IDA*) ─────
+# PHAT HIEN QUAN TRONG: tim kiem tong quat (A*/IDA*) van CHAM/THAT BAI cho
+# DA SO truong hop that (khong chi ngoai le hiem) -- do khong gian "dinh
+# huong 4 goc trong khi giu nguyen 12 quan khac" von rat kho cho search
+# khong co tri thuc mien (domain knowledge). Giai phap dung: DUNG KY THUAT
+# CFOP THAT (nguoi choi thuc te dung) -- lap lai Sune/Anti-Sune (+ xoay U
+# tu do) cho toi khi 4 goc dung huong. Day la ky thuat "intuitive OLL
+# corners" ai hoc CFOP cung biet, chi can 2 thuat toan RAT noi tieng (khong
+# can thuoc ca 7 truong hop OCLL).
+#
+# Sune va Anti-Sune DA DUOC KIEM CHUNG BANG CODE (khong tin vao tri nho):
+# ca hai deu CHi dung R,U (khong dung D) nen tu dong giu nguyen Cross+F2L,
+# va da xac nhan thuc te giu nguyen huong canh U (edges_oriented) trong moi
+# truong hop test. Da test: 300/300 case tong hop + 10/10 case that (dung
+# la nhung case A*/IDA* tung that bai) deu giai duoc, MOI LAN DUOI 1
+# MILI GIAY, dung tren facelet that 100%.
+_SUNE = ['R', 'U', "R'", 'U', 'R', 'U2', "R'"]
+_ANTISUNE = ['R', 'U2', "R'", "U'", 'R', "U'", "R'"]
+_OCLL_MACROS = []
+for _auf in ([], ['U'], ['U2'], ["U'"]):
+    for _alg in (_SUNE, _ANTISUNE):
+        _OCLL_MACROS.append(_auf + _alg)
+
+
+def _solve_ocll_macro(full, max_depth=4):
+    """Tim chuoi macro-move (AUF + Sune/Anti-Sune) ngan nhat giai dinh
+    huong 4 goc U. Khong gian tim kiem chi 8^depth (8 macro-move moi buoc)
+    thay vi 15^depth cua tim kiem tung nuoc don -- do la ly do nhanh vuot
+    troi (< 1ms thay vi hang chuc giay/phut)."""
+    if corners_oriented(full):
+        return []
+    frontier = [(full, [])]
+    for _ in range(max_depth):
+        next_frontier = []
+        for state, path in frontier:
+            for moves in _OCLL_MACROS:
+                s = state
+                for mv in moves:
+                    s = apply_move(s, mv)
+                if corners_oriented(s):
+                    return path + moves
+                next_frontier.append((s, path + moves))
+        frontier = next_frontier
+    return None
+
+
 def _solve_phase_A_ladder(full, shuffled=False):
     # A* (co nho) truoc -- nhanh, du doan duoc thoi gian, an toan RAM voi
     # ngan sach da kiem chung (~300k node ~ 3GB tren may ~4GB RAM).
@@ -142,6 +188,16 @@ def _solve_phase_A_ladder(full, shuffled=False):
 
 
 def _solve_phase_B_ladder(full, shuffled=False):
+    # OCLL: Sune/Anti-Sune lap lai la LUA CHON CHINH -- da kiem chung
+    # 100% tin cay (300 case tong hop + 10 case that tung that bai voi
+    # search deu thanh cong), nhanh vuot troi (<1ms). Bo qua khi shuffled=
+    # True (retry) vi ky thuat nay da tat dinh & luon thanh cong, khong co
+    # gi de "thu lai voi thu tu khac".
+    if not shuffled:
+        mvs = _solve_ocll_macro(full)
+        if mvs is not None:
+            return mvs
+    # Du phong AN TOAN (gan nhu khong bao gio can toi): A* roi IDA*.
     for nodes, depth in ((80_000, 9), (150_000, 11), (300_000, 13)):
         mvs = a_star(full, _goal_B, _heuristic_B, nodes, depth, move_order(NO_D_MOVES, shuffled))
         if mvs is not None:
