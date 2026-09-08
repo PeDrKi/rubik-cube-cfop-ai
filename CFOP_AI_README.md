@@ -101,6 +101,21 @@ phòng) đã tối ưu — đã kiểm chứng xử lý tốt đa số trường
 scramble ngẫu nhiên test nhanh <0.5s), chỉ còn hiếm case khó mất nhiều thời
 gian hơn (không còn crash).
 
+## Cập nhật: PLL cũng bị vấn đề IDA*-thuần y hệt OLL → đã áp dụng cùng bản vá
+
+Sau khi sửa OLL, phát hiện `pll_solver.py` **chưa được cập nhật** — vẫn dùng
+IDA* thuần (từ bản viết trước đó), nên gặp đúng vấn đề "re-expansion"
+tương tự: 1 case PLL cạnh (U-perm) mất tới ~25 giây dù chỉ cần 9 nước.
+
+**Đã áp dụng lại đúng bài học từ OLL:** chuyển sang **A\* (có nhớ) làm
+chính, IDA\* chỉ dự phòng cuối**. Đồng thời phát hiện thêm: tier đầu tiên
+đặt `max_depth=8` trong khi lời giải thực tế cần 9 bước → lãng phí ~15 giây
+"dò" trong độ sâu quá nông trước khi rớt xuống tier tiếp theo. Đã tăng độ
+sâu tier đầu lên 10 (đa số công thức PLL thật dài 9-13 nước).
+
+**Kết quả:** case U-perm nói trên từ ~25s xuống còn **~6.4s**. Bộ test đầy
+đủ (38 test) từ 64.9s xuống còn 44.5s.
+
 ## Cập nhật: IDA* thuần gây "treo" bất ngờ ở vài case → chuyển sang lai A*+IDA*
 
 Sau khi chuyển hẳn sang IDA*, phát hiện thêm vấn đề: IDA* **không lưu
