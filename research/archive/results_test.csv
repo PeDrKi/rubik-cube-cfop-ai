@@ -1,9 +1,0 @@
-seed,scramble,A_reached,A_moves,A_time_s,A_segmentability,A_pattern_conformity,A_trigger_overlap,A_HLI,A_move_ratio,B_solved,B_moves,B_time_s,B_move_ratio
-1000,L' B' R U' B D2 U' B' U2 B2 F U2 F L' D F2 L' F' D L',solved,62,0.7932,1.0,0.5,0.0,0.5,3.1,True,19,0.00847,0.95
-1001,U' R L D R' U' B2 R2 F R U2 B L2 D2 L B' R F R B,solved,81,3.0392,1.0,0.5,0.10810810810810811,0.5324,4.05,True,22,0.02179,1.1
-1002,R' B F R2 D U2 D2 F' B' U2 L' B L U' L2 F B2 U F D,solved,77,0.7919,1.0,0.5,0.1,0.53,3.85,True,21,0.00786,1.05
-1003,R F2 D2 F L2 F' B' F2 B' F U L2 D2 U' B' F2 B' F2 U' R2,solved,54,0.6881,1.0,1.0,0.15789473684210525,0.7474,2.7,True,20,0.00276,1.0
-1004,L' U' L2 B F2 L2 B' F2 L' D R L' R2 L' R D F2 L' U L2,solved,78,0.6452,1.0,0.5,0.0,0.5,3.9,True,21,0.02581,1.05
-1005,R L R2 F B2 F R2 B L' D' F2 B2 L' U2 B' U' L R2 D2 F2,solved,68,0.8022,1.0,1.0,0.09375,0.7281,3.4,True,22,0.04318,1.1
-1006,B2 U F B' U F R2 B D2 L' U R D R2 F2 R2 L D' L' U2,solved,78,0.5959,1.0,0.5,0.0,0.5,3.9,True,21,0.01369,1.05
-1007,U' R L' B U2 R2 D' L2 B2 R U2 F B2 U L' D B2 U B' L,solved,84,1.6403,1.0,0.5,0.11428571428571428,0.5343,4.2,True,22,0.03675,1.1

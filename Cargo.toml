@@ -1,0 +1,11 @@
+[package]
+name = "rubik-render-windowed"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+three-d = "0.17"
+rand = "0.8"
+
+[profile.release]
+opt-level = 3
