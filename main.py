@@ -1,7 +1,8 @@
 """
 main.py — Rubik's Cube Simulator
 6-Face View (cột trái) và 3D View (cột phải).
-Tích hợp CFOP AI (Cross + F2L, phase MVP): phím A = auto-solve, H = hint.
+Tích hợp CFOP AI (Cross + F2L, phase MVP): phím A = auto-solve, H = hint,
+Tab = copy nhanh gợi ý hiện tại xuống thanh công thức (Singmaster).
 """
 
 import pygame
@@ -328,6 +329,16 @@ def main():
                     lo = make_layout()
                     zoom_ratio2 = zoom / lo.ZOOM0
                     zoom = lo.ZOOM0 * zoom_ratio2
+
+                elif ev.key == K_TAB and hint_moves_str:
+                    # Tab = copy nhanh gợi ý hiện tại xuống thanh Singmaster,
+                    # tương đương bấm nút "Copy -> thanh công thức".
+                    # Hoạt động dù đang gõ trong bar hay không (bar_active True/False).
+                    bar_text       = hint_moves_str[:BAR_MAX_LEN]
+                    bar_active     = True
+                    bar_status     = None
+                    bar_cursor     = len(bar_text)
+                    bar_sel_anchor = None
 
                 elif bar_active:
                     shift = bool(mods & KMOD_SHIFT)
@@ -677,6 +688,7 @@ def main():
             ("/",      "Type moves"),
             ("A",      "AI tự giải (Cross→F2L→OLL→PLL)"),
             ("H",      "AI gợi ý bước tiếp"),
+            ("Tab",    "Copy gợi ý -> thanh công thức"),
         ]:
             ks = lo.sfont.render(k, True, GOLD)
             vs = lo.sfont.render(f"  {v}", True, HINT)
