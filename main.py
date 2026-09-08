@@ -1,7 +1,7 @@
 """
 main.py — Rubik's Cube Simulator
-Chỉ còn: 6-Face View (cột trái) và 3D View (cột phải).
-Đã loại bỏ: CFOP Tutor, AI Advisor, F2L Highlighter, 2D Circle View.
+6-Face View (cột trái) và 3D View (cột phải).
+Tích hợp CFOP AI (Cross + F2L, phase MVP): phím A = auto-solve, H = hint.
 """
 
 import pygame
@@ -10,6 +10,8 @@ import math
 import copy
 import sys
 import time
+import threading
+import queue
 
 from constants   import FPS, BG, GOLD, HINT, DIV
 from layout      import Layout
@@ -17,6 +19,7 @@ from cube_engine import (make_solved, scramble_cube, cube_solved,
                          do_move, parse_singmaster)
 from renderer_3d import Rx, Ry, draw_cube_3d, hit_test_3d, ANIMATABLE_BASES
 from draw_helpers import draw_panels, panel_hit, draw_bar
+from solver import cfop_ai
 
 
 ANIM_DUR      = 0.13   # giây, 3D move animation (ở tốc độ x1)
@@ -85,6 +88,52 @@ def main():
     history          = []
     MAX_HIST         = 5
 
+    # ── CFOP AI (Cross + F2L, chay nen bang thread de khong dong UI) ─────────
+    cfop_busy       = False    # True trong khi thread AI dang tinh
+    cfop_job_kind   = None     # 'solve' hoac 'hint'
+    cfop_result_q   = queue.Queue()
+    hint_label      = None     # nhan hien thi cua goi y gan nhat (vd "F2L - cap DFR")
+    hint_moves_str  = None     # chuoi Singmaster cua goi y (khong tu dong thuc thi)
+    cfop_note       = None     # thong bao ngan (vd "Da giai xong Cross+F2L")
+    cfop_note_timer = 0
+
+    def cfop_stage_label():
+        try:
+            stage = cfop_ai.stage_of(state)
+        except Exception:
+            return '—'
+        return {'cross': 'Cross', 'f2l': 'F2L', 'oll_pll_todo': 'Cross+F2L xong (OLL/PLL: sắp có)'}.get(stage, '—')
+
+    def start_cfop_job(kind):
+        nonlocal cfop_busy, cfop_job_kind
+        if cfop_busy:
+            return
+        cfop_busy = True
+        cfop_job_kind = kind
+        snapshot = copy.deepcopy(state)
+
+        def worker():
+            try:
+                if kind == 'solve':
+                    res = cfop_ai.full_solve(snapshot)
+                else:
+                    res = cfop_ai.hint(snapshot)
+                cfop_result_q.put((kind, res, None))
+            except Exception as exc:
+                cfop_result_q.put((kind, None, str(exc)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_cfop_solution(moves):
+        nonlocal move_count, timer_start, scrambled
+        if not moves:
+            return
+        push_undo()
+        anim_queue.extend(moves)
+        move_count += len(moves)
+        if scrambled and timer_start is None:
+            timer_start = time.perf_counter()
+
     def Rm():
         return Ry(yaw) @ Rx(pitch)
 
@@ -138,6 +187,30 @@ def main():
             bar_status_timer -= 1
             if bar_status_timer == 0:
                 bar_status = None
+        if cfop_note_timer > 0:
+            cfop_note_timer -= 1
+            if cfop_note_timer == 0:
+                cfop_note = None
+
+        try:
+            kind, res, err = cfop_result_q.get_nowait()
+        except queue.Empty:
+            pass
+        else:
+            cfop_busy = False
+            if err is not None:
+                cfop_note = f'Lỗi AI: {err}'
+                cfop_note_timer = 200
+            elif kind == 'solve':
+                apply_cfop_solution(res['all_moves'])
+                if res['reached'] == 'f2l_done':
+                    cfop_note = f"AI: đã giải Cross + F2L ({len(res['all_moves'])} nước)"
+                else:
+                    cfop_note = "AI: giải được Cross + một phần F2L (cặp khó, thử lại 'A' lần nữa)"
+                cfop_note_timer = 220
+            else:   # hint
+                hint_label = res['label']
+                hint_moves_str = ' '.join(res['moves']) if res['moves'] else None
 
         mx, my = pygame.mouse.get_pos()
         R = Rm()
@@ -263,6 +336,12 @@ def main():
                     elif ev.key in (K_SLASH, K_t):
                         bar_active = True
 
+                    elif ev.key == K_a:
+                        start_cfop_job('solve')
+
+                    elif ev.key == K_h:
+                        start_cfop_job('hint')
+
         # ── 3D ANIMATION ──────────────────────────────────────────────────────
         if anim_face is None and anim_queue:
             mv   = anim_queue.pop(0)
@@ -340,6 +419,31 @@ def main():
                 )
                 hy += int(15 * lo.s)
 
+        # ── CFOP AI: giai đoạn hiện tại / gợi ý / trạng thái đang tính ────────
+        ay = hy + int(6 * lo.s)
+        stage_txt = lo.sfont.render(f"CFOP: {cfop_stage_label()}", True, (150, 200, 255))
+        screen.blit(stage_txt, (lo.LEFT_X + 10, ay))
+        ay += int(16 * lo.s)
+
+        if cfop_busy:
+            dots = '.' * (1 + (pygame.time.get_ticks() // 300) % 3)
+            busy_txt = lo.sfont.render(f"AI đang tính{dots}", True, (255, 210, 0))
+            screen.blit(busy_txt, (lo.LEFT_X + 10, ay))
+            ay += int(15 * lo.s)
+        elif cfop_note:
+            note_txt = lo.sfont.render(cfop_note, True, (120, 220, 140))
+            screen.blit(note_txt, (lo.LEFT_X + 10, ay))
+            ay += int(15 * lo.s)
+
+        if hint_label:
+            hl_txt = lo.sfont.render(f"Gợi ý: {hint_label}", True, (230, 190, 255))
+            screen.blit(hl_txt, (lo.LEFT_X + 10, ay))
+            ay += int(15 * lo.s)
+            if hint_moves_str:
+                hm_txt = lo.sfont.render(f"  {hint_moves_str}", True, (255, 255, 255))
+                screen.blit(hm_txt, (lo.LEFT_X + 10, ay))
+                ay += int(15 * lo.s)
+
         # phím tắt hint
         sy = lo.BAR_Y - max(60, int(123 * lo.s))
         for k, v in [
@@ -350,6 +454,8 @@ def main():
             ("Esc",    "Quit"),
             ("F11",    "Fullscreen"),
             ("/",      "Type moves"),
+            ("A",      "AI giải Cross+F2L"),
+            ("H",      "AI gợi ý bước tiếp"),
         ]:
             ks = lo.sfont.render(k, True, GOLD)
             vs = lo.sfont.render(f"  {v}", True, HINT)
