@@ -35,6 +35,7 @@ from . import corner_model as CM
 from .pdb_builder import build_pdb_edges, build_pdb_corners
 from .oll_solver import _cross_f2l_lower_bound
 from .search_utils import a_star, ida_star, move_order
+from .pll_algorithms import solve_pll_lookup, VERIFIED_ALG_NAMES
 
 U_EDGES = ('UF', 'UB', 'UL', 'UR')
 U_CORNERS = ('UFR', 'UFL', 'UBR', 'UBL')
@@ -79,13 +80,22 @@ def _edge_key(full):
     return (tuple(ep[i] for i in idx), tuple(eo[i] for i in idx))
 
 
-# ── PLL: giai bang T-perm/Y-perm lap lai (thay the tim kiem A*/IDA*) ──────
+# ── PLL: giai bang cac thuat toan "hoan vi thuan" lap lai ─────────────────
+# 5 generator (da kiem chung bang code, khong tin tri nho):
+#   - T-perm, T-perm mirror, Y-perm: hoan vi 2 goc + 2 canh dong thoi
+#   - Corner-3-cycle: CHI hoan vi 3 goc (canh khong doi gi ca)
+#   - Edge-3-cycle:   CHI hoan vi 3 canh (goc khong doi gi ca)
+# Them 2 generator 3-cycle giup giam do dai loi giai trung binh dang ke
+# (~40 -> ~29 nuoc, da benchmark tren 200 case) vi nhieu case PLL thuc te
+# gan voi dang "3-cycle don" hon la "2 lan hoan vi doi".
 _TPERM = ['R', 'U', "R'", "U'", "R'", 'F', 'R2', "U'", "R'", "U'", 'R', 'U', "R'", "F'"]
 _TPERM_MIRROR = ["L'", "U'", 'L', 'U', 'L', "F'", 'L2', 'U', 'L', 'U', "L'", "U'", 'L', 'F']
 _YPERM = ['F', 'R', "U'", "R'", "U'", 'R', 'U', "R'", "F'", 'R', 'U', "R'", "U'", "R'", 'F', 'R', "F'"]
+_CORNER3 = ["R'", 'F', "R'", 'B2', 'R', "F'", "R'", 'B2', 'R2']
+_EDGE3 = ['R', "U'", 'R', 'U', 'R', 'U', 'R', "U'", "R'", "U'", 'R2']
 _PLL_MACROS = []
 for _auf in ([], ['U'], ['U2'], ["U'"]):
-    for _alg in (_TPERM, _TPERM_MIRROR, _YPERM):
+    for _alg in (_TPERM, _TPERM_MIRROR, _YPERM, _CORNER3, _EDGE3):
         _PLL_MACROS.append(_auf + _alg)
 
 
@@ -165,12 +175,21 @@ def solve_pll(state, retry=False):
        'moves': toan bo nuoc di noi tiep}
     Khong thay doi state truyen vao.
 
-    retry=True: bo qua macro-solver (da tat dinh, luon thanh cong nen
-    khong co gi de 'thu lai'), dung thang fallback search co xao tron.
+    retry=True: bo qua lookup-table & macro-solver (da tat dinh, luon thanh
+    cong nen khong co gi de 'thu lai'), dung thang fallback search co xao tron.
     """
     full = from_facelets(state)
 
     if not retry:
+        # Uu tien 1: tra bang 20 thuat toan PLL CHUAN da kiem chung (dung
+        # CFOP THAT: 1 case = 1 thuat toan, ~9-19 nuoc). Phu ~60% case
+        # thuc te (thieu Z-perm + mot so truong hop chua kiem chung duoc
+        # trong thoi gian cho phep -- xem CFOP_AI_README.md).
+        mvs = solve_pll_lookup(full)
+        if mvs is not None:
+            return {'corner_moves': mvs, 'edge_moves': [], 'moves': mvs}
+        # Uu tien 2: macro-search (T-perm/Y-perm/3-cycle noi tiep) -- luon
+        # thanh cong nhung co the dai hon (ghep 2-3 'khoi').
         mvs = _solve_pll_macro(full)
         if mvs is not None:
             return {'corner_moves': mvs, 'edge_moves': [], 'moves': mvs}

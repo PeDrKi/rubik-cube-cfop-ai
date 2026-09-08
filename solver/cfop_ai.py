@@ -24,6 +24,7 @@ from .oll_solver import (solve_oll, edges_oriented, corners_oriented,
 from .pll_solver import (solve_pll, corners_home, edges_home,
                           solve_pll_corners_only, solve_pll_edges_only)
 from .full_state import from_facelets
+from .move_simplify import simplify
 
 
 def stage_of(state):
@@ -39,7 +40,7 @@ def stage_of(state):
     return 'done'
 
 
-def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, retry=False):
+def _full_solve_raw(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, retry=False):
     """
     Giai toan bo CFOP (Cross + F2L + OLL + PLL) tu state hien tai.
     KHONG thay doi state truyen vao.
@@ -98,7 +99,7 @@ def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, r
     }
 
 
-def hint(state, retry=False):
+def _hint_raw(state, retry=False):
     """
     Tra ve goi y CHO BUOC TIEP THEO duy nhat (khong thuc thi):
       {'stage': 'cross', 'label': 'Cross', 'moves': [...]}
@@ -165,3 +166,21 @@ def hint(state, retry=False):
         return {'stage': 'pll', 'label': 'PLL - Hoán vị cuối cùng', 'moves': mvs}
 
     return {'stage': 'done', 'label': 'Cube đã giải xong! 🎉', 'moves': []}
+
+
+def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, retry=False):
+    """Wrapper cua _full_solve_raw(): rut gon chuoi nuoc di cuoi cung
+    (simplify.py) truoc khi tra ve, khong doi ket qua/tinh dung dan."""
+    res = _full_solve_raw(state, f2l_depths=f2l_depths,
+                           f2l_nodes_per_depth=f2l_nodes_per_depth, retry=retry)
+    res['all_moves'] = simplify(res['all_moves'])
+    return res
+
+
+def hint(state, retry=False):
+    """Wrapper cua _hint_raw(): rut gon chuoi nuoc di cua goi y truoc khi
+    tra ve, khong doi ket qua/tinh dung dan."""
+    res = _hint_raw(state, retry=retry)
+    if res.get('moves'):
+        res['moves'] = simplify(res['moves'])
+    return res

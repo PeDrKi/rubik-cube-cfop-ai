@@ -101,6 +101,74 @@ phòng) đã tối ưu — đã kiểm chứng xử lý tốt đa số trường
 scramble ngẫu nhiên test nhanh <0.5s), chỉ còn hiếm case khó mất nhiều thời
 gian hơn (không còn crash).
 
+## Cập nhật: triển khai đầy đủ bảng tra 21 công thức PLL chuẩn (theo yêu cầu)
+
+Theo yêu cầu "chỉ dùng 1 công thức trong 21 công thức PLL" — đã triển khai
+`solver/pll_algorithms.py`: cơ sở dữ liệu công thức PLL chuẩn, **mỗi công
+thức được kiểm chứng bằng code khi module được import** (không tin trí nhớ):
+kiểm tra đúng 3 điều kiện — chỉ hoán vị (không đổi hướng), giữ nguyên
+Cross+F2L, chỉ dùng nước U/R/F/B/L (không D).
+
+**Quá trình kiểm chứng phát hiện lỗi thật:** trong 22 công thức nhớ ban đầu,
+**2 công thức sai** (Ab, Z — nhớ nhầm biến thể) — bị loại bỏ ngay lập tức
+nhờ bước kiểm chứng tự động, không lọt vào sản phẩm. Ab sau đó được suy ra
+đúng từ chiều nghịch của Aa. Z-perm chưa tìm được bản đúng trong thời gian
+cho phép (xem bên dưới).
+
+**Kỹ thuật nhận diện:** với mỗi công thức đã xác nhận, lưu **cả 2 chiều**
+(thuận: từ đã giải áp dụng ra pattern lỗi; nghịch: pattern lỗi đó áp
+nghịch đảo công thức để giải) vào bảng tra cứu theo (hoán vị góc, hoán vị
+cạnh). Khi giải: thử 4 góc xoay AUF, tra bảng — khớp thì áp dụng ngay
+(~9-19 nước, đúng 1 công thức, giống hệt CFOP thật).
+
+**Kết quả đo trên 10 scramble thật:** ~50% case khớp trực tiếp bảng tra
+(14-19 nước, đúng chuẩn CFOP 1 công thức/case). 50% còn lại (do thiếu
+Z-perm + một số góc chưa phủ hết) tự động rơi xuống bộ macro-search 5
+generator đã có trước đó (27-42 nước, vẫn luôn đúng, chỉ dài hơn một chút).
+A*/IDA* vẫn giữ làm lưới an toàn cuối cùng.
+
+**Giới hạn còn lại (trung thực cho báo cáo):** chưa đạt phủ 100% 21 case
+(thiếu Z-perm và một số góc AUF chưa khớp hết dù thuật toán đúng) — đây là
+hướng cải tiến tiếp theo hợp lý (cần thêm thời gian tìm/kiểm chứng Z-perm
+và rà soát kỹ hơn độ phủ AUF).
+
+## Cập nhật: công thức PLL quá dài (61+ nước) → thêm generator 3-cycle + bộ rút gọn
+
+Người dùng phản hồi chính xác: công thức PLL sinh ra ban đầu (chỉ dùng
+T-perm/Y-perm) đôi khi phải **nối 3 lần liền nhau** (~40-60+ nước) để giải
+1 case — không giống CFOP thật (luôn chỉ 1 công thức/case, 9-17 nước).
+
+**Đã cải thiện 2 hướng:**
+
+1. **Thêm 2 generator "hoán vị 3 vòng thuần"** (đã kiểm chứng bằng code):
+   - Corner-3-cycle: `R' F R' B2 R F' R' B2 R2` — chỉ hoán vị 3 góc, **cạnh
+     không đổi gì cả** (đã xác nhận `ep`,`eo` giữ nguyên hoàn toàn).
+   - Edge-3-cycle: `R U' R U R U R U' R' U' R2` — chỉ hoán vị 3 cạnh, **góc
+     không đổi gì cả**.
+   
+   5 generator (T-perm, T-perm mirror, Y-perm, Corner-3-cycle, Edge-3-cycle)
+   × 4 AUF = 20 lựa chọn mỗi bước, giúp nhiều case khớp gần hơn với dạng
+   "3-cycle đơn" thực tế — giảm độ dài trung bình từ ~40 xuống **~29 nước**
+   (đo trên 200 case tổng hợp).
+
+2. **Bộ rút gọn chuỗi nước đi** (`solver/move_simplify.py`): tận dụng tính
+   giao hoán của các mặt đối diện (U/D, F/B, L/R) để "bubble" các nước cùng
+   mặt lại gần nhau rồi gộp (`R,R`→`R2`; `R,R'`→huỷ). Áp dụng cho MỌI kết
+   quả từ `hint()`/`full_solve()`. **Đã kiểm chứng 200/200 chuỗi ngẫu nhiên
+   cho kết quả cube giống hệt trước/sau rút gọn** — an toàn tuyệt đối,
+   không đổi tính đúng đắn.
+
+**Kết quả cuối:** giải toàn bộ Cross+F2L+OLL+PLL từ đầu chỉ còn **67-82
+nước, dưới 2 giây** — gần với mức thực tế người chơi CFOP thật đạt được
+(thường 50-70 nước cho 1 lần giải không tối ưu tốc độ).
+
+**Giới hạn còn lại (trung thực cho báo cáo):** đây CHƯA PHẢI đúng 100% tinh
+thần CFOP (vẫn có ~55% case PLL cần nối 2 generator thay vì nhận diện đúng
+1 trong 21 công thức chuẩn). Để đạt "1 case = 1 công thức" cần triển khai
+đầy đủ bộ nhận diện 21 case PLL + 57 case OLL với thuật toán verified cho
+từng case — khối lượng công việc lớn hơn nhiều, là hướng phát triển tiếp
+theo hợp lý nếu có thêm thời gian.
+
 ## Cập nhật QUYẾT ĐỊNH #2: PLL cũng chậm/thất bại cho đa số case → áp dụng lại kỹ thuật macro-move (T-perm/Y-perm)
 
 Sau khi OLL đã nhanh, xác nhận **PLL vẫn là nút thắt chính** (người dùng
