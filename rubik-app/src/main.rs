@@ -7,6 +7,8 @@
 //! Xem README.md ở thư mục gốc workspace để biết cách chạy.
 
 
+mod theme;
+
 use rubik_core::cube::{self, CubeState};
 use std::collections::VecDeque;
 use three_d::*;
@@ -221,11 +223,18 @@ fn main() {
     );
     let mut control = OrbitControl::new(vec3(0.0, 0.0, 0.0), 4.0, 15.0);
     let mut gui = three_d::GUI::new(&context);
+    {
+        // Nạp font tiếng Việt + bảng màu. GUI::new() đã tạo sẵn context egui
+        // nên chỉ cần lấy ra và cấu hình 1 lần ở đây.
+        let ctx = gui.context();
+        theme::install_fonts(&ctx);
+        theme::install_style(&ctx);
+    }
 
     let mut state = CubeState::solved();
     let mut pending: Option<PendingMove> = None;
     let mut queue: VecDeque<(char, bool)> = VecDeque::new();
-    let mut status = "San sang. Space=xao, Enter=AI giai, H=goi y, Ctrl+Z=undo, F11=toan man hinh".to_string();
+    let mut status = "Sẵn sàng".to_string();
     let mut formula_text = String::new();
     let mut hint_label: Option<String> = None;
     let mut hint_moves: Vec<String> = Vec::new();
@@ -245,6 +254,7 @@ fn main() {
     let mut retry_counter: u64 = 0;
     let mut anim_speed: f32 = 10.0;
     let mut sel_face: Option<char> = None;
+    let mut total_queued: usize = 0;
 
     // Luu 1 snapshot state HIEN TAI (truoc khi thay doi) vao undo_stack,
     // kem gioi han do sau -- dung dung 1 lan cho MOI "hanh dong" (giong
@@ -276,13 +286,18 @@ fn main() {
         WinitEvent::RedrawRequested(_) => {
             let mut frame_input = frame_input_generator.generate(&context);
 
-            let left_w = 300.0;
+            let left_w = 348.0; // = 4*(3*21+2*2.5+7) so do 6 mat + le the + le panel
             let mut submit_formula = false;
             let mut editing_formula = false;
             let mut request_hint = false;
             let mut apply_hint = false;
             let mut request_cancel = false;
+            let mut request_solve = false;
+            let mut request_scramble = false;
+            let mut request_undo = false;
             let is_busy = job_rx.is_some();
+            let is_animating = pending.is_some();
+            let is_solved_now = state.is_solved();
             gui.update(
                 &mut frame_input.events,
                 frame_input.accumulated_time,
@@ -292,82 +307,291 @@ fn main() {
                     egui::SidePanel::left("faces_panel")
                         .exact_width(left_w)
                         .resizable(false)
+                        .frame(
+                            egui::Frame::none()
+                                .fill(theme::BG_PANEL)
+                                .inner_margin(egui::Margin::symmetric(13.0, 12.0)),
+                        )
                         .show(gui_context, |ui| {
-                            ui.add_space(8.0);
-                            ui.heading("6-Face View");
-                            ui.add_space(6.0);
-                            draw_six_face_net(ui, &state, sel_face);
-                            ui.add_space(14.0);
-                            ui.separator();
-                            ui.add_space(8.0);
-                            ui.label("Singmaster (VD: R U R' U'):");
-                            let resp = ui.text_edit_singleline(&mut formula_text);
-                            editing_formula = resp.has_focus() || resp.lost_focus();
-                            if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                                submit_formula = true;
-                            }
-                            ui.add_space(6.0);
+                            // ── Tiêu đề ứng dụng ────────────────────────
                             ui.horizontal(|ui| {
-                                if ui.button("Ap dung").clicked() {
-                                    submit_formula = true;
-                                }
-                                if ui.button("Xoa").clicked() {
-                                    formula_text.clear();
-                                }
+                                ui.label(
+                                    egui::RichText::new("RUBIK")
+                                        .size(21.0)
+                                        .strong()
+                                        .color(theme::ACCENT),
+                                );
+                                ui.label(
+                                    egui::RichText::new("CFOP Solver")
+                                        .size(11.5)
+                                        .color(theme::TEXT_DIM),
+                                );
                             });
-                            ui.add_space(14.0);
-                            ui.separator();
-                            ui.add_space(8.0);
-                            ui.label("Space: xao ngau nhien");
-                            ui.label("Enter: AI tu giai");
-                            ui.label("H: goi y buoc tiep theo");
-                            ui.label("Esc: huy khi dang tinh");
-                            ui.label("Ctrl+Z: undo");
-                            ui.label("F11: toan man hinh");
-                            ui.label("U D F B L R (+Shift='): xoay tay");
-                            ui.label(format!("[ ]: toc do animation ({:.0})", anim_speed));
-                            ui.label("Click sticker (3D) de chon mat, roi dung phim mui ten de xoay");
+                            ui.add_space(11.0);
+
+                            // ── Sơ đồ 6 mặt ─────────────────────────────
+                            theme::card(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    theme::section_label(ui, "Sơ đồ 6 mặt");
+                                    if let Some(f) = sel_face {
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!("● mặt {f}"))
+                                                        .size(11.0)
+                                                        .color(theme::ACCENT),
+                                                );
+                                            },
+                                        );
+                                    }
+                                });
+                                ui.add_space(7.0);
+                                draw_six_face_net(ui, &state, sel_face);
+                            });
                             ui.add_space(10.0);
-                            ui.add_enabled_ui(!is_busy, |ui| {
-                                if ui.button("Goi y (H)").clicked() {
-                                    request_hint = true;
-                                }
-                            });
-                            if is_busy {
+
+                            // ── Hành động chính ─────────────────────────
+                            theme::card(ui, |ui| {
+                                theme::section_label(ui, "Điều khiển");
+                                ui.add_space(7.0);
+                                ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
+                                    if theme::primary_button(ui, "▶  Giải tự động", "Phím tắt: Enter").clicked() {
+                                        request_solve = true;
+                                    }
+                                });
                                 ui.add_space(6.0);
                                 ui.horizontal(|ui| {
-                                    ui.spinner();
-                                    ui.label("Dang tinh...");
-                                    if ui.button("Huy").clicked() {
-                                        request_cancel = true;
+                                    let w = (ui.available_width() - 8.0) / 2.0;
+                                    ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
+                                        if ui
+                                            .add_sized([w, 30.0], egui::Button::new("🔀  Xáo"))
+                                            .on_hover_text("Phím tắt: Space")
+                                            .clicked()
+                                        {
+                                            request_scramble = true;
+                                        }
+                                    });
+                                    ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
+                                        if ui
+                                            .add_sized([w, 30.0], egui::Button::new("💡  Gợi ý"))
+                                            .on_hover_text("Gợi ý 1 bước tiếp theo — Phím tắt: H")
+                                            .clicked()
+                                        {
+                                            request_hint = true;
+                                        }
+                                    });
+                                });
+                                ui.add_space(6.0);
+                                ui.horizontal(|ui| {
+                                    let w = (ui.available_width() - 8.0) / 2.0;
+                                    ui.add_enabled_ui(!undo_stack.is_empty(), |ui| {
+                                        if ui
+                                            .add_sized(
+                                                [w, 28.0],
+                                                egui::Button::new(format!("↶  Hoàn tác ({})", undo_stack.len())),
+                                            )
+                                            .on_hover_text("Phím tắt: Ctrl+Z")
+                                            .clicked()
+                                        {
+                                            request_undo = true;
+                                        }
+                                    });
+                                    ui.add_enabled_ui(is_busy, |ui| {
+                                        if ui
+                                            .add_sized([w, 28.0], egui::Button::new("✖  Huỷ"))
+                                            .on_hover_text("Dừng việc tính toán — Phím tắt: Esc")
+                                            .clicked()
+                                        {
+                                            request_cancel = true;
+                                        }
+                                    });
+                                });
+                            });
+                            ui.add_space(10.0);
+
+                            // ── Nhập công thức ──────────────────────────
+                            theme::card(ui, |ui| {
+                                theme::section_label(ui, "Công thức Singmaster");
+                                ui.add_space(6.0);
+                                let resp = ui.add_sized(
+                                    [ui.available_width(), 26.0],
+                                    egui::TextEdit::singleline(&mut formula_text)
+                                        .hint_text("VD:  R U R' U'   hoặc   (R U)3"),
+                                );
+                                editing_formula = resp.has_focus() || resp.lost_focus();
+                                if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                    submit_formula = true;
+                                }
+                                ui.add_space(6.0);
+                                ui.horizontal(|ui| {
+                                    let w = (ui.available_width() - 8.0) / 2.0;
+                                    if ui.add_sized([w, 26.0], egui::Button::new("Áp dụng")).clicked() {
+                                        submit_formula = true;
+                                    }
+                                    if ui.add_sized([w, 26.0], egui::Button::new("Xoá")).clicked() {
+                                        formula_text.clear();
+                                    }
+                                });
+                            });
+
+                            // ── Kết quả gợi ý ───────────────────────────
+                            if let Some(lbl) = &hint_label {
+                                ui.add_space(10.0);
+                                theme::card(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("💡").size(13.0));
+                                        ui.label(
+                                            egui::RichText::new(lbl)
+                                                .size(13.0)
+                                                .strong()
+                                                .color(theme::INFO),
+                                        );
+                                    });
+                                    if !hint_moves.is_empty() {
+                                        ui.add_space(5.0);
+                                        ui.label(
+                                            egui::RichText::new(hint_moves.join("  "))
+                                                .monospace()
+                                                .size(13.5)
+                                                .color(theme::ACCENT),
+                                        );
+                                        ui.add_space(6.0);
+                                        ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
+                                            if theme::wide_button(ui, "Thực hiện gợi ý này", "").clicked() {
+                                                apply_hint = true;
+                                            }
+                                        });
                                     }
                                 });
                             }
-                            if let Some(lbl) = &hint_label {
-                                ui.add_space(6.0);
-                                ui.label(format!("Goi y: {lbl}"));
-                                if !hint_moves.is_empty() {
-                                    ui.label(hint_moves.join(" "));
-                                    ui.add_enabled_ui(!is_busy, |ui| {
-                                        if ui.button("Ap dung goi y").clicked() {
-                                            apply_hint = true;
-                                        }
-                                    });
-                                }
-                            }
+
+                            // ── Trạng thái (luôn ở cuối) ────────────────
                             ui.add_space(10.0);
-                            ui.separator();
-                            ui.add_space(6.0);
-                            ui.label(&status);
-                            ui.add_space(4.0);
-                            ui.label(format!("Undo con lai: {}", undo_stack.len()));
+                            theme::card(ui, |ui| {
+                                ui.set_max_width(ui.available_width());
+                                ui.horizontal_wrapped(|ui| {
+                                    if is_busy {
+                                        ui.spinner();
+                                    }
+                                    let color = if is_busy {
+                                        theme::ACCENT
+                                    } else if status.contains("Không") || status.contains("Lỗi") {
+                                        theme::DANGER
+                                    } else if is_solved_now {
+                                        theme::SUCCESS
+                                    } else {
+                                        theme::TEXT_DIM
+                                    };
+                                    ui.label(egui::RichText::new(&status).size(12.0).color(color));
+                                });
+                                if !queue.is_empty() || is_animating {
+                                    ui.add_space(5.0);
+                                    let done = total_queued.saturating_sub(queue.len());
+                                    let frac = if total_queued > 0 {
+                                        done as f32 / total_queued as f32
+                                    } else {
+                                        0.0
+                                    };
+                                    ui.add(
+                                        egui::ProgressBar::new(frac)
+                                            .desired_height(16.0)
+                                            .fill(theme::ACCENT)
+                                            .text(
+                                                egui::RichText::new(format!("{done}/{total_queued} nước"))
+                                                    .size(10.0),
+                                            ),
+                                    );
+                                }
+                                if is_solved_now && !is_animating && queue.is_empty() {
+                                    ui.add_space(4.0);
+                                    ui.label(
+                                        egui::RichText::new("✔  Khối đã hoàn thành")
+                                            .size(12.5)
+                                            .strong()
+                                            .color(theme::SUCCESS),
+                                    );
+                                }
+                            });
+
+                            // ── Phím tắt (thu gọn được) ─────────────────
+                            ui.add_space(10.0);
+                            egui::CollapsingHeader::new(
+                                egui::RichText::new("Phím tắt & hướng dẫn").size(12.5),
+                            )
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                let row = |ui: &mut egui::Ui, k: &str, d: &str| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(k)
+                                                .monospace()
+                                                .size(11.5)
+                                                .color(theme::ACCENT),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new(d).size(11.5).color(theme::TEXT_DIM),
+                                        );
+                                    });
+                                };
+                                row(ui, "U D F B L R", "xoay lớp tương ứng");
+                                row(ui, "Shift + phím", "xoay ngược lại (U', R'…)");
+                                row(ui, "Space", "xáo ngẫu nhiên 25 nước");
+                                row(ui, "Enter", "AI tự giải");
+                                row(ui, "H", "gợi ý 1 bước");
+                                row(ui, "Esc", "huỷ khi đang tính");
+                                row(ui, "Ctrl+Z", "hoàn tác");
+                                row(ui, "F11", "toàn màn hình");
+                                row(ui, "[  ]", &format!("tốc độ quay (hiện tại {:.0})", anim_speed));
+                                ui.add_space(4.0);
+                                ui.label(
+                                    egui::RichText::new(
+                                        "Kéo chuột để xoay góc nhìn · cuộn để phóng to\n\
+                                         Bấm vào một ô màu rồi dùng phím mũi tên để xoay mặt đó",
+                                    )
+                                    .size(11.0)
+                                    .color(theme::TEXT_DIM),
+                                );
+                            });
                         });
                 },
             );
 
             if request_cancel {
                 rubik_core::cancel::request();
-                status = "Dang huy...".to_string();
+                status = "Đang huỷ…".to_string();
+            }
+            if request_undo && !undo_stack.is_empty() {
+                if let Some(prev) = undo_stack.pop() {
+                    pending = None;
+                    queue.clear();
+                    state = prev;
+                    move_count = move_count.saturating_sub(1);
+                    status = "Đã hoàn tác".to_string();
+                }
+            }
+            if request_scramble && !is_busy && !is_animating && queue.is_empty() {
+                push_undo!();
+                let mut rng = rand::thread_rng();
+                let mut tmp = state;
+                let mvs = cube::random_scramble_moves(&mut tmp, 25, &mut rng);
+                queue.clear();
+                for m in mvs {
+                    queue_move(&mut queue, m);
+                }
+                total_queued = queue.len();
+                status = "Đang xáo…".to_string();
+            }
+            if request_solve && !is_busy && !is_animating && queue.is_empty() {
+                rubik_core::cancel::clear();
+                let state_copy = state;
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let res = rubik_core::solve::solve_full_cube(&state_copy, 2);
+                    let _ = tx.send(JobResult::Solve(res));
+                });
+                job_rx = Some(rx);
+                status = "Đang tính lời giải…".to_string();
             }
 
             if request_hint && job_rx.is_none() && queue.is_empty() && pending.is_none() {
@@ -390,9 +614,9 @@ fn main() {
                 });
                 job_rx = Some(rx);
                 status = if retry {
-                    "Dang tinh goi y (thu huong khac)... (Esc de huy)".to_string()
+                    "Đang tính gợi ý (thử hướng khác)…".to_string()
                 } else {
-                    "Dang tinh goi y... (Esc de huy)".to_string()
+                    "Đang tính gợi ý…".to_string()
                 };
             }
             if apply_hint && !hint_moves.is_empty() {
@@ -401,7 +625,7 @@ fn main() {
                 for m in &hint_moves {
                     queue_move(&mut queue, m);
                 }
-                status = "Dang ap dung goi y...".to_string();
+                status = "Đang thực hiện gợi ý…".to_string();
             }
 
             if submit_formula {
@@ -412,13 +636,13 @@ fn main() {
                         for m in &mvs {
                             queue_move(&mut queue, m);
                         }
-                        status = format!("Da nap {} nuoc tu cong thuc", mvs.len());
+                        status = format!("Đã nạp {} nước từ công thức", mvs.len());
                     }
                     Ok(_) => {
-                        status = "Cong thuc rong".to_string();
+                        status = "Công thức trống".to_string();
                     }
                     Err(e) => {
-                        status = format!("Loi cong thuc: {e}");
+                        status = format!("Lỗi công thức: {e}");
                     }
                 }
                 formula_text.clear();
@@ -489,7 +713,7 @@ fn main() {
                             for m in mvs {
                                 queue_move(&mut queue, m);
                             }
-                            status = "Dang xao...".to_string();
+                            status = "Đang xáo…".to_string();
                         }
                         Key::Enter => {
                             if job_rx.is_none() && queue.is_empty() && pending.is_none() {
@@ -501,9 +725,9 @@ fn main() {
                                     let _ = tx.send(JobResult::Solve(res));
                                 });
                                 job_rx = Some(rx);
-                                status = "Dang tinh loi giai... (Esc de huy)".to_string();
+                                status = "Đang tính lời giải…".to_string();
                             } else if job_rx.is_none() {
-                                status = "Doi cube animate xong da (Enter)".to_string();
+                                status = "Đợi khối xoay xong đã".to_string();
                             }
                         }
                         Key::H => {
@@ -527,18 +751,18 @@ fn main() {
                                 });
                                 job_rx = Some(rx);
                                 status = if retry {
-                                    "Dang tinh goi y (thu huong khac)... (Esc de huy)".to_string()
+                                    "Đang tính gợi ý (thử hướng khác)…".to_string()
                                 } else {
-                                    "Dang tinh goi y... (Esc de huy)".to_string()
+                                    "Đang tính gợi ý…".to_string()
                                 };
                             } else if job_rx.is_none() {
-                                status = "Doi cube animate xong da (H)".to_string();
+                                status = "Đợi khối xoay xong đã".to_string();
                             }
                         }
                         Key::Escape => {
                             if job_rx.is_some() {
                                 rubik_core::cancel::request();
-                                status = "Dang huy...".to_string();
+                                status = "Đang huỷ…".to_string();
                             }
                         }
                         Key::Z if modifiers.command || modifiers.ctrl => {
@@ -547,9 +771,9 @@ fn main() {
                                 queue.clear();
                                 state = prev;
                                 move_count = move_count.saturating_sub(1);
-                                status = "Da undo".to_string();
+                                status = "Đã hoàn tác".to_string();
                             } else {
-                                status = "Khong co gi de undo".to_string();
+                                status = "Không có gì để hoàn tác".to_string();
                             }
                         }
                         // Mui ten: xoay mat DANG CHON (click sticker de chon
@@ -583,16 +807,16 @@ fn main() {
                             for m in &mvs {
                                 queue_move(&mut queue, m);
                             }
-                            status = format!("Loi giai: {} nuoc", mvs.len());
+                            status = format!("Lời giải: {} nước", mvs.len());
                         }
                         JobResult::Solve(Some(_)) => {
-                            status = "Cube da giai san roi!".to_string();
+                            status = "Khối đã ở trạng thái hoàn thành".to_string();
                         }
                         JobResult::Solve(None) => {
                             status = if rubik_core::cancel::is_cancelled() {
-                                "Da huy".to_string()
+                                "Đã huỷ".to_string()
                             } else {
-                                "Khong tim duoc loi giai (hiem, thu Space xao lai)".to_string()
+                                "Không tìm được lời giải — thử xáo lại".to_string()
                             };
                         }
                         JobResult::Hint(h) => {
@@ -603,12 +827,12 @@ fn main() {
                                 h.label.clone()
                             } else if h.moves.is_empty() {
                                 if rubik_core::cancel::is_cancelled() {
-                                    "Da huy".to_string()
+                                    "Đã huỷ".to_string()
                                 } else {
-                                    format!("Goi y: {} (that bai)", h.label)
+                                    format!("{} — chưa tìm được", h.label)
                                 }
                             } else {
-                                format!("Da tinh goi y: {}", h.label)
+                                format!("Gợi ý: {}", h.label)
                             };
                             hint_label = Some(h.label);
                             hint_moves = h.moves;
@@ -618,6 +842,9 @@ fn main() {
                 }
             }
 
+            if queue.len() > total_queued {
+                total_queued = queue.len();
+            }
             if pending.is_none() {
                 if let Some((mv, prime)) = queue.pop_front() {
                     let target = if prime { std::f32::consts::FRAC_PI_2 } else { -std::f32::consts::FRAC_PI_2 };
@@ -625,7 +852,7 @@ fn main() {
                 }
             }
 
-            let anim = pending.as_mut().map(|p| {
+            let mut anim = pending.as_mut().map(|p| {
                 let dt = (frame_input.elapsed_time / 1000.0) as f32;
                 p.current += p.speed * dt * p.target.signum();
                 if p.current.abs() >= p.target.abs() {
@@ -639,8 +866,18 @@ fn main() {
                     state.do_move(&mv_str);
                     move_count += 1;
                     pending = None;
-                    if queue.is_empty() && status.starts_with("Dang xao") {
-                        status = "Xao xong. Enter=AI giai".to_string();
+                    // QUAN TRONG: phai XOA anim o day. `state` vua duoc cap
+                    // nhat da BAO GOM nuoc di nay roi, nen neu van giu anim
+                    // (dang o goc 90 do day du) thi build_cube_mesh se xoay
+                    // THEM 90 do nua len trang thai moi -> lop do bi xoay du
+                    // trong dung 1 khung hinh, gay hien tuong NHAY/GIAT o
+                    // moi nuoc khi may tu xoay. Da tim ra va sua.
+                    anim = None;
+                    if queue.is_empty() {
+                        total_queued = 0;
+                        if status.starts_with("Đang xáo") {
+                            status = "Đã xáo xong".to_string();
+                        }
                     }
                 }
             }
@@ -736,9 +973,10 @@ fn pick_face(
 }
 
 fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: Option<char>) {
-    let cell = 20.0;
-    let gap = 2.0;
+    let cell = 21.0;
+    let gap = 2.5;
     let panel = cell * 3.0 + gap * 2.0;
+    let pad = 7.0;
     let grid_pos: [(char, i32, i32); 6] = [
         ('U', 1, 0),
         ('L', 0, 1), ('F', 1, 1), ('R', 2, 1), ('B', 3, 1),
@@ -746,13 +984,26 @@ fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: Option<char
     ];
     let origin = ui.cursor().min;
     let (rect, _resp) = ui.allocate_exact_size(
-        egui::vec2(4.0 * (panel + 6.0), 3.0 * (panel + 6.0)),
+        egui::vec2(4.0 * (panel + pad), 3.0 * (panel + pad)),
         egui::Sense::hover(),
     );
     let painter = ui.painter_at(rect);
     for (face, gc, gr) in grid_pos {
-        let fx = origin.x + gc as f32 * (panel + 6.0);
-        let fy = origin.y + gr as f32 * (panel + 6.0);
+        let fx = origin.x + gc as f32 * (panel + pad);
+        let fy = origin.y + gr as f32 * (panel + pad);
+        let selected = Some(face) == sel_face;
+
+        // Nền mờ phía sau mỗi mặt cho tách bạch khỏi nền panel
+        let panel_rect = egui::Rect::from_min_size(
+            egui::pos2(fx - 3.0, fy - 3.0),
+            egui::vec2(panel + 6.0, panel + 6.0),
+        );
+        painter.rect_filled(
+            panel_rect,
+            egui::Rounding::same(5.0),
+            egui::Color32::from_rgb(16, 17, 25),
+        );
+
         for r in 0..3usize {
             for c in 0..3usize {
                 let ck = cube::face_char(state.facelet_at(cube::idx_of(face), r, c) as usize);
@@ -760,18 +1011,30 @@ fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: Option<char
                 let x = fx + c as f32 * (cell + gap);
                 let y = fy + r as f32 * (cell + gap);
                 let cell_rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cell, cell));
-                painter.rect_filled(cell_rect, 2.0, egui::Color32::from_rgb(cr, cg, cb));
-                painter.rect_stroke(cell_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
+                painter.rect_filled(
+                    cell_rect,
+                    egui::Rounding::same(3.5),
+                    egui::Color32::from_rgb(cr, cg, cb),
+                );
             }
         }
-        // Vien vang quanh CA mat neu dang duoc chon (click sticker 3D
-        // hoac chua chon gi = khong ve) -- giong sel_face glow ben Python.
-        if Some(face) == sel_face {
-            let panel_rect = egui::Rect::from_min_size(
-                egui::pos2(fx - 2.0, fy - 2.0),
-                egui::vec2(panel + 4.0, panel + 4.0),
+
+        // Chữ tên mặt ở ô giữa (ô tâm luôn giữ nguyên màu mặt đó)
+        let center = egui::pos2(fx + panel / 2.0, fy + panel / 2.0);
+        painter.text(
+            center,
+            egui::Align2::CENTER_CENTER,
+            face,
+            egui::FontId::proportional(11.0),
+            egui::Color32::from_black_alpha(150),
+        );
+
+        if selected {
+            painter.rect_stroke(
+                panel_rect,
+                egui::Rounding::same(5.0),
+                egui::Stroke::new(2.0, theme::ACCENT),
             );
-            painter.rect_stroke(panel_rect, 3.0, egui::Stroke::new(3.0, egui::Color32::from_rgb(255, 230, 60)));
         }
     }
 }

@@ -30,6 +30,14 @@ dựng pattern database, chỉ 1 lần).
 **Yêu cầu**: Rust (https://rustup.rs). Trên Windows cần thêm Visual C++
 Build Tools (chọn workload "Desktop development with C++").
 
+## Giao diện
+
+Giao diện tiếng Việt có dấu (nhúng font DejaVuSans vì font mặc định của
+egui thiếu ký tự tiếng Việt), chủ đề tối với màu nhấn cam, các nhóm chức
+năng tách thành thẻ riêng: sơ đồ 6 mặt (có chữ tên mặt, viền vàng đánh
+dấu mặt đang chọn), điều khiển, nhập công thức, kết quả gợi ý, và thanh
+trạng thái kèm tiến trình khi khối đang xoay.
+
 ## Điều khiển
 
 | Phím / thao tác | Chức năng |
