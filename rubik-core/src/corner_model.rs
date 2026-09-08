@@ -18,8 +18,9 @@ const B: usize = 3;
 const L: usize = 4;
 const R: usize = 5;
 
-type Coord = (usize, usize, usize);
-const CORNER_SLOTS: [(Coord, Coord, Coord); 8] = [
+pub type Coord = (usize, usize, usize);
+/// Bảng toạ độ 8 khe góc, public cùng lý do với `edge_model::EDGE_SLOTS`.
+pub const CORNER_SLOTS: [(Coord, Coord, Coord); 8] = [
     ((U, 2, 2), (F, 0, 2), (R, 0, 0)), // UFR
     ((U, 2, 0), (L, 0, 2), (F, 0, 0)), // UFL
     ((U, 0, 2), (R, 0, 2), (B, 0, 0)), // UBR

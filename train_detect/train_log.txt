@@ -1,0 +1,8 @@
+train=3523 val=83 (val = ảnh gốc KHÁC hoàn toàn với train)
+params: 141,027
+epoch  1/45  train_mse=0.03624  val_mse=0.02765  (9.4s)
+epoch  2/45  train_mse=0.02216  val_mse=0.02286  (8.7s)
+epoch  3/45  train_mse=0.01749  val_mse=0.02491  (8.6s)
+epoch  4/45  train_mse=0.01566  val_mse=0.01580  (8.5s)
+epoch  5/45  train_mse=0.01359  val_mse=0.01654  (8.4s)
+epoch  6/45  train_mse=0.01347  val_mse=0.01499  (8.7s)

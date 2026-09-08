@@ -1,0 +1,32 @@
+[package]
+name = "rubik-vision-ml"
+version = "0.1.0"
+edition = "2021"
+description = "Dò vị trí mặt cube bằng CNN nhỏ (ONNX Runtime qua crate `ort`) — THỬ NGHIỆM, tách riêng khỏi workspace chính."
+
+# [workspace] RỖNG bên dưới ĐÃ BỊ BỎ (từng dùng để cô lập hoàn toàn khỏi
+# workspace chính lúc chưa chắc `ort` build được trên máy người dùng).
+# Nay đã xác nhận build thành công thật trên máy thật -> gia nhập lại
+# workspace chính cho tiện quản lý 1 Cargo.lock duy nhất. Nếu sau này
+# đổi máy/CI mà `ort` lại gây lỗi khi build TOÀN BỘ workspace, cách lùi
+# nhanh nhất: bỏ khỏi `members` ở Cargo.toml gốc + thêm lại dòng
+# `[workspace]` rỗng ở đây.
+
+# QUAN TRỌNG: crate này CỐ TÌNH không nằm trong [workspace] members ở
+# Cargo.toml gốc của repo, và rubik-app KHÔNG phụ thuộc vào nó theo mặc
+# định. Lý do: `ort` (bản 2.0 release-candidate, bản duy nhất còn trên
+# crates.io) cần Rust khá mới (~1.88+); nếu để chung workspace, ngay cả
+# khi CHỈ dùng Cargo feature để tắt mặc định, cargo vẫn có thể cố dựng
+# Cargo.lock cho toàn bộ đồ thị dependency (kể cả phần chưa bật) và báo
+# lỗi phiên bản Rust -- làm hỏng lây cả rubik-core/rubik-vision/rubik-app
+# (đã test kỹ, luôn build được) dù người dùng không hề đụng tới ML.
+#
+# Cách dùng: `cd rubik-vision-ml && cargo build` RIÊNG, độc lập hoàn
+# toàn với workspace chính. Nếu build được, xem README.md để biết cách
+# nối thủ công vào rubik-app.
+
+[dependencies]
+rubik-vision = { path = "../rubik-vision" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+ort = "=2.0.0-rc.13"
+ndarray = "0.17"

@@ -1,0 +1,11 @@
+[package]
+name = "rubik-vision"
+version = "0.1.0"
+edition = "2021"
+description = "Nhận diện trạng thái Rubik từ ảnh (phân loại màu sticker + ghép facelet), tách khỏi rubik-core."
+
+[dependencies]
+rubik-core = { path = "../rubik-core" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+
+[dev-dependencies]

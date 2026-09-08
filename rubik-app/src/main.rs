@@ -8,6 +8,9 @@
 
 
 mod theme;
+mod camera_capture;
+mod scan_ui;
+mod paint_ui;
 
 use rubik_core::cube::{self, CubeState};
 use std::collections::VecDeque;
@@ -248,6 +251,8 @@ fn main() {
     let mut undo_stack: Vec<CubeState> = Vec::new();
     const UNDO_MAX: usize = 120;
     let mut is_fullscreen = false;
+    let mut scan_state = scan_ui::ScanState::default();
+    let mut paint_state = paint_ui::PaintState::default();
 
     // ── Job nen (Enter=giai / H=goi y) chay tren thread rieng, khong chan
     // khung hinh -- ket qua nhan qua channel, kiem tra khong-blocking moi
@@ -269,11 +274,9 @@ fn main() {
     let mut formula_open = false;
     // Bảng tra công thức chuẩn (55 OLL + 21 PLL) — phím V.
     let mut library_open = false;
+    let mut shortcuts_open = false;
     let mut library_query = String::new();
     let mut library_tab_pll = false;
-    // Chế độ học từng bước: bấm 1 nút là tính + thực hiện đúng 1 chặng
-    // CFOP rồi dừng, kèm bảng tiến độ 6 chặng.
-    let mut step_mode = false;
     let mut auto_apply_hint = false;
 
     // Luu 1 snapshot state HIEN TAI (truoc khi thay doi) vao undo_stack,
@@ -329,16 +332,14 @@ fn main() {
             let mut editing_formula = false;
             let mut request_hint = false;
             let mut apply_hint = false;
-            let mut request_cancel = false;
             let mut request_solve = false;
             let mut request_scramble = false;
-            let mut request_undo = false;
             let mut close_formula = false;
             let mut request_table = false;
-            let mut request_library = false;
-            let mut request_step = false;
             let mut close_library = false;
             let mut load_into_bar: Option<String> = None;
+            let mut scanned_state: Option<CubeState> = None;
+            let mut state_source_label: &str = "camera";
             let is_busy = job_rx.is_some();
             let is_animating = pending.is_some();
             let is_solved_now = state.is_solved();
@@ -400,27 +401,58 @@ fn main() {
                             });
                             ui.add_space(10.0);
 
+                            // ── Đầu vào ──────────────────────────────────
+                            theme::card(ui, |ui| {
+                                theme::section_label(ui, "Đầu vào");
+                                ui.add_space(7.0);
+                                ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
+                                    if ui
+                                        .add_sized([ui.available_width(), 30.0], egui::Button::new("🎨  Điền màu thủ công"))
+                                        .on_hover_text("Tự chọn màu từng ô để mô phỏng trạng thái cube")
+                                        .clicked()
+                                    {
+                                        paint_state.open = true;
+                                    }
+                                });
+                            });
+                            ui.add_space(10.0);
+
                             // ── Hành động chính ─────────────────────────
                             theme::card(ui, |ui| {
                                 theme::section_label(ui, "Điều khiển");
                                 ui.add_space(7.0);
-                                ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
-                                    if theme::primary_button(ui, "▶  Giải tự động", "Phím tắt: Enter").clicked() {
-                                        request_solve = true;
-                                    }
-                                });
-                                ui.add_space(6.0);
                                 ui.horizontal(|ui| {
                                     let w = (ui.available_width() - 8.0) / 2.0;
                                     ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
                                         if ui
-                                            .add_sized([w, 30.0], egui::Button::new("🔀  Xáo"))
+                                            .add_sized([w, 32.0], egui::Button::new("🔀  Xáo"))
                                             .on_hover_text("Phím tắt: Space")
                                             .clicked()
                                         {
                                             request_scramble = true;
                                         }
                                     });
+                                    ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
+                                        let text = egui::RichText::new("▶  Giải tự động")
+                                            .strong()
+                                            .color(egui::Color32::from_rgb(28, 20, 6));
+                                        if ui
+                                            .add_sized(
+                                                [w, 32.0],
+                                                egui::Button::new(text)
+                                                    .fill(theme::ACCENT)
+                                                    .rounding(egui::Rounding::same(8.0)),
+                                            )
+                                            .on_hover_text("Phím tắt: Enter")
+                                            .clicked()
+                                        {
+                                            request_solve = true;
+                                        }
+                                    });
+                                });
+                                ui.add_space(6.0);
+                                ui.horizontal(|ui| {
+                                    let w = (ui.available_width() - 8.0) / 2.0;
                                     ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
                                         if ui
                                             .add_sized([w, 30.0], egui::Button::new("💡  Gợi ý"))
@@ -430,141 +462,18 @@ fn main() {
                                             request_hint = true;
                                         }
                                     });
-                                });
-                                ui.add_space(6.0);
-                                ui.horizontal(|ui| {
-                                    let w = (ui.available_width() - 8.0) / 2.0;
-                                    ui.add_enabled_ui(!undo_stack.is_empty(), |ui| {
+                                    ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
                                         if ui
-                                            .add_sized(
-                                                [w, 28.0],
-                                                egui::Button::new(format!("↶  Hoàn tác ({})", undo_stack.len())),
+                                            .add_sized([w, 30.0], egui::Button::new("📋  Bảng công thức"))
+                                            .on_hover_text(
+                                                "Xem lời giải tách theo từng chặng CFOP — Phím tắt: Ctrl+T",
                                             )
-                                            .on_hover_text("Phím tắt: Ctrl+Z")
                                             .clicked()
                                         {
-                                            request_undo = true;
-                                        }
-                                    });
-                                    ui.add_enabled_ui(is_busy, |ui| {
-                                        if ui
-                                            .add_sized([w, 28.0], egui::Button::new("✖  Huỷ"))
-                                            .on_hover_text("Dừng việc tính toán — Phím tắt: Esc")
-                                            .clicked()
-                                        {
-                                            request_cancel = true;
+                                            request_table = true;
                                         }
                                     });
                                 });
-                                ui.add_space(6.0);
-                                ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
-                                    if theme::wide_button(
-                                        ui,
-                                        "📋  Bảng công thức",
-                                        "Xem lời giải tách theo từng chặng CFOP — Phím tắt: T",
-                                    )
-                                    .clicked()
-                                    {
-                                        request_table = true;
-                                    }
-                                });
-                                ui.add_space(6.0);
-                                if ui
-                                    .selectable_label(
-                                        step_mode,
-                                        egui::RichText::new("🎓  Chế độ học từng bước").size(13.0),
-                                    )
-                                    .on_hover_text(
-                                        "Thay vì giải một mạch, mỗi lần chỉ làm 1 chặng CFOP rồi dừng",
-                                    )
-                                    .clicked()
-                                {
-                                    step_mode = !step_mode;
-                                }
-                                if step_mode {
-                                    ui.add_space(7.0);
-                                    // Bảng tiến độ 6 chặng: đọc thẳng từ
-                                    // trạng thái khối nên luôn đúng, kể cả
-                                    // khi người dùng tự xoay tay.
-                                    let fs = rubik_core::full_state::from_facelets(&state);
-                                    let cross_ok = rubik_core::full_state::cross_ok(&fs);
-                                    let f2l_done = rubik_core::full_state::F2L_ORDER
-                                        .iter()
-                                        .filter(|&&s| rubik_core::full_state::pair_ok(&fs, s))
-                                        .count();
-                                    let oll_ok = rubik_core::full_state::u_edges_oriented(&fs)
-                                        && rubik_core::full_state::u_corners_oriented(&fs);
-                                    let all_ok = state.is_solved();
-                                    let stage_now = if !cross_ok {
-                                        0
-                                    } else if f2l_done < 4 {
-                                        1
-                                    } else if !oll_ok {
-                                        2
-                                    } else if !all_ok {
-                                        3
-                                    } else {
-                                        4
-                                    };
-                                    let items = [
-                                        ("Cross", cross_ok, String::new()),
-                                        ("F2L", f2l_done == 4, format!("{f2l_done}/4")),
-                                        ("OLL", oll_ok, String::new()),
-                                        ("PLL", all_ok, String::new()),
-                                    ];
-                                    for (i, (name, done, extra)) in items.iter().enumerate() {
-                                        ui.horizontal(|ui| {
-                                            let (icon, col) = if *done {
-                                                ("✔", theme::SUCCESS)
-                                            } else if i == stage_now {
-                                                ("▶", theme::ACCENT)
-                                            } else {
-                                                ("·", theme::TEXT_DIM)
-                                            };
-                                            ui.label(
-                                                egui::RichText::new(icon).size(12.5).color(col),
-                                            );
-                                            ui.label(
-                                                egui::RichText::new(*name)
-                                                    .size(12.5)
-                                                    .color(if i == stage_now && !*done {
-                                                        theme::TEXT
-                                                    } else {
-                                                        col
-                                                    }),
-                                            );
-                                            if !extra.is_empty() {
-                                                ui.label(
-                                                    egui::RichText::new(extra)
-                                                        .size(11.5)
-                                                        .color(theme::TEXT_DIM),
-                                                );
-                                            }
-                                        });
-                                    }
-                                    ui.add_space(7.0);
-                                    ui.add_enabled_ui(!is_busy && !is_animating && !all_ok, |ui| {
-                                        if theme::primary_button(
-                                            ui,
-                                            "⏭  Bước tiếp theo",
-                                            "Tính và thực hiện đúng 1 chặng rồi dừng",
-                                        )
-                                        .clicked()
-                                        {
-                                            request_step = true;
-                                        }
-                                    });
-                                }
-                                ui.add_space(6.0);
-                                if theme::wide_button(
-                                    ui,
-                                    "📖  Tra công thức chuẩn",
-                                    "Toàn bộ 55 công thức OLL + 21 PLL — Phím tắt: V",
-                                )
-                                .clicked()
-                                {
-                                    request_library = true;
-                                }
                             });
                             ui.add_space(10.0);
 
@@ -672,47 +581,9 @@ fn main() {
                                 }
                             });
 
-                            // ── Phím tắt (thu gọn được) ─────────────────
-                            ui.add_space(10.0);
-                            egui::CollapsingHeader::new(
-                                egui::RichText::new("Phím tắt & hướng dẫn").size(12.5),
-                            )
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                let row = |ui: &mut egui::Ui, k: &str, d: &str| {
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new(k)
-                                                .monospace()
-                                                .size(11.5)
-                                                .color(theme::ACCENT),
-                                        );
-                                        ui.label(
-                                            egui::RichText::new(d).size(11.5).color(theme::TEXT_DIM),
-                                        );
-                                    });
-                                };
-                                row(ui, "U D F B L R", "xoay lớp tương ứng");
-                                row(ui, "Shift + phím", "xoay ngược lại (U', R'…)");
-                                row(ui, "Space", "xáo ngẫu nhiên 25 nước");
-                                row(ui, "Enter", "AI tự giải");
-                                row(ui, "H", "gợi ý 1 bước");
-                                row(ui, "T", "bảng công thức cho ván này");
-                                row(ui, "V", "tra toàn bộ công thức chuẩn");
-                                row(ui, "Esc", "huỷ khi đang tính");
-                                row(ui, "Ctrl+Z", "hoàn tác");
-                                row(ui, "F11", "toàn màn hình");
-                                row(ui, "[  ]", &format!("tốc độ quay (hiện tại {:.0})", anim_speed));
-                                ui.add_space(4.0);
-                                ui.label(
-                                    egui::RichText::new(
-                                        "Kéo chuột để xoay góc nhìn · cuộn để phóng to\n\
-                                         Bấm vào một ô màu rồi dùng phím mũi tên để xoay mặt đó",
-                                    )
-                                    .size(11.0)
-                                    .color(theme::TEXT_DIM),
-                                );
-                            });
+                            // ── Phím tắt: đã chuyển sang cửa sổ riêng, mở
+                            // bằng icon bánh răng ở góc màn hình (xem phía
+                            // dưới, gần "Bảng công thức").
                             }); // het ScrollArea
                         });
 
@@ -880,6 +751,90 @@ fn main() {
                         }
                     }
 
+                    // ── Icon bánh răng ở góc màn hình -- mở bảng phím tắt ──
+                    egui::Area::new("shortcuts_gear_icon")
+                        .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-14.0, 14.0))
+                        .order(egui::Order::Foreground)
+                        .show(gui_context, |ui| {
+                            let resp = ui.add(
+                                egui::Button::new(egui::RichText::new("⚙").size(18.0))
+                                    .fill(theme::BG_CARD)
+                                    .stroke(egui::Stroke::new(1.0, theme::BG_CARD_HI))
+                                    .rounding(egui::Rounding::same(8.0)),
+                            );
+                            if resp.on_hover_text("Phím tắt & hướng dẫn").clicked() {
+                                shortcuts_open = !shortcuts_open;
+                            }
+                        });
+
+                    // ── Cửa sổ phím tắt & hướng dẫn (mở bằng icon bánh răng) ──
+                    if shortcuts_open {
+                        let mut open = true;
+                        egui::Window::new("⚙ Phím tắt & hướng dẫn")
+                            .open(&mut open)
+                            .default_width(340.0)
+                            .default_pos(egui::pos2(left_w + 40.0, 60.0))
+                            .collapsible(false)
+                            .frame(
+                                egui::Frame::none()
+                                    .fill(theme::BG_PANEL)
+                                    .rounding(egui::Rounding::same(10.0))
+                                    .inner_margin(egui::Margin::same(13.0))
+                                    .stroke(egui::Stroke::new(1.0, theme::BG_CARD_HI)),
+                            )
+                            .show(gui_context, |ui| {
+                                let row = |ui: &mut egui::Ui, k: &str, d: &str| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(k)
+                                                .monospace()
+                                                .size(11.5)
+                                                .color(theme::ACCENT),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new(d).size(11.5).color(theme::TEXT_DIM),
+                                        );
+                                    });
+                                };
+                                row(ui, "U D F B L R", "xoay lớp tương ứng");
+                                row(ui, "Shift + phím", "xoay ngược lại (U', R'…)");
+                                row(ui, "Space", "xáo ngẫu nhiên 25 nước");
+                                row(ui, "Enter", "AI tự giải");
+                                row(ui, "H", "gợi ý 1 bước");
+                                row(ui, "Ctrl+T", "bảng công thức cho ván này");
+                                row(ui, "Ctrl+J", "tra toàn bộ công thức chuẩn");
+                                row(ui, "Ctrl+K", "quét trạng thái từ camera");
+                                row(ui, "Esc", "huỷ khi đang tính");
+                                row(ui, "Ctrl+Z", "hoàn tác");
+                                row(ui, "F11", "toàn màn hình");
+                                row(ui, "[  ]", &format!("tốc độ quay (hiện tại {:.0})", anim_speed));
+                                ui.add_space(4.0);
+                                ui.label(
+                                    egui::RichText::new(
+                                        "Kéo chuột để xoay góc nhìn · cuộn để phóng to\n\
+                                         Bấm vào một ô màu rồi dùng phím mũi tên để xoay mặt đó",
+                                    )
+                                    .size(11.0)
+                                    .color(theme::TEXT_DIM),
+                                );
+                            });
+                        if !open {
+                            shortcuts_open = false;
+                        }
+                    }
+
+                    // ── Cửa sổ quét trạng thái từ camera ─────────────────
+                    if let Some(new_state) = scan_ui::show(gui_context, &mut scan_state) {
+                        scanned_state = Some(new_state);
+                        state_source_label = "camera";
+                    }
+
+                    // ── Cửa sổ điền màu thủ công ──────────────────────────
+                    if let Some(new_state) = paint_ui::show(gui_context, &mut paint_state) {
+                        scanned_state = Some(new_state);
+                        state_source_label = "điền màu thủ công";
+                    }
+
                     // Chặn phím tắt toàn cục khi BẤT KỲ ô nhập nào của egui
                     // đang nhận bàn phím (ô công thức ở panel, ô tìm kiếm
                     // trong bảng tra…). Trước đây chỉ chặn riêng ô công
@@ -892,6 +847,15 @@ fn main() {
                 },
             );
 
+            if let Some(new_state) = scanned_state.take() {
+                push_undo!();
+                pending = None;
+                queue.clear();
+                state = new_state;
+                move_count = 0;
+                status = format!("Đã nạp trạng thái từ {state_source_label}");
+            }
+
             if close_formula {
                 formula_open = false;
             }
@@ -901,21 +865,6 @@ fn main() {
             if let Some(mvs) = load_into_bar.take() {
                 formula_text = mvs;
                 status = "Đã nạp công thức — bấm Áp dụng để chạy".to_string();
-            }
-            if request_library {
-                library_open = !library_open;
-            }
-            if request_step && job_rx.is_none() && queue.is_empty() && pending.is_none() {
-                rubik_core::cancel::clear();
-                auto_apply_hint = true;
-                let state_copy = state;
-                let (tx, rx) = std::sync::mpsc::channel();
-                std::thread::spawn(move || {
-                    let h = rubik_core::hint::compute_hint(&state_copy, None);
-                    let _ = tx.send(JobResult::Hint(h));
-                });
-                job_rx = Some(rx);
-                status = "Đang tính bước tiếp theo…".to_string();
             }
             if request_table && job_rx.is_none() && queue.is_empty() && pending.is_none() {
                 if formula_table.is_some() {
@@ -930,19 +879,6 @@ fn main() {
                     });
                     job_rx = Some(rx);
                     status = "Đang lập bảng công thức…".to_string();
-                }
-            }
-            if request_cancel {
-                rubik_core::cancel::request();
-                status = "Đang huỷ…".to_string();
-            }
-            if request_undo && !undo_stack.is_empty() {
-                if let Some(prev) = undo_stack.pop() {
-                    pending = None;
-                    queue.clear();
-                    state = prev;
-                    move_count = move_count.saturating_sub(1);
-                    status = "Đã hoàn tác".to_string();
                 }
             }
             if request_scramble && !is_busy && !is_animating && queue.is_empty() {
@@ -1033,7 +969,15 @@ fn main() {
                 x: full.x + left_px,
                 y: full.y,
                 width: (full.width as i32 - left_px).max(1) as u32,
-                height: full.height,
+                // `height` truoc day khong duoc .max(1) nhu `width` --
+                // khi Windows gui 1 frame co viewport.height = 0 (thuong
+                // gap ngay frame dau tien luc mo app, hoac khi minimize/
+                // restore cua so), ma tran chieu phoi canh (perspective
+                // projection) tro thanh suy bien (aspect ratio vo cuc),
+                // khien view*projection khong nghich dao duoc -> three-d
+                // panic o .invert().unwrap() trong update_screen2ray().
+                // Ghim height >=1 giong het width de tranh crash nay.
+                height: full.height.max(1),
             };
             camera.set_viewport(cam_viewport);
 
@@ -1069,7 +1013,7 @@ fn main() {
             control.handle_events(&mut camera, &mut frame_input.events);
 
             for event in &frame_input.events {
-                if editing_formula {
+                if editing_formula || scan_state.open || paint_state.open {
                     break;
                 }
                 if let Event::KeyPress { kind, modifiers, handled, .. } = event {
@@ -1178,9 +1122,10 @@ fn main() {
                                 status = "Đợi khối xoay xong đã".to_string();
                             }
                         }
-                        // T = mở/đóng bảng công thức (toàn bộ lời giải
-                        // tách theo từng chặng CFOP), giống phím T bản Python.
-                        Key::T => {
+                        // Ctrl+T = mở/đóng bảng công thức (toàn bộ lời giải
+                        // tách theo từng chặng CFOP), giống phím T bản Python
+                        // (nay thêm Ctrl để tránh lẫn với các phím xoay mặt).
+                        Key::T if modifiers.ctrl || modifiers.command => {
                             if formula_open {
                                 formula_open = false;
                             } else if job_rx.is_none() && queue.is_empty() && pending.is_none() {
@@ -1199,9 +1144,17 @@ fn main() {
                                 }
                             }
                         }
-                        // V = mở/đóng bảng tra toàn bộ công thức chuẩn.
-                        Key::V => {
+                        // Ctrl+J = mở/đóng bảng tra toàn bộ công thức chuẩn.
+                        Key::J if modifiers.ctrl || modifiers.command => {
                             library_open = !library_open;
+                        }
+                        // Ctrl+K = mở cửa sổ quét trạng thái từ camera (không
+                        // có nút bấm riêng trong giao diện theo yêu cầu --
+                        // chỉ vào được bằng phím tắt này).
+                        Key::K if modifiers.ctrl || modifiers.command => {
+                            if !is_busy && !is_animating {
+                                scan_state.open = true;
+                            }
                         }
                         Key::Escape => {
                             if library_open {

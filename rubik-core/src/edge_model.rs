@@ -25,8 +25,11 @@ const B: usize = 3;
 const L: usize = 4;
 const R: usize = 5;
 
-type Coord = (usize, usize, usize);
-const EDGE_SLOTS: [(Coord, Coord); 12] = [
+pub type Coord = (usize, usize, usize);
+/// Bảng toạ độ 12 khe cạnh, public để các crate khác (vd rubik-vision)
+/// có thể tự kiểm tra tính hợp lệ của 1 bộ facelet mà không phải chép
+/// lại bảng này (tránh lệch dữ liệu giữa 2 nơi).
+pub const EDGE_SLOTS: [(Coord, Coord); 12] = [
     ((U, 2, 1), (F, 0, 1)), // UF
     ((U, 0, 1), (B, 0, 1)), // UB
     ((U, 1, 0), (L, 0, 1)), // UL

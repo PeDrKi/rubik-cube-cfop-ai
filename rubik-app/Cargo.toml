@@ -6,6 +6,17 @@ description = "Ứng dụng Rubik's Cube 3D tương tác"
 
 [dependencies]
 rubik-core = { path = "../rubik-core" }
+rubik-vision = { path = "../rubik-vision" }
+rubik-vision-ml = { path = "../rubik-vision-ml", optional = true }
 three-d = { version = "0.17", features = ["egui-gui"] }
 rand = "0.8"
 winit = "0.28"
+image = { version = "=0.25.2", default-features = false, features = ["png", "jpeg"] }
+nokhwa = { version = "0.10", default-features = false, features = ["input-native"] }
+home = "=0.5.9"
+png = "=0.17.16"
+
+[features]
+# TẮT mặc định -- `cargo build`/`cargo run` bình thường KHÔNG đụng gì
+# đến `ort`. Bật thử nghiệm dò cube bằng ML: cargo run --features ml_detect
+ml_detect = ["dep:rubik-vision-ml"]
