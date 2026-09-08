@@ -73,6 +73,34 @@ cache/                  PDB đã build, cache ra đĩa (.pkl) — build 1 lần
 test_solver.py           unit + stress test
 ```
 
+## Đã thử hướng "tự huấn luyện mô hình học máy" — và tại sao dừng lại
+
+Có cân nhắc hướng đi xa hơn: huấn luyện 1 mô hình (Gradient Boosting, dùng
+`scikit-learn`, chạy CPU không cần GPU) để **học phần dư (residual)** giữa
+heuristic admissible hiện tại và khoảng cách thực — với kỳ vọng nắm được
+tương tác giữa các nhóm quân mà `max(PDB...)` bỏ sót.
+
+**Kiến trúc dự kiến** (file `solver/ml/generate_training_data.py` còn giữ
+lại làm tư liệu): sinh dữ liệu tự động bằng chính solver hiện có (không
+cần gán nhãn tay) — với mỗi scramble ngẫu nhiên, giải Cross+F2L+OLL-cạnh
+(nhanh, tin cậy), rồi chạy A* có ngân sách để lấy "nhãn đúng" (số bước tối
+thiểu thực tế) cho pha định hướng góc.
+
+**Lý do dừng lại — phát hiện qua đo đạc thực tế:** để lấy "nhãn đúng" cho
+mỗi mẫu dữ liệu, vẫn phải chạy chính thuật toán tìm kiếm đang muốn cải
+thiện — với case khó, việc sinh 1 nhãn cũng chậm y hệt vấn đề gốc (đo được
+tỉ lệ thành công ~30-40% mỗi lần thử, ~8-13s/lần thất bại). Ước tính cần
+**~3-4 giờ** trên máy 1 CPU (không GPU) để có đủ ~500 mẫu chất lượng — vượt
+quá phạm vi hợp lý cho một cải tiến hiệu năng. Đây là bài học kỹ thuật thật:
+**sinh dữ liệu huấn luyện cho 1 bài toán tìm kiếm khó cũng khó y như chính
+bài toán đó** — không phải lúc nào "thêm ML" cũng là câu trả lời đúng, đặc
+biệt khi hạ tầng tính toán (CPU-only, 1 nhân, 4GB RAM) không phù hợp.
+
+**Quyết định cuối:** giữ nguyên kiến trúc A* (ưu tiên chính) + IDA* (dự
+phòng) đã tối ưu — đã kiểm chứng xử lý tốt đa số trường hợp thực tế (15/15
+scramble ngẫu nhiên test nhanh <0.5s), chỉ còn hiếm case khó mất nhiều thời
+gian hơn (không còn crash).
+
 ## Cập nhật: IDA* thuần gây "treo" bất ngờ ở vài case → chuyển sang lai A*+IDA*
 
 Sau khi chuyển hẳn sang IDA*, phát hiện thêm vấn đề: IDA* **không lưu
