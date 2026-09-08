@@ -96,6 +96,24 @@ def build_formula_lines(breakdown):
     return lines
 
 
+def _formula_lines_to_text(formula_lines):
+    """Chuyen danh sach (kind, ...) tu build_formula_lines() thanh 1 doan
+    van ban thuong (plain text), dung de copy toan bo noi dung bang cong
+    thuc vao clipboard he thong (vi ban than cua so pygame khong ho tro
+    boi den/chon van ban truc tiep tren canvas ve)."""
+    out = []
+    for row in formula_lines:
+        kind = row[0]
+        if kind == 'header':
+            out.append(row[1])
+        elif kind == 'row':
+            _, label, text, _color = row
+            out.append(f"{label}: {text}")
+        elif kind == 'spacer':
+            out.append('')
+    return '\n'.join(out)
+
+
 def _wrap_text(text, font, max_w):
     """Chia `text` thanh nhieu dong sao cho moi dong vua voi chieu rong
     max_w khi render bang `font` (wrap theo tu, cach nhau boi dau cach --
@@ -288,6 +306,9 @@ def main():
     formula_close_rect   = None
     formula_up_rect      = None
     formula_down_rect    = None
+    formula_copy_rect    = None   # nút "Copy" trên panel nổi -- hit-test frame sau
+    formula_copy_note        = None   # thông báo "Đã copy..." hiển thị tạm thời
+    formula_copy_note_timer  = 0
 
     # ── Cửa sổ OS riêng (thử nghiệm) cho bảng công thức, xem show_formula_window() ──
     formula_window        = None   # pygame._sdl2.video.Window hoặc None nếu không tạo được
@@ -406,6 +427,10 @@ def main():
             cfop_note_timer -= 1
             if cfop_note_timer == 0:
                 cfop_note = None
+        if formula_copy_note_timer > 0:
+            formula_copy_note_timer -= 1
+            if formula_copy_note_timer == 0:
+                formula_copy_note = None
 
         try:
             kind, res, err = cfop_result_q.get_nowait()
@@ -486,6 +511,14 @@ def main():
                 step = max(30, int(60 * lo.s))
                 if formula_close_rect and formula_close_rect.collidepoint(mx, my):
                     formula_panel_open = False
+                elif formula_copy_rect and formula_copy_rect.collidepoint(mx, my):
+                    txt = _formula_lines_to_text(formula_lines)
+                    try:
+                        pygame.scrap.put(pygame.SCRAP_TEXT, txt.encode('utf-8'))
+                        formula_copy_note = "Đã copy toàn bộ công thức vào clipboard!"
+                    except Exception:
+                        formula_copy_note = "Không copy được (clipboard không khả dụng ở máy này)"
+                    formula_copy_note_timer = 150
                 elif formula_up_rect and formula_up_rect.collidepoint(mx, my):
                     formula_scroll = max(0, formula_scroll - step)
                 elif formula_down_rect and formula_down_rect.collidepoint(mx, my):
@@ -565,6 +598,22 @@ def main():
                     bar_status     = None
                     bar_cursor     = len(bar_text)
                     bar_sel_anchor = None
+
+                elif (ev.key == K_c and not (mods & (KMOD_CTRL | KMOD_META))
+                      and formula_lines):
+                    # C (không Ctrl) = copy TOÀN BỘ bảng công thức hiện tại
+                    # vào clipboard hệ thống. Cần thiết vì nội dung được vẽ
+                    # dưới dạng hình (canvas) trong panel/cửa sổ riêng, KHÔNG
+                    # phải văn bản thật nên không thể bôi đen/chọn bằng chuột
+                    # như trong 1 ứng dụng thông thường -- đây là cách duy
+                    # nhất để lấy nội dung ra ngoài.
+                    txt = _formula_lines_to_text(formula_lines)
+                    try:
+                        pygame.scrap.put(pygame.SCRAP_TEXT, txt.encode('utf-8'))
+                        formula_copy_note = "Đã copy toàn bộ công thức vào clipboard!"
+                    except Exception:
+                        formula_copy_note = "Không copy được (clipboard không khả dụng ở máy này)"
+                    formula_copy_note_timer = 150
 
                 elif ev.key == K_t:
                     # T = mở/đóng bảng công thức (KHÔNG modal -- hoạt động dù
@@ -941,6 +990,7 @@ def main():
             ("H",      "AI gợi ý bước tiếp"),
             ("Tab",    "Copy gợi ý -> thanh công thức"),
             ("T",      "Bảng công thức (cửa sổ riêng nếu được, hoặc panel nổi)"),
+            ("C",      "Copy toàn bộ bảng công thức vào clipboard"),
         ]:
             ks = lo.sfont.render(k, True, GOLD)
             vs = lo.sfont.render(f"  {v}", True, HINT)
@@ -1007,6 +1057,16 @@ def main():
             t = lo.bfont.render("✓  SOLVED!", True, (60, 230, 100))
             screen.blit(t, (lo.CX3 - t.get_width() // 2, lo.CY3 - 14))
 
+        if formula_copy_note:
+            note_s = lo.sfont.render(formula_copy_note, True, (110, 230, 140))
+            note_pad = max(6, int(8 * lo.s))
+            note_bg  = pygame.Rect(0, 0, note_s.get_width() + note_pad * 2,
+                                    note_s.get_height() + note_pad * 2)
+            note_bg.topright = (lo.W - max(10, int(14 * lo.s)), max(10, int(14 * lo.s)))
+            pygame.draw.rect(screen, (18, 18, 28), note_bg, border_radius=6)
+            pygame.draw.rect(screen, (110, 230, 140), note_bg, width=1, border_radius=6)
+            screen.blit(note_s, (note_bg.x + note_pad, note_bg.y + note_pad))
+
         if formula_panel_open:
             # ── Panel NỔI (docked), KHÔNG modal: không dim/khoá phần còn lại
             # của màn hình -- cube vẫn xoay/giải bình thường khi panel mở.
@@ -1036,6 +1096,14 @@ def main():
             screen.blit(xt, (formula_close_rect.centerx - xt.get_width() // 2,
                               formula_close_rect.centery - xt.get_height() // 2))
 
+            copy_txt_s = lo.sfont.render("Copy", True, (230, 230, 230))
+            copy_w = copy_txt_s.get_width() + 14
+            formula_copy_rect = pygame.Rect(
+                formula_close_rect.x - copy_w - 6, panel_y + 8, copy_w, close_sz)
+            pygame.draw.rect(screen, (60, 60, 75), formula_copy_rect, border_radius=5)
+            screen.blit(copy_txt_s, (formula_copy_rect.centerx - copy_txt_s.get_width() // 2,
+                                      formula_copy_rect.centery - copy_txt_s.get_height() // 2))
+
             header_h = max(title.get_height(), close_sz) + 16
 
             stale = (formula_state_ver is not None and formula_state_ver != state_version)
@@ -1046,7 +1114,9 @@ def main():
                 screen.blit(stale_txt, (panel_x + 14, panel_y + header_h))
                 stale_h = stale_txt.get_height() + 6
 
-            footer_txt = lo.sfont.render("T/Esc: đóng  •  lăn chuột: cuộn", True, HINT)
+            footer_txt = lo.sfont.render(
+                "T/Esc: đóng  •  lăn chuột: cuộn  •  C hoặc nút Copy: chép công thức",
+                True, HINT)
             footer_h = footer_txt.get_height() + 10
             screen.blit(footer_txt, (panel_x + 14, panel_y + panel_h - footer_h))
 
@@ -1110,7 +1180,7 @@ def main():
                     win_stale_h = stxt.get_height() + 6
 
                 foot_txt = formula_win_fonts['footer'].render(
-                    "Đóng bằng phím T (hoặc Esc) ở cửa sổ chính  •  cửa sổ này chỉ để xem",
+                    "Đóng: T/Esc  •  Copy toàn bộ: C  (bấm ở cửa sổ chính)",
                     True, HINT)
                 foot_h = foot_txt.get_height() + pad
                 surf.blit(foot_txt, (pad, win_h - foot_h))
