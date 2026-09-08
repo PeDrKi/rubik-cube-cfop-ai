@@ -114,6 +114,19 @@ def _formula_lines_to_text(formula_lines):
     return '\n'.join(out)
 
 
+def _formula_row_plain_texts(formula_lines):
+    """Tra ve list ["Cross: DONE!", "DFR: R U R'...", ...] -- 1 phan tu cho
+    moi dong 'row' trong formula_lines, THEO DUNG THU TU/row_idx ma
+    _draw_formula_panel_content() dung de gan nhan khi ve (chon 1 dong ->
+    copy dung 1 phan tu nay)."""
+    out = []
+    for row in formula_lines:
+        if row[0] == 'row':
+            _, label, text, _color = row
+            out.append(f"{label}: {text}")
+    return out
+
+
 def _wrap_text(text, font, max_w):
     """Chia `text` thanh nhieu dong sao cho moi dong vua voi chieu rong
     max_w khi render bang `font` (wrap theo tu, cach nhau boi dau cach --
@@ -133,16 +146,26 @@ def _wrap_text(text, font, max_w):
     return lines
 
 
-def _draw_formula_panel_content(surface, rect, fonts, formula_lines, scroll, gold_color):
+def _draw_formula_panel_content(surface, rect, fonts, formula_lines, scroll, gold_color,
+                                 selected_row=None, highlight_color=(90, 74, 20)):
     """
     Vẽ NỘI DUNG (header/rows, có scroll+clip) của bảng công thức vào
     `surface`, giới hạn trong `rect`. KHÔNG vẽ khung ngoài / nút đóng / nút
     cuộn -- những phần đó do nơi gọi tự vẽ. Tách riêng để dùng chung cho cả
     panel nổi (docked, không modal) và -- nếu tạo được -- 1 cửa sổ OS riêng.
 
+    Mỗi dòng công thức ('row' -- vd Cross/DFR/OLL/PLL) có 1 chỉ số thứ tự
+    (row_idx, đếm theo thứ tự xuất hiện). Nếu `selected_row` khớp row_idx
+    của 1 dòng, dòng đó (và các dòng phụ do wrap dài) được TÔ NỀN để thể
+    hiện "đã chọn" (thay thế cho việc bôi đen văn bản thật không khả dụng
+    trên canvas pygame).
+
     fonts: dict {'header': Font, 'row': Font, 'name_col_w': int,
                  'row_gap': int, 'spacer_h': int}
-    Trả về (scroll_max, scroll_da_duoc_gioi_han).
+    Trả về (scroll_max, scroll_da_duoc_gioi_han, hit_rows) trong đó
+    hit_rows là list [(pygame.Rect_toa_do_man_hinh, row_idx), ...] cho MỌI
+    dòng 'row'/'rowcont' đã vẽ (kể cả nằm ngoài rect do đã cuộn) -- nơi gọi
+    tự lọc theo rect khi hit-test click.
     """
     bfont, mfont   = fonts['header'], fonts['row']
     name_col_w     = fonts['name_col_w']
@@ -152,6 +175,7 @@ def _draw_formula_panel_content(surface, rect, fonts, formula_lines, scroll, gol
     wrap_w         = max(50, rect.width - 10 - name_col_w - 10)
 
     draw_items = []
+    row_idx = -1
     for row in formula_lines:
         kind = row[0]
         if kind == 'header':
@@ -160,39 +184,47 @@ def _draw_formula_panel_content(surface, rect, fonts, formula_lines, scroll, gol
         elif kind == 'spacer':
             draw_items.append({'kind': 'spacer', 'h': spacer_h})
         elif kind == 'row':
+            row_idx += 1
             _, label, text, color = row
             wrapped = _wrap_text(text, mfont, wrap_w)
             h0 = mfont.get_height() + row_gap
-            draw_items.append({'kind': 'row', 'label': label,
+            draw_items.append({'kind': 'row', 'label': label, 'row_idx': row_idx,
                                 'text': wrapped[0], 'color': color, 'h': h0})
             for extra in wrapped[1:]:
-                draw_items.append({'kind': 'rowcont', 'text': extra,
+                draw_items.append({'kind': 'rowcont', 'text': extra, 'row_idx': row_idx,
                                     'color': color, 'h': h0})
 
     total_h    = sum(it['h'] for it in draw_items)
     scroll_max = max(0, total_h - rect.height)
     scroll     = max(0, min(scroll, scroll_max))
 
+    hit_rows  = []
     prev_clip = surface.get_clip()
     surface.set_clip(rect)
     y = rect.y - scroll
     for it in draw_items:
         h = it['h']
+        if it['kind'] in ('row', 'rowcont'):
+            hit_rows.append((pygame.Rect(rect.x, y, rect.width, h), it['row_idx']))
         if y + h >= rect.y and y <= rect.bottom:
             if it['kind'] == 'header':
                 txt = bfont.render(it['text'], True, gold_color)
                 surface.blit(txt, (rect.x, y))
             elif it['kind'] == 'row':
+                if it['row_idx'] == selected_row:
+                    pygame.draw.rect(surface, highlight_color, (rect.x, y, rect.width, h))
                 n_txt = mfont.render(it['label'], True, gold_color)
                 s_txt = mfont.render(it['text'], True, it['color'])
                 surface.blit(n_txt, (rect.x + 10, y))
                 surface.blit(s_txt, (text_x0, y))
             elif it['kind'] == 'rowcont':
+                if it['row_idx'] == selected_row:
+                    pygame.draw.rect(surface, highlight_color, (rect.x, y, rect.width, h))
                 s_txt = mfont.render(it['text'], True, it['color'])
                 surface.blit(s_txt, (text_x0, y))
         y += h
     surface.set_clip(prev_clip)
-    return scroll_max, scroll
+    return scroll_max, scroll, hit_rows
 
 
 def _try_open_formula_window():
@@ -309,6 +341,10 @@ def main():
     formula_copy_rect    = None   # nút "Copy" trên panel nổi -- hit-test frame sau
     formula_copy_note        = None   # thông báo "Đã copy..." hiển thị tạm thời
     formula_copy_note_timer  = 0
+    formula_selected_row  = None  # row_idx (int) đang được "bôi đen"/chọn, hoặc None
+    formula_row_texts     = []    # ["Cross: ...", "DFR: ...", ...] song song với row_idx
+    formula_hit_rows      = []    # [(Rect, row_idx), ...] cập nhật mỗi frame -> hit-test click
+    formula_content_rect  = None  # vùng nội dung (không tính header/footer) -- hit-test click trống để bỏ chọn
 
     # ── Cửa sổ OS riêng (thử nghiệm) cho bảng công thức, xem show_formula_window() ──
     formula_window        = None   # pygame._sdl2.video.Window hoặc None nếu không tạo được
@@ -454,6 +490,8 @@ def main():
                 cfop_note_timer = 220
             elif kind == 'formula':
                 formula_lines       = build_formula_lines(res)
+                formula_row_texts   = _formula_row_plain_texts(formula_lines)
+                formula_selected_row = None   # dữ liệu mới -> bỏ chọn dòng cũ
                 formula_scroll      = 0
                 formula_state_ver   = state_version
 
@@ -512,10 +550,15 @@ def main():
                 if formula_close_rect and formula_close_rect.collidepoint(mx, my):
                     formula_panel_open = False
                 elif formula_copy_rect and formula_copy_rect.collidepoint(mx, my):
-                    txt = _formula_lines_to_text(formula_lines)
+                    if formula_selected_row is not None and formula_selected_row < len(formula_row_texts):
+                        cp_txt  = formula_row_texts[formula_selected_row]
+                        cp_note = f"Đã copy: {cp_txt.split(':', 1)[0]}"
+                    else:
+                        cp_txt  = _formula_lines_to_text(formula_lines)
+                        cp_note = "Đã copy toàn bộ công thức vào clipboard!"
                     try:
-                        pygame.scrap.put(pygame.SCRAP_TEXT, txt.encode('utf-8'))
-                        formula_copy_note = "Đã copy toàn bộ công thức vào clipboard!"
+                        pygame.scrap.put(pygame.SCRAP_TEXT, cp_txt.encode('utf-8'))
+                        formula_copy_note = cp_note
                     except Exception:
                         formula_copy_note = "Không copy được (clipboard không khả dụng ở máy này)"
                     formula_copy_note_timer = 150
@@ -523,6 +566,18 @@ def main():
                     formula_scroll = max(0, formula_scroll - step)
                 elif formula_down_rect and formula_down_rect.collidepoint(mx, my):
                     formula_scroll = min(formula_scroll_max, formula_scroll + step)
+                elif formula_content_rect and formula_content_rect.collidepoint(mx, my):
+                    # Click vào NỘI DUNG (không phải nút) -- chọn/bỏ chọn 1
+                    # dòng công thức (Cross/DFR/.../PLL) theo vị trí click.
+                    # Đây là cách "bôi đen" 1 công thức trên canvas pygame
+                    # (không hỗ trợ kéo-chọn văn bản thật như ứng dụng thường).
+                    clicked_idx = None
+                    for hit_rect, hit_idx in formula_hit_rows:
+                        if hit_rect.collidepoint(mx, my):
+                            clicked_idx = hit_idx
+                            break
+                    formula_selected_row = (
+                        None if clicked_idx == formula_selected_row else clicked_idx)
 
             elif ev.type == MOUSEBUTTONDOWN and ev.button == 1:
                 if hint_copy_rect and hint_copy_rect.collidepoint(mx, my):
@@ -601,16 +656,21 @@ def main():
 
                 elif (ev.key == K_c and not (mods & (KMOD_CTRL | KMOD_META))
                       and formula_lines):
-                    # C (không Ctrl) = copy TOÀN BỘ bảng công thức hiện tại
-                    # vào clipboard hệ thống. Cần thiết vì nội dung được vẽ
-                    # dưới dạng hình (canvas) trong panel/cửa sổ riêng, KHÔNG
-                    # phải văn bản thật nên không thể bôi đen/chọn bằng chuột
-                    # như trong 1 ứng dụng thông thường -- đây là cách duy
-                    # nhất để lấy nội dung ra ngoài.
-                    txt = _formula_lines_to_text(formula_lines)
+                    # C (không Ctrl) = copy bảng công thức vào clipboard hệ
+                    # thống. Nếu đã CLICK CHỌN 1 dòng trong panel nổi (bôi
+                    # nền vàng) thì chỉ copy dòng đó; ngược lại copy toàn bộ.
+                    # Cần thiết vì nội dung được vẽ dưới dạng hình (canvas),
+                    # KHÔNG phải văn bản thật nên không kéo-chọn bằng chuột
+                    # được như 1 ứng dụng thông thường.
+                    if formula_selected_row is not None and formula_selected_row < len(formula_row_texts):
+                        txt  = formula_row_texts[formula_selected_row]
+                        note = f"Đã copy: {txt.split(':', 1)[0]}"
+                    else:
+                        txt  = _formula_lines_to_text(formula_lines)
+                        note = "Đã copy toàn bộ công thức vào clipboard!"
                     try:
                         pygame.scrap.put(pygame.SCRAP_TEXT, txt.encode('utf-8'))
-                        formula_copy_note = "Đã copy toàn bộ công thức vào clipboard!"
+                        formula_copy_note = note
                     except Exception:
                         formula_copy_note = "Không copy được (clipboard không khả dụng ở máy này)"
                     formula_copy_note_timer = 150
@@ -1096,7 +1156,8 @@ def main():
             screen.blit(xt, (formula_close_rect.centerx - xt.get_width() // 2,
                               formula_close_rect.centery - xt.get_height() // 2))
 
-            copy_txt_s = lo.sfont.render("Copy", True, (230, 230, 230))
+            copy_label = "Copy dòng" if formula_selected_row is not None else "Copy tất cả"
+            copy_txt_s = lo.sfont.render(copy_label, True, (230, 230, 230))
             copy_w = copy_txt_s.get_width() + 14
             formula_copy_rect = pygame.Rect(
                 formula_close_rect.x - copy_w - 6, panel_y + 8, copy_w, close_sz)
@@ -1115,7 +1176,7 @@ def main():
                 stale_h = stale_txt.get_height() + 6
 
             footer_txt = lo.sfont.render(
-                "T/Esc: đóng  •  lăn chuột: cuộn  •  C hoặc nút Copy: chép công thức",
+                "T/Esc đóng • lăn chuột cuộn • click dòng để chọn • C: copy",
                 True, HINT)
             footer_h = footer_txt.get_height() + 10
             screen.blit(footer_txt, (panel_x + 14, panel_y + panel_h - footer_h))
@@ -1135,13 +1196,15 @@ def main():
             content_rect = pygame.Rect(
                 panel_x + 14, panel_y + header_h + stale_h,
                 panel_w - 28, panel_h - header_h - stale_h - footer_h - 4)
+            formula_content_rect = content_rect
 
             fonts = {'header': lo.bfont, 'row': lo.mfont,
                      'name_col_w': max(70, int(80 * lo.s)),
                      'row_gap': max(2, int(3 * lo.s)),
                      'spacer_h': max(6, int(10 * lo.s))}
-            formula_scroll_max, formula_scroll = _draw_formula_panel_content(
-                screen, content_rect, fonts, formula_lines, formula_scroll, GOLD)
+            formula_scroll_max, formula_scroll, formula_hit_rows = _draw_formula_panel_content(
+                screen, content_rect, fonts, formula_lines, formula_scroll, GOLD,
+                selected_row=formula_selected_row)
 
         if formula_window is not None:
             # ── Vẽ + hiện cửa sổ OS riêng (thử nghiệm) ───────────────────────
