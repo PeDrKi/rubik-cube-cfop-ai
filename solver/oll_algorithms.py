@@ -51,6 +51,72 @@ _RAW_ALGS = {
     # Dot case (0 canh dinh huong) -- do nguoi dung cung cap va kiem
     # chung thuc te dung cho 1 case Dot that (xem hoi thoai).
     'Dot_variant1': "F R' F' R U R U' R' U F R U R' U' F'",
+    # --- Cac case con lai (49 non-dot + 5 dot), sinh/kiem chung tu dong ---
+    # 49 case non-dot: dung chinh 2-look solver noi bo (_solve_phase_A_ladder +
+    # _solve_phase_B_ladder) de tu giai tung trang thai mau roi ghep chuoi nuoc
+    # di lai -- KHONG chep tay, tu kiem chung 100% bang cross_f2l_ok + huong=0.
+    'case_auto_01': "R U2 R' U' R U' R' U R U R' U R U2 R'",
+    'case_auto_02': "U R U2 R' U' R U' R' U' R U R' U R U2 R'",
+    'case_auto_03': "U R U R' U R U2 R'",
+    'case_auto_04': "U2 R U R' U R U2 R' U2 R U2 R' U' R U' R'",
+    'case_auto_05': "U' R U2 R' U' R U' R'",
+    'case_auto_06': "R U R' U R U2 R' U' R U R' U R U2 R'",
+    'case_auto_07': "R U2 R' U' R U' R' R U2 R' U' R U' R'",
+    'case_auto_08': "L' B' U' B U L U R U2 R' U' R U' R' U' R U R' U R U2 R'",
+    'case_auto_09': "L' B' U' B U L R U2 R' U' R U' R' R U2 R' U' R U' R'",
+    'case_auto_10': "L' B' U' B U L R U R' U R U2 R' U R U R' U R U2 R'",
+    'case_auto_11': "L' B' U' B U L U' R U2 R' U' R U' R'",
+    'case_auto_12': "L' B' U' B U L R U R' U R U2 R' U' R U R' U R U2 R'",
+    'case_auto_13': "L' B' U' B U L U2 R U2 R' U' R U' R'",
+    'case_auto_14': "L' B' U' B U L U2 R U R' U R U2 R' U2 R U2 R' U' R U' R'",
+    'case_auto_15': "L' B' U' B U L U R U2 R' U' R U' R'",
+    'case_auto_16': "L' B' U' B U L R U R' U R U2 R' U' R U2 R' U' R U' R'",
+    'case_auto_17': "L' B' U' B U L U2 R U R' U R U2 R'",
+    'case_auto_18': "L' B' U' B U L R U2 R' U' R U' R'",
+    'case_auto_19': "L' B' U' B U L R U R' U R U2 R' U R U2 R' U' R U' R'",
+    'case_auto_20': "L' B' U' B U L U R U R' U R U2 R' U' R U2 R' U' R U' R'",
+    'case_auto_21': "L' B' U' B U L U2 R U R' U R U2 R' U' R U R' U R U2 R'",
+    'case_auto_22': "L' B' U' B U L U R U R' U R U2 R' U' R U R' U R U2 R'",
+    'case_auto_23': "B' U' R' U R B U2 R U2 R' U' R U' R' U' R U R' U R U2 R'",
+    'case_auto_24': "B' U' R' U R B U2 R U R' U R U2 R' U2 R U2 R' U' R U' R'",
+    'case_auto_25': "B' U' R' U R B U R U R' U R U2 R'",
+    'case_auto_26': "B' U' R' U R B R U R' U R U2 R' U' R U R' U R U2 R'",
+    'case_auto_27': "B' U' R' U R B U' R U R' U R U2 R'",
+    'case_auto_28': "B' U' R' U R B U2 R U R' U R U2 R'",
+    'case_auto_29': "B' U' R' U R B R U R' U R U2 R' R U R' U R U2 R'",
+    'case_auto_30': "B' U' R' U R B U R U R' U R U2 R' U' R U2 R' U' R U' R'",
+    'case_auto_31': "B' U' R' U R B R U R' U R U2 R' U R U R' U R U2 R'",
+    'case_auto_32': "B' U' R' U R B U' R U2 R' U' R U' R'",
+    'case_auto_33': "B' U' R' U R B R U R' U R U2 R' U2 R U2 R' U' R U' R'",
+    'case_auto_34': "B' U' R' U R B R U R' U R U2 R' U' R U2 R' U' R U' R'",
+    'case_auto_35': "B' U' R' U R B U R U R' U R U2 R' U' R U R' U R U2 R'",
+    'case_auto_36': "B' U' R' U R B R U R' U R U2 R' U R U2 R' U' R U' R'",
+    'case_auto_37': "B' U' R' U R B R U2 R' U' R U' R' R U2 R' U' R U' R'",
+    'case_auto_38': "B' U' R' U R B R U2 R' U' R U' R'",
+    'case_auto_39': "B' U' R' U R B U R U2 R' U' R U' R'",
+    'case_auto_40': "B' U' R' U R B U2 R U R' U R U2 R' U' R U R' U R U2 R'",
+    'case_auto_41': "B' U' R' U R B R U2 R' U' R U' R' U R U R' U R U2 R'",
+    'case_auto_42': "B' U' R' U R B",
+    'case_auto_43': "B' U' R' U R B U R U2 R' U' R U' R' U' R U R' U R U2 R'",
+    'case_auto_44': "B' U' R' U R B U' R U R' U R U2 R' U2 R U2 R' U' R U' R'",
+    'case_auto_45': "B' U' R' U R B U2 R U R' U R U2 R' U' R U2 R' U' R U' R'",
+    'case_auto_46': "B' U' R' U R B R U R' U R U2 R'",
+    'case_auto_47': "B' U' R' U R B U2 R U2 R' U' R U' R'",
+    'case_auto_48': "B' U' R' U R B R U2 R' U' R U' R' U' R U R' U R U2 R'",
+    'case_auto_49': "B' U' R' U R B U R U R' U R U2 R' U2 R U2 R' U' R U' R'",
+
+    # --- 5 case Dot con lai (OLL 1, 3, 4, 17, 19 theo danh so cong dong) ---
+    # Tra tu SpeedCubeReview.com / SpeedCubeDB.com (chi dung nuoc don lop
+    # U/D/F/B/L/R, khong M/S/E/wide/rotation -- dung yeu cau engine), TU KIEM
+    # CHUNG lai bang chinh co che _table_key_for cua file nay (khong tin suong
+    # nguon web). OLL 2 va OLL 20 (2/8 case Dot con lai) CHUA tim duoc cong
+    # thuc thuan (chi dung M/wide trong moi nguon tra duoc) -- se roi ve 2-look
+    # search (van dung, chi cham hon).
+    'Dot_OLL1': "R U2 R2 F R F' U2 R' F R F'",
+    'Dot_OLL3': "F U R U' R' F' U F R U R' U' F'",
+    'Dot_OLL4': "F' U' L' U L F U F R U R' U' F'",
+    'Dot_OLL17': "R U R' U R' F R F' U2 R' F R F'",
+    'Dot_OLL19': "F R' F' R U R U' R' U' F R U R' U' F'",
 }
 
 

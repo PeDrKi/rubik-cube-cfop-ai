@@ -93,19 +93,32 @@ def _normalize_auf(full):
     tra ve BIEU DIEN CHUAN HOA (tuple nho nhat theo thu tu tu dien) cua
     (edge_shape, corner_pattern) -- de 2 state chi khac nhau boi AUF duoc
     nhan dien la CUNG 1 case (dung nhu nguoi choi CFOP lam: xoay U truoc
-    khi nhan dien, khong quan tam huong U hien tai)."""
+    khi nhan dien, khong quan tam huong U hien tai).
+
+    QUAN TRONG (da sua loi 2026-07): so sanh de chon dai dien PHAI dua tren
+    CA CAP (eo_slot, co_slot) DAY DU, KHONG duoc rut gon qua shape_name
+    truoc khi so sanh. shape_name chi la 1 NHAN CHUNG CHUNG (vd "Angle")
+    dung chung cho nhieu sap xep canh khac nhau (VD: {UF,UL} dung huong
+    va {UB,UR} dung huong deu la "Angle" nhung la 2 truong hop KHAC NHAU
+    ve mat vi tri). Neu chi so sanh (shape_name, pattern) nhu truoc day,
+    2 state co tuong quan canh-goc THAT SU KHAC NHAU (khong the quay ve
+    nhau bang AUF) van co the trung (shape_name, pattern) MOT CACH TINH
+    CO, gay gop nham thanh 1 case -- da kiem chung bang toan hoc: 1 nhom
+    AUF bac 4 KHONG THE tao orbit lon hon 4 phan tu, nhung phien ban loi
+    cho ra orbit size 8/16 (bat kha thi ve mat ly thuyet nhom) => xac nhan
+    day la loi that, da sua bang cach so sanh tren (eo_slot, co_slot) day
+    du (giu nguyen vi tri, khong rut gon)."""
     candidates = []
     for auf in ['', 'U', 'U2', "U'"]:
         state = full if auf == '' else apply_move(full, auf)
         ep, eo, cp, co = state
-        eo_slot = _slot_indexed(ep, eo)
-        co_slot = _slot_indexed(cp, co)
-        shape_name, _ = _edge_shape(eo_slot)
-        pattern = _corner_pattern(co_slot)
-        candidates.append((shape_name, pattern, auf))
-    # chon dai dien chuan hoa (nho nhat theo thu tu tu dien cua
-    # (shape_name, pattern)) -- dam bao 2 case AUF-tuong duong luon ra
-    # cung 1 ket qua chuan hoa bat ke dang xoay U ban dau la gi.
+        eo_slot = tuple(_slot_indexed(ep, eo))
+        co_slot = tuple(_slot_indexed(cp, co))
+        candidates.append((eo_slot, co_slot, auf))
+    # chon dai dien chuan hoa (nho nhat theo thu tu tu dien cua CA CAP
+    # (eo_slot, co_slot) day du) -- dam bao 2 case AUF-tuong duong luon ra
+    # cung 1 ket qua chuan hoa bat ke dang xoay U ban dau la gi, VA khong
+    # gop nham 2 case that su khac nhau.
     candidates.sort(key=lambda x: (x[0], x[1]))
     return candidates[0]
 
@@ -120,8 +133,10 @@ def identify_oll_case(full):
       shape_desc: mo ta tieng Viet
       corner_pattern: tuple 4 gia tri huong goc (UFR,UFL,UBR,UBL) O TRANG
         THAI HIEN TAI (chua chuan hoa AUF)
-      normalized_key: (shape, corner_pattern_chuan_hoa) -- DUNG CAI NAY de
-        so sanh 2 case co "giong nhau" khong (bat ke dang xoay U)
+      normalized_key: (shape, norm_eo_slot, norm_co_slot) DA CHUAN HOA AUF
+        -- DUNG CAI NAY de so sanh 2 case co "giong nhau" khong (bat ke
+        dang xoay U). Gom day du eo/co slot (khong chi shape+pattern rut
+        gon) de tranh gop nham 2 case khac nhau (xem _normalize_auf).
       auf_needed: so nuoc U can xoay truoc de dua ve dang chuan hoa
       is_solved: da dinh huong xong ca canh lan goc chua
     """
@@ -130,13 +145,14 @@ def identify_oll_case(full):
     co_slot = _slot_indexed(cp, co)
     shape_name, shape_desc = _edge_shape(eo_slot)
     corner_pattern = _corner_pattern(co_slot)
-    norm_shape, norm_pattern, auf = _normalize_auf(full)
+    norm_eo, norm_co, auf = _normalize_auf(full)
+    norm_shape, _ = _edge_shape(list(norm_eo))
     is_solved = (shape_name == 'AllOriented' and corner_pattern == (0, 0, 0, 0))
     return {
         'shape': shape_name,
         'shape_desc': shape_desc,
         'corner_pattern': corner_pattern,
-        'normalized_key': (norm_shape, norm_pattern),
+        'normalized_key': (norm_shape, norm_eo, norm_co),
         'auf_needed': auf,
         'is_solved': is_solved,
     }
