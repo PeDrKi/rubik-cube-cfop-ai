@@ -44,6 +44,28 @@ python3 -m pytest test_solver.py test_cube_engine.py -q
 ```
 Kết quả mong đợi: `176 passed`.
 
+## 5b. Mở rộng bảng công thức OLL đầy đủ
+
+`solver/oll_algorithms.py` hiện chỉ có 3 công thức (Sune, Anti-Sune, 1
+case Dot). Muốn thêm công thức mới (chỉ chấp nhận nước thuần
+R/L/U/D/F/B, không lát/rộng):
+
+```python
+# mo file solver/oll_algorithms.py, them 1 dong vao dict _RAW_ALGS:
+_RAW_ALGS['TenCaseMoi'] = "chuoi nuoc di ban tim duoc"
+```
+Chạy `python3 -m solver.oll_algorithms` để tự kiểm chứng — công thức
+sai sẽ tự động bị loại (in ra `REJECTED_ALG_NAMES`), không cần lo làm
+hỏng bảng hiện có.
+
+Muốn xem case OLL hiện tại là dạng nào (Dot/Line/Angle/AllOriented) để
+biết cần tìm công thức gì:
+```python
+from solver.oll_recognition import identify_oll_case
+r = identify_oll_case(full)   # full = solver.full_state.from_facelets(state)
+print(r['shape'], r['normalized_key'])
+```
+
 ## 6. Chạy các script nghiên cứu (`research/`)
 
 Luôn chạy từ **thư mục gốc project** bằng `python3 -m`:

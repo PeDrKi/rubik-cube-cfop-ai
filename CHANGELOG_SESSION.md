@@ -117,6 +117,40 @@ chạy đầu tiên.
   11 trang.
 - `main.pdf` — bản build sẵn, đã biên dịch kiểm chứng nhiều lần.
 
+## PHẦN 5 — Hệ thống nhận diện case OLL + bảng công thức đầy đủ
+
+Bổ sung sau khi hoàn tất Giai đoạn 3, giải quyết điểm yếu "OLL chỉ
+2-look" đã tự phát hiện trong phần tự đánh giá đề tài:
+
+- **`solver/oll_recognition.py`** — nhận diện case OLL dựa THUẦN TUÝ trên
+  toán tổ hợp (định luật parity: tổng hướng 4 cạnh U chia hết 2, tổng
+  hướng 4 góc U chia hết 3 — đã kiểm chứng bằng code), không phụ thuộc
+  trí nhớ công thức. Tự chuẩn hoá AUF (nhận ra 2 case chỉ lệch vài độ
+  xoay U là "cùng 1 case"). **Đã phát hiện và sửa 1 bug quan trọng**
+  trong quá trình làm việc cùng người dùng: `cp`/`co` trong engine là
+  piece-indexed (theo dõi từng viên cụ thể), không phải slot-indexed
+  (theo vị trí hiện tại) — bug từng bị che giấu trong test tự viết ban
+  đầu (vô tình rơi vào trường hợp permutation=identity), chỉ lộ ra khi
+  test với 1 case OLL thật có hoán vị khác identity do người dùng cung
+  cấp làm ví dụ.
+- **`solver/oll_algorithms.py`** — bảng công thức OLL đầy đủ (không giới
+  hạn OCLL), dùng lại cơ chế nhận diện ở trên. Sửa đúng 1 hiểu nhầm quan
+  trọng: OLL KHÔNG cần giữ nguyên hoán vị (khác PLL) — công thức OLL
+  thật (vd Sune) vẫn hoán vị, chỉ định hướng đúng, PLL sửa hoán vị sau.
+  Key tra bảng = NGHỊCH ĐẢO (mod 2/3) của delta đọc được khi áp công
+  thức lên cube đã giải. Hiện có 3 công thức (Sune, Anti-Sune, 1 case
+  Dot) — **mở rộng dễ dàng**: thêm 1 dòng vào `_RAW_ALGS`, chạy lại
+  `python3 -m solver.oll_algorithms` để tự kiểm chứng đúng/sai.
+- **`solver/oll_solver.py`** — `solve_oll()` giờ ưu tiên tra bảng đầy đủ
+  trước (giải gọn 1 bước như CFOP thật), fallback về kiến trúc 2-look cũ
+  khi case chưa có trong bảng. Đã xác nhận THẬT trên pipeline đầy đủ:
+  2/21 scramble thật được giải qua bảng mới (Sune/Anti-Sune, giờ tra
+  bảng thay vì brute-force AUF như code cũ).
+
+**Không cần chạy lại số liệu Experiment 1-3 trong bài báo** — logic đếm
+`corner_source == 'named'` trong `cfop_ai.py` không đổi ý nghĩa, tương
+thích ngược hoàn toàn (176/176 test vẫn pass sau mỗi bước sửa).
+
 ## Venue dự kiến — xem chi tiết mục 9 trong `HUONG_DAN_CHAY.md`
 
 Hầu hết deadline 2026 (CoG, ICAPS/HAXP) đã qua tại thời điểm dự án thực

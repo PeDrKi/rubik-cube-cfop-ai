@@ -221,18 +221,34 @@ def solve_oll_corners_only(state, retry=False):
 
 def solve_oll(state, retry=False):
     """
-    Giai OLL (2-look) tu trang thai facelet hien tai (Cross+F2L phai da xong).
+    Giai OLL tu trang thai facelet hien tai (Cross+F2L phai da xong).
     Tra ve dict:
       {'edge_moves': [...] hoac None, 'corner_moves': [...] hoac None,
        'moves': edge_moves + corner_moves,
-       'edge_source': 'search' (pha A luon la search, khong co thuat toan
-                       ten trong cai dat nay),
-       'corner_source': 'named' (giai bang Sune/Anti-Sune, thuat toan co
-                         ten chuan) hoac 'search' (fallback hiem gap)}
+       'edge_source': 'named' (giai gon 1 buoc bang bang OLL day du,
+                       xem solver/oll_algorithms.py) hoac 'search' (pha A
+                       rieng, kien truc 2-look cu) hoac None,
+       'corner_source': 'named' (Sune/Anti-Sune HOAC bang OLL day du) hoac
+                         'search' (fallback hiem gap)}
     Khong thay doi state truyen vao. retry=True: xao tron thu tu nuoc di.
     """
     full = from_facelets(state)
 
+    # Uu tien 1: tra bang OLL DAY DU (dinh huong CA canh lan goc trong 1
+    # buoc, dung nhu nguoi choi CFOP that lam voi 1 thuat toan full-OLL) --
+    # xem solver/oll_algorithms.py. Chi thu khi khong phai retry (giong
+    # quy uoc cua PLL: bang tra cuu da tat dinh, khong co gi de "thu lai").
+    if not retry:
+        from .oll_algorithms import solve_oll_with_auf
+        result = solve_oll_with_auf(full)
+        if result is not None:
+            auf, table_moves = result
+            moves = auf + table_moves
+            return {'edge_moves': [], 'corner_moves': moves, 'moves': moves,
+                    'edge_source': 'named', 'corner_source': 'named'}
+
+    # Uu tien 2 (fallback): kien truc 2-look cu -- dinh huong canh bang
+    # search truoc, roi goc bang Sune/Anti-Sune (macro) hoac search.
     edge_moves = _solve_phase_A_ladder(full, shuffled=retry)
     if edge_moves is None:
         return {'edge_moves': None, 'corner_moves': None, 'moves': None,
