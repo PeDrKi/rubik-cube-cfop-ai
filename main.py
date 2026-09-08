@@ -33,6 +33,7 @@ from cube_engine import (make_solved, scramble_cube, cube_solved,
 from renderer_3d import Rx, Ry, draw_cube_3d, hit_test_3d, ANIMATABLE_BASES
 from draw_helpers import draw_panels, panel_hit, draw_bar
 from solver import cfop_ai
+from solver.oll_algorithms import PRETTY_CASE_NAME as _PRETTY_CASE_NAME
 
 
 ANIM_DUR      = 0.13   # giây, 3D move animation (ở tốc độ x1)
@@ -91,9 +92,6 @@ _ROW_WHITE = (225, 225, 235)   # co chuoi nuoc di can lam
 
 # Ten hien thi "dep" hon cho nguoi dung (khac ten bien noi bo trong code) --
 # vd 'Dot_variant1' la ten bien ky thuat, khong phai thuat ngu CFOP chuan.
-_PRETTY_CASE_NAME = {
-    'Dot_variant1': 'Dot',
-}
 
 
 def _stage_row(label, info):

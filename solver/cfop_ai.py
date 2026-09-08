@@ -21,6 +21,7 @@ from .cross_solver import solve_cross
 from .f2l_solver import solve_f2l
 from .oll_solver import (solve_oll, edges_oriented, corners_oriented,
                           solve_oll_edges_only, solve_oll_corners_only)
+from .oll_algorithms import solve_oll_with_auf, PRETTY_CASE_NAME
 from .pll_solver import (solve_pll, corners_home, edges_home,
                           solve_pll_corners_only, solve_pll_edges_only)
 from .full_state import from_facelets
@@ -146,11 +147,21 @@ def _hint_raw(state, retry=False):
         return {'stage': 'f2l', 'label': f'F2L - cặp {target}', 'moves': mvs}
 
     if stage == 'oll':
+        # Uu tien tra bang 1-look (O(1), 55/57 case) truoc -- neu co, tra
+        # ve DUNG 1 buoc hint duy nhat (thay vi tach edges/corners).
+        # Chi roi ve tach 2 pha (edges truoc, corners sau) cho ~2/57 case
+        # con lai CHUA co cong thuc 1-look trong bang (xem oll_algorithms.py).
+        full = from_facelets(state)
+        table_result = solve_oll_with_auf(full)
+        if table_result is not None:
+            auf, table_moves, case_name = table_result
+            pretty = PRETTY_CASE_NAME.get(case_name, case_name)
+            return {'stage': 'oll', 'label': f'OLL - {pretty} (1-look)',
+                    'moves': auf + table_moves}
         # Quan trong (toi uu toc do): chi goi PHA CAN THIET, khong goi
         # solve_oll() nguyen khoi -- vi solve_oll() se tinh CA 2 pha, va
         # pha khong can cung co the roi vao case kho (~1 phut), lang phi
         # thoi gian vo ich khi hint() chi can 1 pha.
-        full = from_facelets(state)
         if not edges_oriented(full):
             mvs = solve_oll_edges_only(state, retry=retry)
             if mvs is None:
