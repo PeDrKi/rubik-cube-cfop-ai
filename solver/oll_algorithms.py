@@ -94,6 +94,7 @@ def verify_and_build_table():
     that su (xem _table_key_for), chi giu lai cai HOP LE. Chay 1 lan khi
     import module."""
     table = {}
+    name_table = {}
     verified_names = []
     rejected_names = []
     for name, seqstr in _RAW_ALGS.items():
@@ -103,11 +104,12 @@ def verify_and_build_table():
             rejected_names.append(name)
             continue
         table[(eo_key, co_key)] = seq
+        name_table[(eo_key, co_key)] = name
         verified_names.append(name)
-    return table, verified_names, rejected_names
+    return table, name_table, verified_names, rejected_names
 
 
-OLL_TABLE, VERIFIED_ALG_NAMES, REJECTED_ALG_NAMES = verify_and_build_table()
+OLL_TABLE, OLL_TABLE_NAME, VERIFIED_ALG_NAMES, REJECTED_ALG_NAMES = verify_and_build_table()
 
 # Bang cong thuc OLL "sach" (ten -> chuoi Singmaster goc, khong doi guong/
 # nghich dao) chi gom cac thuat toan DA KIEM CHUNG, dung de hien thi trong
@@ -128,16 +130,24 @@ def solve_oll_lookup(full):
 
 
 def solve_oll_with_auf(full):
-    """Thu ca 4 AUF (khong xoay/U/U2/U'), tra ve (auf_prefix, solve_moves)
-    cho lan dau tien tim thay trong bang, hoac None neu khong case nao
-    khop. auf_prefix can duoc AP DUNG TRUOC solve_moves khi thuc thi that."""
+    """Thu ca 4 AUF (khong xoay/U/U2/U'), tra ve (auf_prefix, solve_moves,
+    case_name) cho lan dau tien tim thay trong bang, hoac None neu khong
+    case nao khop. auf_prefix can duoc AP DUNG TRUOC solve_moves khi thuc
+    thi that. case_name (vd 'Sune', 'AntiSune'...) dung de HIEN THI trong
+    UI -- KHONG anh huong logic giai."""
+    ep, eo, cp, co = full
     from .full_state import apply_move
+    from .oll_recognition import _slot_indexed
     for auf in ['', 'U', 'U2', "U'"]:
         state = full if auf == '' else apply_move(full, auf)
-        mvs = solve_oll_lookup(state)
+        sep, seo, scp, sco = state
+        eo_slot = tuple(_slot_indexed(sep, seo))
+        co_slot = tuple(_slot_indexed(scp, sco))
+        key = (eo_slot, co_slot)
+        mvs = OLL_TABLE.get(key)
         if mvs is not None:
             prefix = [] if auf == '' else [auf]
-            return prefix, mvs
+            return prefix, mvs, OLL_TABLE_NAME.get(key)
     return None
 
 

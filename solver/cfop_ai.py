@@ -212,9 +212,17 @@ def full_solve_breakdown(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=
         'cross': {'status': 'done'|'moves'|'failed', 'moves': [...]},
         'f2l':   {slot: {'status': 'done'|'moves'|'failed'|'not_reached',
                           'moves': [...]} for slot in F2L_ORDER},
-        'oll':   {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...]},
-        'pll':   {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...]},
+        'oll':   {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...],
+                   'case_name': ten case DA KIEM CHUNG (vd 'Sune') hoac None},
+        'pll':   {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...],
+                   'case_name': ten case DA KIEM CHUNG (vd 'Aa', 'T'...) hoac None},
       }
+
+    case_name (chi co o oll/pll, chi khac None khi status == 'moves' VA
+    solver nhan dien duoc dung 1 case co ten cu the qua bang tra cuu --
+    xem solver/oll_algorithms.py, solver/pll_algorithms.py) -- dung de HIEN
+    THI trong UI (vd "PLL (T-perm): U R U' ..."), giup nguoi dung HOC luon
+    ten case thay vi chi thay 1 chuoi nuoc vo danh.
 
     status:
       'done'        -- buoc nay DA XONG SAN (khong can nuoc di nao) -> hien "DONE!"
@@ -239,8 +247,8 @@ def full_solve_breakdown(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=
             cross = {'status': 'failed', 'moves': []}
             f2l = {s: {'status': 'not_reached', 'moves': []} for s in F2L_ORDER}
             return {'cross': cross, 'f2l': f2l,
-                    'oll': {'status': 'not_reached', 'moves': []},
-                    'pll': {'status': 'not_reached', 'moves': []}}
+                    'oll': {'status': 'not_reached', 'moves': [], 'case_name': None},
+                    'pll': {'status': 'not_reached', 'moves': [], 'case_name': None}}
         for mv in mvs:
             do_move(st, mv)
         cross = {'status': 'moves', 'moves': mvs}
@@ -264,33 +272,35 @@ def full_solve_breakdown(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=
 
     if not f2l_all_done:
         return {'cross': cross, 'f2l': f2l,
-                'oll': {'status': 'not_reached', 'moves': []},
-                'pll': {'status': 'not_reached', 'moves': []}}
+                'oll': {'status': 'not_reached', 'moves': [], 'case_name': None},
+                'pll': {'status': 'not_reached', 'moves': [], 'case_name': None}}
 
     # ── 3) OLL ────────────────────────────────────────────────────────────
     if oll_solved(st):
-        oll = {'status': 'done', 'moves': []}
+        oll = {'status': 'done', 'moves': [], 'case_name': None}
     else:
         oll_res = solve_oll(st, retry=retry)
         mvs = oll_res.get('moves') or []
         for mv in mvs:
             do_move(st, mv)
         oll = {'status': 'moves' if oll_solved(st) else 'failed',
-               'moves': simplify(mvs) if mvs else []}
+               'moves': simplify(mvs) if mvs else [],
+               'case_name': oll_res.get('case_name') if oll_solved(st) else None}
 
     if oll['status'] == 'failed':
         return {'cross': cross, 'f2l': f2l, 'oll': oll,
-                'pll': {'status': 'not_reached', 'moves': []}}
+                'pll': {'status': 'not_reached', 'moves': [], 'case_name': None}}
 
     # ── 4) PLL ────────────────────────────────────────────────────────────
     if cube_solved(st):
-        pll = {'status': 'done', 'moves': []}
+        pll = {'status': 'done', 'moves': [], 'case_name': None}
     else:
         pll_res = solve_pll(st, retry=retry)
         mvs = pll_res.get('moves') or []
         for mv in mvs:
             do_move(st, mv)
         pll = {'status': 'moves' if cube_solved(st) else 'failed',
-               'moves': simplify(mvs) if mvs else []}
+               'moves': simplify(mvs) if mvs else [],
+               'case_name': pll_res.get('case_name') if cube_solved(st) else None}
 
     return {'cross': cross, 'f2l': f2l, 'oll': oll, 'pll': pll}

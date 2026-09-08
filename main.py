@@ -89,14 +89,32 @@ _ROW_GREY  = (140, 140, 175)   # chua toi luot
 _ROW_WHITE = (225, 225, 235)   # co chuoi nuoc di can lam
 
 
+# Ten hien thi "dep" hon cho nguoi dung (khac ten bien noi bo trong code) --
+# vd 'Dot_variant1' la ten bien ky thuat, khong phai thuat ngu CFOP chuan.
+_PRETTY_CASE_NAME = {
+    'Dot_variant1': 'Dot',
+}
+
+
 def _stage_row(label, info):
     """1 dong (kind='row') the hien 1 buoc/1 cap F2L, dua tren dict
-    {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...]}."""
-    status = info.get('status')
+    {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...],
+     'case_name': ten case (chi co o oll/pll) hoac None}.
+    Khi da nhan dien duoc TEN case cu the (vd 'Sune', 'T', 'OCLL'), THAY
+    THE nhan hien thi bang ten do (gon hon so voi nhan chung "OLL"/"PLL"
+    vốn đã lặp lại tiêu đề nhóm ngay phía trên) -- giúp người dùng HỌC
+    tên case thay vì chỉ thấy 1 chuỗi nước vô danh."""
+    status    = info.get('status')
+    case_name = info.get('case_name')
+    if status == 'moves' and case_name:
+        pretty = _PRETTY_CASE_NAME.get(case_name, case_name)
+        disp_label = f"{label}:{pretty}"
+    else:
+        disp_label = label
     if status == 'done':
         return ('row', label, 'DONE!', _ROW_GREEN)
     if status == 'moves':
-        return ('row', label, ' '.join(info['moves']), _ROW_WHITE)
+        return ('row', disp_label, ' '.join(info['moves']), _ROW_WHITE)
     if status == 'failed':
         return ('row', label,
                  '(chưa tìm được trong ngân sách hiện tại -- mở lại bảng (T) để thử lại)',
@@ -1267,7 +1285,7 @@ def main():
             formula_content_rect = content_rect
 
             fonts = {'header': lo.bfont, 'row': lo.mfont,
-                     'name_col_w': max(70, int(80 * lo.s)),
+                     'name_col_w': max(90, int(108 * lo.s)),
                      'row_gap': max(2, int(3 * lo.s)),
                      'spacer_h': max(6, int(10 * lo.s))}
             formula_scroll_max, formula_scroll, formula_hit_rows = _draw_formula_panel_content(
@@ -1321,7 +1339,7 @@ def main():
                     max(10, win_h - header_h - win_stale_h - foot_h - 4))
                 win_fonts_arg = {'header': formula_win_fonts['header'],
                                   'row': formula_win_fonts['row'],
-                                  'name_col_w': max(60, int(80 * (win_w / 460))),
+                                  'name_col_w': max(80, int(108 * (win_w / 460))),
                                   'row_gap': 2,
                                   'spacer_h': max(6, int(8 * (win_w / 460)))}
                 # Cửa sổ chỉ xem -- không cuộn (scroll=0); nội dung dài quá sẽ

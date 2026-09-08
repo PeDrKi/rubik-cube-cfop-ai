@@ -35,7 +35,7 @@ from . import corner_model as CM
 from .pdb_builder import build_pdb_edges, build_pdb_corners
 from .oll_solver import _cross_f2l_lower_bound
 from .search_utils import a_star, ida_star, move_order
-from .pll_algorithms import solve_pll_lookup, VERIFIED_ALG_NAMES
+from .pll_algorithms import solve_pll_lookup, solve_pll_lookup_named, VERIFIED_ALG_NAMES
 
 U_EDGES = ('UF', 'UB', 'UL', 'UR')
 U_CORNERS = ('UFR', 'UFL', 'UBR', 'UBL')
@@ -178,7 +178,11 @@ def solve_pll(state, retry=False):
                | 'macro'  (ghep T-perm/Y-perm/3-cycle + AUF -- van la cac
                             trigger co ten, nhung khong phai "1 case = 1
                             thuat toan" nhu CFOP chuan)
-               | 'search' (2-look search vu vet, khong co ten case nao)}
+               | 'search' (2-look search vu vet, khong co ten case nao),
+       'case_name': ten case DA KIEM CHUNG (vd 'Aa', 'T', 'Y'...) NEU
+                     source == 'named', dung de HIEN THI trong UI --
+                     None neu source khac 'named' (khong xac dinh duoc
+                     1 case cu the).}
     Khong thay doi state truyen vao.
 
     retry=True: bo qua lookup-table & macro-solver (da tat dinh, luon thanh
@@ -189,29 +193,29 @@ def solve_pll(state, retry=False):
     if not retry:
         # Uu tien 1: tra bang 21 thuat toan PLL CHUAN da kiem chung (dung
         # CFOP THAT: 1 case = 1 thuat toan, ~9-19 nuoc).
-        mvs = solve_pll_lookup(full)
+        mvs, case_name = solve_pll_lookup_named(full)
         if mvs is not None:
             return {'corner_moves': mvs, 'edge_moves': [], 'moves': mvs,
-                    'source': 'named'}
+                    'source': 'named', 'case_name': case_name}
         # Uu tien 2: macro-search (T-perm/Y-perm/3-cycle noi tiep) -- luon
         # thanh cong nhung co the dai hon (ghep 2-3 'khoi').
         mvs = _solve_pll_macro(full)
         if mvs is not None:
             return {'corner_moves': mvs, 'edge_moves': [], 'moves': mvs,
-                    'source': 'macro'}
+                    'source': 'macro', 'case_name': None}
 
     # Du phong (gan nhu khong bao gio can toi): giai 2-look bang search.
     corner_moves = _search_fallback(_goal_A, _heuristic_A, full, shuffled=retry)
     if corner_moves is None:
         return {'corner_moves': None, 'edge_moves': None, 'moves': None,
-                'source': None}
+                'source': None, 'case_name': None}
     for mv in corner_moves:
         full = apply_move(full, mv)
 
     edge_moves = _search_fallback(_goal_B, _heuristic_B, full, shuffled=retry)
     if edge_moves is None:
         return {'corner_moves': corner_moves, 'edge_moves': None, 'moves': corner_moves,
-                'source': 'search'}
+                'source': 'search', 'case_name': None}
 
     return {'corner_moves': corner_moves, 'edge_moves': edge_moves,
-            'moves': corner_moves + edge_moves, 'source': 'search'}
+            'moves': corner_moves + edge_moves, 'source': 'search', 'case_name': None}

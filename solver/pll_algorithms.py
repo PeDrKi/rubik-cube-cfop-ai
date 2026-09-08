@@ -109,17 +109,21 @@ def _pattern_of(seq):
     return cp[0:4], ep[0:4], valid
 
 
-def _add_variant(table, seq):
+def _add_variant(table, name_table, seq, name):
     """Them 1 bien the (chuoi nuoc da xac dinh la hop le) vao bang, ca
-    chieu thuan lan chieu nghich cua no."""
+    chieu thuan lan chieu nghich cua no. Dong thoi ghi lai TEN thuat toan
+    goc (vd 'Aa', 'T'...) vao name_table cho ca 2 chieu -- dung de HIEN
+    THI case name trong UI (khong chi tra ve chuoi nuoc vo danh)."""
     cp, ep, valid = _pattern_of(seq)
     if not valid:
         return False
     table[(cp, ep)] = _inv(seq)
+    name_table[(cp, ep)] = name
     inv_seq = _inv(seq)
     icp, iep, ivalid = _pattern_of(inv_seq)
     if ivalid:
         table[(icp, iep)] = seq
+        name_table[(icp, iep)] = name
     return True
 
 
@@ -132,16 +136,17 @@ def verify_and_build_table():
     van hop le va cho pattern KHAC ban goc -- xem CFOP_AI_README.md).
     Chay 1 lan khi import module."""
     table = {}
+    name_table = {}
     verified_names = []
     for name, seqstr in _RAW_ALGS.items():
         seq = seqstr.split()
-        if _add_variant(table, seq):
+        if _add_variant(table, name_table, seq, name):
             verified_names.append(name)
-            _add_variant(table, _mirror_seq(seq))
-    return table, verified_names
+            _add_variant(table, name_table, _mirror_seq(seq), name)
+    return table, name_table, verified_names
 
 
-PLL_TABLE, VERIFIED_ALG_NAMES = verify_and_build_table()
+PLL_TABLE, PLL_TABLE_NAME, VERIFIED_ALG_NAMES = verify_and_build_table()
 
 # Bang cong thuc PLL "sach" (ten -> chuoi Singmaster goc, khong doi guong/
 # nghich dao) chi gom cac thuat toan DA KIEM CHUNG, dung de hien thi trong
@@ -155,10 +160,23 @@ def solve_pll_lookup(full):
     """Nhan dien case PLL hien tai (thu 4 AUF) va tra ve chuoi nuoc giai
     NEU khop 1 trong cac pattern da kiem chung -- CFOP thuc su (1 case = 1
     thuat toan, ~9-19 nuoc), KHONG phai ghep nhieu 'khoi'.
-    Tra ve None neu khong khop case nao (goi ham macro-search du phong)."""
+    Tra ve None neu khong khop case nao (goi ham macro-search du phong).
+
+    LUU Y: giu nguyen chu ky nay (chi tra ve moves) de tuong thich nguoc
+    voi code da dung ham nay tu truoc (vd research/phase3_survey). Neu can
+    ca TEN case, dung solve_pll_lookup_named() ben duoi."""
+    mvs, _name = solve_pll_lookup_named(full)
+    return mvs
+
+
+def solve_pll_lookup_named(full):
+    """Giong solve_pll_lookup(), nhung tra ve CA TEN case da kiem chung
+    (vd 'Aa', 'T', 'Y'...) dung de HIEN THI trong UI -- tra ve
+    (moves, name) hoac (None, None) neu khong khop case nao. name =
+    'solved' neu cube da o trang thai PLL xong san (khong can nuoc nao)."""
     ep0, eo0, cp0, co0 = full
     if cp0[0:4] == (0, 1, 2, 3) and ep0[0:4] == (0, 1, 2, 3):
-        return []
+        return [], 'solved'
     for auf_name, auf in AUF_OPTIONS:
         s = full
         for mv in auf:
@@ -166,5 +184,5 @@ def solve_pll_lookup(full):
         ep, eo, cp, co = s
         key = (cp[0:4], ep[0:4])
         if key in PLL_TABLE:
-            return auf + PLL_TABLE[key]
-    return None
+            return auf + PLL_TABLE[key], PLL_TABLE_NAME.get(key)
+    return None, None

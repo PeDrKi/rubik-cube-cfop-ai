@@ -229,7 +229,13 @@ def solve_oll(state, retry=False):
                        xem solver/oll_algorithms.py) hoac 'search' (pha A
                        rieng, kien truc 2-look cu) hoac None,
        'corner_source': 'named' (Sune/Anti-Sune HOAC bang OLL day du) hoac
-                         'search' (fallback hiem gap)}
+                         'search' (fallback hiem gap),
+       'case_name': ten case DA KIEM CHUNG (vd 'Sune', 'AntiSune',
+                     'Dot_variant1'...) NEU tra bang OLL day du thanh cong
+                     (edge_source=corner_source='named'); 'OCLL' neu chi
+                     khop qua kien truc 2-look cu (Sune/Anti-Sune lap lai
+                     -- it chinh xac hon vi co the lap macro nhieu lan);
+                     None neu khong xac dinh duoc case cu the (search).}
     Khong thay doi state truyen vao. retry=True: xao tron thu tu nuoc di.
     """
     full = from_facelets(state)
@@ -242,17 +248,18 @@ def solve_oll(state, retry=False):
         from .oll_algorithms import solve_oll_with_auf
         result = solve_oll_with_auf(full)
         if result is not None:
-            auf, table_moves = result
+            auf, table_moves, case_name = result
             moves = auf + table_moves
             return {'edge_moves': [], 'corner_moves': moves, 'moves': moves,
-                    'edge_source': 'named', 'corner_source': 'named'}
+                    'edge_source': 'named', 'corner_source': 'named',
+                    'case_name': case_name}
 
     # Uu tien 2 (fallback): kien truc 2-look cu -- dinh huong canh bang
     # search truoc, roi goc bang Sune/Anti-Sune (macro) hoac search.
     edge_moves = _solve_phase_A_ladder(full, shuffled=retry)
     if edge_moves is None:
         return {'edge_moves': None, 'corner_moves': None, 'moves': None,
-                'edge_source': None, 'corner_source': None}
+                'edge_source': None, 'corner_source': None, 'case_name': None}
     for mv in edge_moves:
         full = apply_move(full, mv)
 
@@ -266,10 +273,13 @@ def solve_oll(state, retry=False):
     corner_moves = _solve_phase_B_ladder(full, shuffled=retry)
     if corner_moves is None:
         return {'edge_moves': edge_moves, 'corner_moves': None, 'moves': edge_moves,
-                'edge_source': 'search', 'corner_source': None}
+                'edge_source': 'search', 'corner_source': None, 'case_name': None}
     if corner_source is None:
         corner_source = 'search'
 
+    case_name = 'OCLL' if corner_source == 'named' else None
+
     return {'edge_moves': edge_moves, 'corner_moves': corner_moves,
             'moves': edge_moves + corner_moves,
+            'case_name': case_name,
             'edge_source': 'search', 'corner_source': corner_source}
