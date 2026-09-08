@@ -43,6 +43,42 @@ SPEED_STEPS   = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]   # các mức tốc 
 SPEED_DEFAULT_IDX = SPEED_STEPS.index(1.0)
 
 
+def _clipboard_set(text):
+    """
+    Copy `text` (str, có thể chứa tiếng Việt có dấu) vào clipboard hệ
+    thống, ưu tiên cách ĐẢM BẢO ĐÚNG UNICODE trên từng nền tảng thay vì chỉ
+    dùng pygame.scrap (trên Windows, pygame.scrap ánh xạ SCRAP_TEXT sang
+    CF_TEXT/ANSI -- ghi thẳng bytes UTF-8 vào đó khiến ứng dụng dán ra hiểu
+    nhầm theo bảng mã ANSI/CP1252, gây lỗi hiển thị kiểu "cáº·p" thay vì
+    "cặp"). Trả về True nếu copy thành công.
+    """
+    if sys.platform.startswith('win'):
+        try:
+            import ctypes
+            CF_UNICODETEXT = 13
+            GMEM_MOVEABLE  = 0x0002
+            data = (text.replace('\n', '\r\n') + '\0').encode('utf-16-le')
+            kernel32 = ctypes.windll.kernel32
+            user32   = ctypes.windll.user32
+            h = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(data))
+            ptr = kernel32.GlobalLock(h)
+            ctypes.memmove(ptr, data, len(data))
+            kernel32.GlobalUnlock(h)
+            user32.OpenClipboard(0)
+            user32.EmptyClipboard()
+            user32.SetClipboardData(CF_UNICODETEXT, h)
+            user32.CloseClipboard()
+            return True
+        except Exception:
+            pass   # rot xuong thu pygame.scrap ben duoi
+
+    try:
+        pygame.scrap.put(pygame.SCRAP_TEXT, text.encode('utf-8'))
+        return True
+    except Exception:
+        return False
+
+
 # ── Bảng công thức CFOP (Cross -> F2L -> OLL -> PLL), hiển thị khi bấm T ────
 # Khác với 1 bảng tra cứu tĩnh: nội dung được TÍNH TỪ TRẠNG THÁI CUBE HIỆN
 # TẠI (xem cfop_ai.full_solve_breakdown), nên mỗi bước hiện đúng chuỗi nước
@@ -114,17 +150,28 @@ def _formula_lines_to_text(formula_lines):
     return '\n'.join(out)
 
 
-def _formula_row_plain_texts(formula_lines):
-    """Tra ve list ["Cross: DONE!", "DFR: R U R'...", ...] -- 1 phan tu cho
-    moi dong 'row' trong formula_lines, THEO DUNG THU TU/row_idx ma
-    _draw_formula_panel_content() dung de gan nhan khi ve (chon 1 dong ->
-    copy dung 1 phan tu nay)."""
-    out = []
+def _formula_row_data(formula_lines):
+    """Tra ve 2 list SONG SONG (cung thu tu/row_idx ma
+    _draw_formula_panel_content() dung de gan nhan khi ve):
+      labels   -- ["Cross", "DFR", "DFL", ..., "PLL"]
+      formulas -- ["U' F2 B2 L D", "DONE!", "R U R'...", ...]  (CHỈ nội
+                  dung, KHÔNG kèm nhãn -- dùng để copy/áp dụng đúng 1 công
+                  thức mà không dính chữ "Cross: "/"DFR: " ở đầu).
+    """
+    labels, formulas = [], []
     for row in formula_lines:
         if row[0] == 'row':
             _, label, text, _color = row
-            out.append(f"{label}: {text}")
-    return out
+            labels.append(label)
+            formulas.append(text)
+    return labels, formulas
+
+
+def _looks_like_moves(text):
+    """True neu `text` la 1 chuoi nuoc di Singmaster that su (khong phai
+    'DONE!' hay ghi chu dang '(...)'), dung de an/hien nut 'Ap dung -> bar'."""
+    t = (text or '').strip()
+    return bool(t) and t != 'DONE!' and not t.startswith('(')
 
 
 def _wrap_text(text, font, max_w):
@@ -342,8 +389,10 @@ def main():
     formula_copy_note        = None   # thông báo "Đã copy..." hiển thị tạm thời
     formula_copy_note_timer  = 0
     formula_selected_row  = None  # row_idx (int) đang được "bôi đen"/chọn, hoặc None
-    formula_row_texts     = []    # ["Cross: ...", "DFR: ...", ...] song song với row_idx
+    formula_row_labels    = []    # ["Cross", "DFR", ...] song song với row_idx
+    formula_row_formulas  = []    # ["U' F2 B2 L D", "DONE!", ...] -- KHÔNG kèm nhãn
     formula_hit_rows      = []    # [(Rect, row_idx), ...] cập nhật mỗi frame -> hit-test click
+    formula_apply_rect    = None  # nút "Áp dụng -> bar" -- chỉ hiện khi có dòng đang chọn
     formula_content_rect  = None  # vùng nội dung (không tính header/footer) -- hit-test click trống để bỏ chọn
 
     # ── Cửa sổ OS riêng (thử nghiệm) cho bảng công thức, xem show_formula_window() ──
@@ -490,7 +539,7 @@ def main():
                 cfop_note_timer = 220
             elif kind == 'formula':
                 formula_lines       = build_formula_lines(res)
-                formula_row_texts   = _formula_row_plain_texts(formula_lines)
+                formula_row_labels, formula_row_formulas = _formula_row_data(formula_lines)
                 formula_selected_row = None   # dữ liệu mới -> bỏ chọn dòng cũ
                 formula_scroll      = 0
                 formula_state_ver   = state_version
@@ -550,18 +599,27 @@ def main():
                 if formula_close_rect and formula_close_rect.collidepoint(mx, my):
                     formula_panel_open = False
                 elif formula_copy_rect and formula_copy_rect.collidepoint(mx, my):
-                    if formula_selected_row is not None and formula_selected_row < len(formula_row_texts):
-                        cp_txt  = formula_row_texts[formula_selected_row]
-                        cp_note = f"Đã copy: {cp_txt.split(':', 1)[0]}"
+                    if formula_selected_row is not None and formula_selected_row < len(formula_row_formulas):
+                        cp_txt  = formula_row_formulas[formula_selected_row]
+                        cp_note = f"Đã copy: {formula_row_labels[formula_selected_row]}"
                     else:
                         cp_txt  = _formula_lines_to_text(formula_lines)
                         cp_note = "Đã copy toàn bộ công thức vào clipboard!"
-                    try:
-                        pygame.scrap.put(pygame.SCRAP_TEXT, cp_txt.encode('utf-8'))
-                        formula_copy_note = cp_note
-                    except Exception:
-                        formula_copy_note = "Không copy được (clipboard không khả dụng ở máy này)"
+                    formula_copy_note = (cp_note if _clipboard_set(cp_txt) else
+                                          "Không copy được (clipboard không khả dụng ở máy này)")
                     formula_copy_note_timer = 150
+                elif formula_apply_rect and formula_apply_rect.collidepoint(mx, my):
+                    # Áp dụng công thức đang chọn thẳng vào thanh Singmaster
+                    # (giống nút "Copy -> bar" của gợi ý H) để xem/sửa rồi
+                    # Enter thực thi trên cube.
+                    if (formula_selected_row is not None
+                            and formula_selected_row < len(formula_row_formulas)
+                            and _looks_like_moves(formula_row_formulas[formula_selected_row])):
+                        bar_text       = formula_row_formulas[formula_selected_row][:BAR_MAX_LEN]
+                        bar_active     = True
+                        bar_status     = None
+                        bar_cursor     = len(bar_text)
+                        bar_sel_anchor = None
                 elif formula_up_rect and formula_up_rect.collidepoint(mx, my):
                     formula_scroll = max(0, formula_scroll - step)
                 elif formula_down_rect and formula_down_rect.collidepoint(mx, my):
@@ -658,21 +716,19 @@ def main():
                       and formula_lines):
                     # C (không Ctrl) = copy bảng công thức vào clipboard hệ
                     # thống. Nếu đã CLICK CHỌN 1 dòng trong panel nổi (bôi
-                    # nền vàng) thì chỉ copy dòng đó; ngược lại copy toàn bộ.
-                    # Cần thiết vì nội dung được vẽ dưới dạng hình (canvas),
-                    # KHÔNG phải văn bản thật nên không kéo-chọn bằng chuột
-                    # được như 1 ứng dụng thông thường.
-                    if formula_selected_row is not None and formula_selected_row < len(formula_row_texts):
-                        txt  = formula_row_texts[formula_selected_row]
-                        note = f"Đã copy: {txt.split(':', 1)[0]}"
+                    # nền vàng) thì chỉ copy ĐÚNG chuỗi công thức của dòng đó
+                    # (không kèm nhãn "Cross: "/"DFR: "); ngược lại copy toàn
+                    # bộ. Cần thiết vì nội dung được vẽ dưới dạng hình
+                    # (canvas), KHÔNG phải văn bản thật nên không kéo-chọn
+                    # bằng chuột được như 1 ứng dụng thông thường.
+                    if formula_selected_row is not None and formula_selected_row < len(formula_row_formulas):
+                        txt  = formula_row_formulas[formula_selected_row]
+                        note = f"Đã copy: {formula_row_labels[formula_selected_row]}"
                     else:
                         txt  = _formula_lines_to_text(formula_lines)
                         note = "Đã copy toàn bộ công thức vào clipboard!"
-                    try:
-                        pygame.scrap.put(pygame.SCRAP_TEXT, txt.encode('utf-8'))
-                        formula_copy_note = note
-                    except Exception:
-                        formula_copy_note = "Không copy được (clipboard không khả dụng ở máy này)"
+                    formula_copy_note = (note if _clipboard_set(txt) else
+                                          "Không copy được (clipboard không khả dụng ở máy này)")
                     formula_copy_note_timer = 150
 
                 elif ev.key == K_t:
@@ -725,10 +781,7 @@ def main():
                     elif ctrl and ev.key in (K_c, K_x):
                         sel = _sel_range()
                         copy_text = bar_text[sel[0]:sel[1]] if sel else bar_text
-                        try:
-                            pygame.scrap.put(pygame.SCRAP_TEXT, copy_text.encode('utf-8'))
-                        except Exception:
-                            pass   # clipboard khong kha dung tren moi truong nay -- bo qua an toan
+                        _clipboard_set(copy_text)
                         if ev.key == K_x and sel:
                             a, b = sel
                             bar_text = bar_text[:a] + bar_text[b:]
@@ -1165,6 +1218,21 @@ def main():
             screen.blit(copy_txt_s, (formula_copy_rect.centerx - copy_txt_s.get_width() // 2,
                                       formula_copy_rect.centery - copy_txt_s.get_height() // 2))
 
+            can_apply = (formula_selected_row is not None
+                         and formula_selected_row < len(formula_row_formulas)
+                         and _looks_like_moves(formula_row_formulas[formula_selected_row]))
+            if can_apply:
+                apply_txt_s = lo.sfont.render("Áp dụng -> bar", True, (30, 30, 20))
+                apply_w = apply_txt_s.get_width() + 14
+                formula_apply_rect = pygame.Rect(
+                    formula_copy_rect.x - apply_w - 6, panel_y + 8, apply_w, close_sz)
+                pygame.draw.rect(screen, GOLD, formula_apply_rect, border_radius=5)
+                screen.blit(apply_txt_s,
+                            (formula_apply_rect.centerx - apply_txt_s.get_width() // 2,
+                             formula_apply_rect.centery - apply_txt_s.get_height() // 2))
+            else:
+                formula_apply_rect = None
+
             header_h = max(title.get_height(), close_sz) + 16
 
             stale = (formula_state_ver is not None and formula_state_ver != state_version)
@@ -1176,7 +1244,7 @@ def main():
                 stale_h = stale_txt.get_height() + 6
 
             footer_txt = lo.sfont.render(
-                "T/Esc đóng • lăn chuột cuộn • click dòng để chọn • C: copy",
+                "T/Esc đóng • click chọn dòng • C: copy • nút vàng: dán vào bar",
                 True, HINT)
             footer_h = footer_txt.get_height() + 10
             screen.blit(footer_txt, (panel_x + 14, panel_y + panel_h - footer_h))
