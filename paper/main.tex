@@ -113,16 +113,23 @@ reported in this paper were run, OLL coverage was limited to a
 2-look decomposition (2 generator algorithms, Sune/Anti-Sune, rather
 than the full 57); this asymmetry is itself informative for
 Pattern-conformity measurement (Section~\ref{sec:method}). The
-solver has since been extended to a verified single-look table
-covering 55 of the 57 OLL cases (43 confirmed against the standard
-community numbering, the remainder auto-derived and self-verified
-via exhaustive search); the 2 unresolved cases (OLL~2 and OLL~20)
-provably admit no pure face-turn algorithm shorter than 13 moves
-(established by bidirectional meet-in-the-middle search over the
-full cube-state graph) and fall back to the same verified 2-look
-decomposition. This upgrade postdates data collection and does not
-alter the results reported in Section~\ref{sec:results}, which
-reflect the 2-generator OLL table described above.
+solver has since been extended to a single-look table with all 57
+cases functionally verified (each confirmed not to break Cross+F2L
+when applied from a solved state, via
+\texttt{verify\_and\_build\_table()}); of these, 40 of 57 have been
+matched against the standard community numbering (increasing over
+successive review passes), with the remaining 17 functionally valid
+but not yet matched to a specific community number. For OLL~2 and
+OLL~20 specifically: every pure face-turn algorithm (no
+slice/wide moves) published by the speedcubing community for these
+two cases uses a slice or wide move (M/S/E or r/l/f/u/d/b) --- this
+is an \emph{empirical observation} from public sources, \textbf{not}
+a formal proof by exhaustive search (no such script exists in this
+repository); these two cases therefore still fall back to the
+verified 2-look decomposition. This upgrade postdates data
+collection and does not alter the results reported in
+Section~\ref{sec:results}, which reflect the 2-generator OLL table
+described above.
 
 Three related research directions (Section~\ref{sec:related}) currently
 do not intersect: computer-optimal Rubik's Cube solvers
@@ -287,7 +294,8 @@ of solved stages whose corresponding sub-sequence exactly matches an
 entry in a verified table of canonical algorithms (Aa, Ab, \ldots,
 Z for PLL; Sune/Anti-Sune generators for 2-look OLL, the table in
 effect at data-collection time --- see Section~\ref{sec:intro} for
-the subsequent 55/57 single-look upgrade, which does not affect the
+the subsequent upgrade to a full single-look OLL table, which does
+not affect the
 figures below) rather than an
 unstructured search fallback. All 21/21 PLL cases in the table are
 verified automatically on first module import via
@@ -347,8 +355,12 @@ current path covered by a greedy longest-match against corpus $T$
 (the same matching procedure used to compute $O(\pi)$ at evaluation
 time, ensuring consistency between the search-time objective and the
 evaluation-time metric). $\lambda=0$ recovers the original,
-unbiased search exactly (formal backward-compatibility: we verified
-all $176$ pre-existing unit tests pass unchanged with $\lambda=0$).
+unbiased search exactly (formal backward-compatibility: verified by a
+dedicated test comparing output with/without the $\lambda$ parameter,
+see
+\texttt{test\_solver.py::TestF2LSolver::test\_lam\_zero\_is\_backward\_compatible},
+one of $319$ unit tests currently in the repository --
+\texttt{pytest test\_solver.py test\_cube\_engine.py}).
 Increasing $\lambda$ trades search optimality (and, as we show
 empirically, compute time) for trigger-overlap.
 
@@ -629,10 +641,12 @@ expectation --- that higher $\lambda$ was associated with
     gives the mean rating used in the RQ-V1 correlation high
     reliability (ICC(2,k)$=0.91$) --- the RQ-V1 correlation should
     be read as a correlation with a stable group mean, not with any
-    single rater's judgment. \emph{Note: these ICC figures are
-    reported from the survey write-up and have not yet been
-    independently re-derived from the raw per-rater rating matrix in
-    this repository; re-verify before a formal submission.}
+    single rater's judgment. \emph{Note: these ICC figures were
+    initially taken from the survey write-up; they have since been
+    independently re-derived from the raw per-rater rating matrix (28
+    real CSV files, see
+    \texttt{research/phase3\_survey/compute\_icc.py}), matching
+    exactly: ICC(2,1)$=0.2563$, ICC(2,k)$=0.9061$.}
   \item \textbf{Corpus bias}: the finger-trick corpus $T$ is
     manually curated (11 tricks), not derived from real solve logs;
     results may not generalize to solvers with different trigger

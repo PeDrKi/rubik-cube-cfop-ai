@@ -95,15 +95,21 @@ trong bài này được chạy, OLL chỉ có bảng 2-look (2 thuật toán si
 Sune/Anti-Sune, thay vì đầy đủ 57 case); sự bất đối xứng này tự nó có
 giá trị thông tin cho việc đo lường Pattern-conformity
 (Mục~\ref{sec:method}). Solver sau đó đã được mở rộng thành một bảng
-1-look đã kiểm chứng, phủ 55/57 case OLL (43 case đã đối chiếu đúng số
-thứ tự chuẩn cộng đồng, số còn lại tự sinh và tự kiểm chứng qua tìm
-kiếm vét cạn); 2 case chưa giải được (OLL~2 và OLL~20) đã được chứng
-minh không tồn tại thuật toán thuần (chỉ xoay mặt đơn, không dùng nước
-lát/rộng) nào dưới 13 nước (bằng tìm kiếm hai chiều gặp giữa trên toàn
-bộ đồ thị trạng thái khối), nên rơi về đúng bảng 2-look đã kiểm chứng
-nói trên. Nâng cấp này diễn ra sau khi thu thập dữ liệu và không làm
-thay đổi các kết quả báo cáo ở Mục~\ref{sec:results}, vốn phản ánh bảng
-OLL 2 thuật toán sinh nói trên.
+1-look với đầy đủ 57/57 công thức đã kiểm chứng về mặt chức năng (mỗi
+công thức được xác nhận không phá vỡ Cross+F2L khi áp từ trạng thái đã
+giải, qua \texttt{verify\_and\_build\_table()}); trong số đó, 40/57
+đã được đối chiếu đúng số thứ tự chuẩn cộng đồng (tăng dần qua nhiều
+lần rà soát), số còn lại (17 công thức) hợp lệ về chức năng nhưng
+chưa được đối chiếu số cộng đồng cụ thể. Riêng OLL~2 và OLL~20: toàn
+bộ công thức thuần (chỉ xoay mặt đơn, không dùng nước lát/rộng) được
+cộng đồng speedcubing công bố cho 2 case này đều dùng nước lát/rộng
+(M/S/E hoặc r/l/f/u/d/b) --- đây là một \emph{quan sát thực nghiệm}
+từ các nguồn công khai, \textbf{không phải} một chứng minh hình thức
+bằng tìm kiếm vét cạn (không có script như vậy trong repo này); do đó
+2 case này vẫn rơi về bảng 2-look đã kiểm chứng nói trên. Nâng cấp
+bảng OLL này diễn ra sau khi thu thập dữ liệu và không làm thay đổi
+các kết quả báo cáo ở Mục~\ref{sec:results}, vốn phản ánh bảng OLL 2
+thuật toán sinh (Sune/Anti-Sune) có hiệu lực tại thời điểm đó.
 
 Ba hướng nghiên cứu liên quan (Mục~\ref{sec:related}) hiện chưa giao
 nhau: các solver Rubik's Cube tối ưu máy tính
@@ -266,7 +272,8 @@ giai đoạn đã giải mà đoạn con nước-đi tương ứng khớp chính
 mục trong bảng đã kiểm chứng các thuật toán chuẩn (Aa, Ab, \ldots, Z
 cho PLL; các thuật toán sinh Sune/Anti-Sune cho OLL 2-look -- bảng có
 hiệu lực tại thời điểm thu thập dữ liệu; xem Mục~\ref{sec:intro} về
-việc nâng cấp lên 55/57 sau đó, không ảnh hưởng tới số liệu bên dưới)
+việc nâng cấp OLL lên bảng 1-look đầy đủ sau đó, không ảnh hưởng tới
+số liệu bên dưới)
 thay vì rơi
 vào tìm kiếm không cấu trúc. Toàn bộ 21/21 case PLL trong bảng đã
 được kiểm chứng tự động ngay lần import module đầu tiên qua
@@ -323,8 +330,12 @@ hiện tại được bao phủ bởi một phép khớp greedy-longest-match đ
 với kho $T$ (cùng quy trình khớp dùng để tính $O(\pi)$ tại thời điểm
 đánh giá, đảm bảo tính nhất quán giữa mục tiêu lúc tìm kiếm và chỉ số
 lúc đánh giá). $\lambda=0$ khôi phục chính xác tìm kiếm gốc, không
-thiên vị (tương thích ngược hình thức: chúng tôi đã xác nhận cả $176$
-unit test có sẵn từ trước đều pass không đổi với $\lambda=0$). Tăng
+thiên vị (tương thích ngược hình thức: chúng tôi xác nhận điều này
+bằng một test chuyên biệt so sánh trực tiếp kết quả có/không truyền
+tham số $\lambda$, xem
+\texttt{test\_solver.py::TestF2LSolver::test\_lam\_zero\_is\_backward\_compatible},
+một trong $319$ unit test hiện có của repo --
+\texttt{pytest test\_solver.py test\_cube\_engine.py}). Tăng
 $\lambda$ đánh đổi tính tối ưu của tìm kiếm (và, như chúng tôi cho thấy
 thực nghiệm, thời gian tính toán) để lấy độ trùng lặp trigger.
 
@@ -595,10 +606,11 @@ hơn}, không phải nhiều hơn, các thất bại hội tụ trên tập dữ
     điểm trung bình dùng trong tương quan RQ-V1 độ tin cậy cao
     (ICC(2,k)$=0,91$) --- tương quan RQ-V1 nên được đọc như tương
     quan với một giá trị trung bình nhóm ổn định, không phải với đánh
-    giá của một giám khảo đơn lẻ nào. \emph{Lưu ý: các số ICC này lấy
-    từ bản viết khảo sát, chưa được tự tính lại độc lập từ ma trận
-    đánh giá thô theo từng giám khảo trong repo này; cần xác minh lại
-    trước khi nộp bản chính thức.}
+    giá của một giám khảo đơn lẻ nào. \emph{Ghi chú: các số ICC này ban
+    đầu lấy từ bản viết khảo sát; đã được tính lại độc lập từ ma trận
+    đánh giá thô theo từng giám khảo (28 file CSV thật, xem
+    \texttt{research/phase3\_survey/compute\_icc.py}), khớp chính xác:
+    ICC(2,1)$=0,2563$, ICC(2,k)$=0,9061$.}
   \item \textbf{Thiên vị kho ngữ liệu}: kho finger-trick $T$ được tuyển
     chọn thủ công (11 trigger), không được suy ra từ log solve người
     thật; kết quả có thể không tổng quát hóa được cho các solver có vốn

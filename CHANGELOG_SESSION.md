@@ -293,6 +293,49 @@ tái lập, kiểm chứng độc lập, và vệ sinh gói nộp.
 Toàn bộ 319 test + cả 2 script verify ICC/correlation đã chạy lại lần
 cuối sau khi refactor xong — không có gì bị phá vỡ.
 
+## CẬP NHẬT MỚI NHẤT 8 — Đọc lại prose 2 bản paper, sửa 3 chỗ số liệu lỗi thời, tăng độ phủ nhãn OLL 35→40
+
+Đọc toàn bộ 829+867 dòng của cả `main_vi.tex`/`main.tex`, đối chiếu
+từng con số với code/CSV thô. Tìm và sửa 3 vấn đề — **lặp lại giống hệt
+ở cả 2 bản** (rủi ro copy-paste 2 ngôn ngữ song song):
+
+**1. Claim "55/57 case OLL, 43 đối chiếu số cộng đồng" — sai lệch
+thật.** Kiểm tra trực tiếp `PRETTY_CASE_NAME` trong
+`solver/oll_algorithms.py`: trước khi sửa chỉ có **35** số OLL chính
+thức duy nhất được gán nhãn đúng (37 entry, 2 trùng — OLL 26, 27),
+KHÔNG PHẢI 55; 22 số OLL vắng mặt hoàn toàn, không chỉ 2. Đã tra 57
+thuật toán chuẩn cộng đồng (nguồn SpeedCubeDB), lọc ra 14 công thức
+**thuần** (không nước lát/rộng) cho các số còn thiếu, tự tính pattern
+bằng chính engine của dự án (dùng phép "conjugate" — thêm nghịch đảo
+phép xoay `y`/`y2` ở cuối chuỗi — để xử lý đúng tiền tố xoay cả khối,
+tránh lỗi `cross_f2l_ok` sai do hệ quy chiếu tuyệt đối), đối chiếu với
+bảng hiện có. Tìm được **5 case khớp thật** (OLL 24, 29, 36, 39, 40 →
+`case_auto_01/44/30/13/16`, trước đó gắn nhãn chung chung
+`OCLL`/`Angle`/`Line`) → cập nhật `PRETTY_CASE_NAME`. Kết quả: **35→40
+số OLL chính thức được gán nhãn đúng**, 17 công thức còn lại (đã kiểm
+chứng hợp lệ về chức năng) chưa đối chiếu được số cộng đồng cụ thể.
+Paper đã sửa lại theo đúng con số 40/57 hiện tại.
+
+**2. Claim "đã chứng minh bằng tìm kiếm hai chiều gặp giữa" cho OLL 2
+và OLL 20 — không có bằng chứng.** Grep toàn repo: không có script nào
+tên/nội dung liên quan "bidirectional"/"meet-in-middle". Claim này
+được làm mềm lại thành đúng bản chất: "quan sát thực nghiệm từ nguồn
+cộng đồng công khai (mọi thuật toán thuần được công bố cho 2 case này
+đều dùng nước lát/rộng), KHÔNG PHẢI chứng minh hình thức".
+
+**3. Đã sửa 2 vấn đề nêu ở CẬP NHẬT MỚI NHẤT 7** (chưa áp dụng vào
+paper lúc đó): claim "176 unit test" → đổi thành trích dẫn cụ thể
+`test_solver.py::TestF2LSolver::test_lam_zero_is_backward_compatible`
+(1 trong 319 test hiện có); caveat ICC "chưa verify độc lập, cần xác
+minh trước khi nộp" → đổi thành đã verify, khớp chính xác (0,2563 /
+0,9061).
+
+Đã đối chiếu 9 cặp số liệu chính giữa 2 bản VI/EN (điểm nhóm khảo sát,
+ρ, số nước...) — khớp 1-1 hoàn toàn, không phát hiện lỗi lệch dịch.
+Compile lại sạch cả 2 bản sau khi sửa (pdflatex 15 trang / xelatex 17
+trang, 0 lỗi). Chạy lại 319 test sau khi sửa `oll_algorithms.py` —
+không có gì bị phá vỡ.
+
 ## Việc còn lại (đã cập nhật sau CẬP NHẬT MỚI NHẤT 7)
 
 Giai đoạn 3 **đã xong** (28 CSV thật, đã phân tích, đã verify độc lập —
@@ -302,15 +345,22 @@ không còn đúng).
 Việc còn mở, theo mức ưu tiên:
 1. **Điều tra 4 case OLL round-trip thất bại** (224/228, xem
    `test_solver.py::TestOLLAlgorithms::test_own_generating_set_round_trip`)
-   — chưa rõ là bug thật hay giới hạn thiết kế đã biết.
+   — chưa rõ là bug thật hay giới hạn thiết kế đã biết. (Lưu ý: KHÁC
+   với việc gán nhãn số cộng đồng đã cải thiện ở CẬP NHẬT MỚI NHẤT 8 —
+   đây là lỗi round-trip solve, chưa đụng tới.)
 2. Xác định `human_solves_log.txt` thu thập trước hay sau bugfix màu
    trong `move_recorder.html` (xem CẬP NHẬT MỚI NHẤT 4 và mục 2 của
    CẬP NHẬT MỚI NHẤT 7) — nếu không xác định được, cần ghi chú thận
    trọng trong paper.
 3. ~~Thêm `LICENSE` nếu định public source code.~~ **Đã xong** — MIT,
    xem `LICENSE` (đứng tên Pham Dang Khue theo `paper/main.tex`).
-4. Đọc lại toàn bộ prose 2 bản paper lần cuối trước khi nộp chính thức.
-5. "Fresh-clone test": giải nén gói ở máy sạch, chạy đúng theo từng
+4. ~~Đọc lại toàn bộ prose 2 bản paper lần cuối trước khi nộp chính
+   thức.~~ **Đã xong** — xem CẬP NHẬT MỚI NHẤT 8 (sửa 3 chỗ số liệu
+   lỗi thời, tăng độ phủ nhãn OLL 35→40/57).
+5. (Tuỳ chọn, không bắt buộc) Đối chiếu nốt 15 công thức OLL còn lại
+   (hợp lệ về chức năng nhưng chưa gán được số cộng đồng — xem CẬP
+   NHẬT MỚI NHẤT 8) nếu muốn paper nêu con số cao hơn 40/57.
+6. "Fresh-clone test": giải nén gói ở máy sạch, chạy đúng theo từng
    bước `HUONG_DAN_CHAY.md` từ đầu đến cuối — phép thử cuối cùng trước
    khi nộp.
 
