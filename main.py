@@ -15,6 +15,17 @@ import time
 import threading
 import queue
 
+# ── Cửa sổ OS riêng cho bảng công thức (THỬ NGHIỆM / best-effort) ──────────
+# pygame >= 2.5 hỗ trợ đa cửa sổ qua pygame._sdl2.video.Window, nhưng hành
+# vi có thể khác nhau giữa các hệ điều hành/driver và KHÔNG được test trực
+# tiếp ở đây. Nếu import/tạo cửa sổ thất bại bất kỳ lúc nào, toàn bộ tính
+# năng tự vô hiệu hoá và app quay lại dùng panel nổi (docked) như bình
+# thường -- không bao giờ làm crash app chính.
+try:
+    from pygame._sdl2.video import Window as _SDLWindow
+except Exception:
+    _SDLWindow = None
+
 from constants   import FPS, BG, GOLD, HINT, DIV
 from layout      import Layout
 from cube_engine import (make_solved, scramble_cube, cube_solved,
@@ -104,6 +115,85 @@ def _wrap_text(text, font, max_w):
     return lines
 
 
+def _draw_formula_panel_content(surface, rect, fonts, formula_lines, scroll, gold_color):
+    """
+    Vẽ NỘI DUNG (header/rows, có scroll+clip) của bảng công thức vào
+    `surface`, giới hạn trong `rect`. KHÔNG vẽ khung ngoài / nút đóng / nút
+    cuộn -- những phần đó do nơi gọi tự vẽ. Tách riêng để dùng chung cho cả
+    panel nổi (docked, không modal) và -- nếu tạo được -- 1 cửa sổ OS riêng.
+
+    fonts: dict {'header': Font, 'row': Font, 'name_col_w': int,
+                 'row_gap': int, 'spacer_h': int}
+    Trả về (scroll_max, scroll_da_duoc_gioi_han).
+    """
+    bfont, mfont   = fonts['header'], fonts['row']
+    name_col_w     = fonts['name_col_w']
+    row_gap        = fonts['row_gap']
+    spacer_h       = fonts['spacer_h']
+    text_x0        = rect.x + 10 + name_col_w
+    wrap_w         = max(50, rect.width - 10 - name_col_w - 10)
+
+    draw_items = []
+    for row in formula_lines:
+        kind = row[0]
+        if kind == 'header':
+            h = bfont.get_height() + 14
+            draw_items.append({'kind': 'header', 'text': row[1], 'h': h})
+        elif kind == 'spacer':
+            draw_items.append({'kind': 'spacer', 'h': spacer_h})
+        elif kind == 'row':
+            _, label, text, color = row
+            wrapped = _wrap_text(text, mfont, wrap_w)
+            h0 = mfont.get_height() + row_gap
+            draw_items.append({'kind': 'row', 'label': label,
+                                'text': wrapped[0], 'color': color, 'h': h0})
+            for extra in wrapped[1:]:
+                draw_items.append({'kind': 'rowcont', 'text': extra,
+                                    'color': color, 'h': h0})
+
+    total_h    = sum(it['h'] for it in draw_items)
+    scroll_max = max(0, total_h - rect.height)
+    scroll     = max(0, min(scroll, scroll_max))
+
+    prev_clip = surface.get_clip()
+    surface.set_clip(rect)
+    y = rect.y - scroll
+    for it in draw_items:
+        h = it['h']
+        if y + h >= rect.y and y <= rect.bottom:
+            if it['kind'] == 'header':
+                txt = bfont.render(it['text'], True, gold_color)
+                surface.blit(txt, (rect.x, y))
+            elif it['kind'] == 'row':
+                n_txt = mfont.render(it['label'], True, gold_color)
+                s_txt = mfont.render(it['text'], True, it['color'])
+                surface.blit(n_txt, (rect.x + 10, y))
+                surface.blit(s_txt, (text_x0, y))
+            elif it['kind'] == 'rowcont':
+                s_txt = mfont.render(it['text'], True, it['color'])
+                surface.blit(s_txt, (text_x0, y))
+        y += h
+    surface.set_clip(prev_clip)
+    return scroll_max, scroll
+
+
+def _try_open_formula_window():
+    """Cố tạo 1 cửa sổ OS THẬT SỰ riêng (dùng pygame._sdl2.video.Window) để
+    hiển thị bảng công thức, độc lập với cửa sổ chính. TÍNH NĂNG THỬ
+    NGHIỆM (best-effort): nếu thất bại ở bất kỳ bước nào (import không có,
+    driver không hỗ trợ đa cửa sổ, v.v.), trả về (None, None) -- nơi gọi sẽ
+    tự động dùng panel nổi (docked) thay thế, KHÔNG làm crash app.
+    """
+    if _SDLWindow is None:
+        return None, None
+    try:
+        win  = _SDLWindow("Công thức CFOP - Rubik AI", size=(460, 720), resizable=True)
+        surf = win.get_surface()
+        return win, surf
+    except Exception:
+        return None, None
+
+
 def _bar_index_at_x(text, mouse_x, text_start_x, font):
     """Tra ve vi tri ky tu (0..len(text)) gan nhat voi toa do x cua chuot,
     dung khi bam/keo chuot trong Singmaster bar de dat con tro/chon text."""
@@ -187,10 +277,24 @@ def main():
                                # ve lai moi frame, dung de hit-test click.
 
     # ── Bảng công thức CFOP (mở/đóng bằng phím T) ─────────────────────────────
-    formula_panel_open = False
-    formula_scroll      = 0     # độ lệch cuộn hiện tại (px)
+    # Panel KHÔNG modal: nổi (floating) ở góc trên-phải, không làm mờ/khoá
+    # phần còn lại của app -- cube vẫn xoay/giải được bình thường khi panel mở.
+    formula_panel_open   = False
+    formula_scroll       = 0     # độ lệch cuộn hiện tại (px)
     formula_scroll_max   = 0     # cập nhật mỗi frame khi vẽ, dùng để giới hạn cuộn
-    formula_lines        = []    # nội dung hiện tại, dựng lại mỗi lần bấm T (xem start_cfop_job('formula'))
+    formula_lines        = []    # nội dung hiện tại, dựng lại mỗi lần bấm T
+    formula_state_ver    = None  # state_version tại lúc tính xong -> phát hiện dữ liệu cũ
+    formula_panel_rect   = None  # cập nhật mỗi frame khi vẽ, dùng hit-test chuột frame sau
+    formula_close_rect   = None
+    formula_up_rect      = None
+    formula_down_rect    = None
+
+    # ── Cửa sổ OS riêng (thử nghiệm) cho bảng công thức, xem show_formula_window() ──
+    formula_window        = None   # pygame._sdl2.video.Window hoặc None nếu không tạo được
+    formula_win_surface   = None
+    formula_win_supported = True   # False nếu mở lần đầu thất bại -> không thử lại nữa
+    formula_win_last_w    = -1     # để phát hiện đổi kích thước -> dựng lại font
+    formula_win_fonts     = None
 
     # ── CFOP AI (Cross + F2L, chay nen bang thread de khong dong UI) ─────────
     cfop_busy       = False    # True trong khi thread AI dang tinh
@@ -324,9 +428,23 @@ def main():
                 cfop_note = msgs.get(res['reached'], f"AI: đã đi {len(res['all_moves'])} nước")
                 cfop_note_timer = 220
             elif kind == 'formula':
-                formula_lines  = build_formula_lines(res)
-                formula_scroll = 0
-                formula_panel_open = True
+                formula_lines       = build_formula_lines(res)
+                formula_scroll      = 0
+                formula_state_ver   = state_version
+
+                used_real_window = False
+                if formula_win_supported and _SDLWindow is not None:
+                    if formula_window is None:
+                        formula_window, formula_win_surface = _try_open_formula_window()
+                        if formula_window is None:
+                            formula_win_supported = False   # thử 1 lần/phiên, tránh spam lỗi
+                    if formula_window is not None:
+                        used_real_window   = True
+                        formula_win_last_w = -1   # ép dựng lại font ở frame kế tiếp
+
+                # Chỉ dùng 1 trong 2 nơi hiển thị cùng lúc (tránh trùng lặp):
+                # cửa sổ OS riêng nếu tạo được, ngược lại panel nổi (docked).
+                formula_panel_open = not used_real_window
             else:   # hint
                 hint_label = res['label']
                 hint_moves_str = ' '.join(res['moves']) if res['moves'] else None
@@ -350,15 +468,28 @@ def main():
                 zoom_ratio = zoom / lo.ZOOM0
                 zoom = lo.ZOOM0 * zoom_ratio
 
-            elif formula_panel_open and ev.type == MOUSEBUTTONDOWN and ev.button in (4, 5):
+            elif (formula_panel_open and ev.type == MOUSEBUTTONDOWN
+                  and ev.button in (4, 5)
+                  and formula_panel_rect and formula_panel_rect.collidepoint(mx, my)):
                 step = max(30, int(60 * lo.s))
                 if ev.button == 4:
                     formula_scroll = max(0, formula_scroll - step)
                 else:
                     formula_scroll = min(formula_scroll_max, formula_scroll + step)
 
-            elif formula_panel_open and ev.type in (MOUSEBUTTONDOWN, MOUSEBUTTONUP, MOUSEMOTION):
-                pass   # panel công thức đang mở -- chặn tương tác chuột với cube/bar phía sau
+            elif (formula_panel_open and ev.type == MOUSEBUTTONDOWN and ev.button == 1
+                  and formula_panel_rect and formula_panel_rect.collidepoint(mx, my)):
+                # Click nằm TRONG panel công thức -- xử lý nút đóng/cuộn tại đây.
+                # Panel không modal: click ở NGOÀI panel (kể cả khi panel đang
+                # mở) sẽ không rơi vào đây, mà rơi xuống nhánh cube/bar bên dưới
+                # như bình thường -- đây chính là điều làm panel "không chặn".
+                step = max(30, int(60 * lo.s))
+                if formula_close_rect and formula_close_rect.collidepoint(mx, my):
+                    formula_panel_open = False
+                elif formula_up_rect and formula_up_rect.collidepoint(mx, my):
+                    formula_scroll = max(0, formula_scroll - step)
+                elif formula_down_rect and formula_down_rect.collidepoint(mx, my):
+                    formula_scroll = min(formula_scroll_max, formula_scroll + step)
 
             elif ev.type == MOUSEBUTTONDOWN and ev.button == 1:
                 if hint_copy_rect and hint_copy_rect.collidepoint(mx, my):
@@ -435,22 +566,30 @@ def main():
                     bar_cursor     = len(bar_text)
                     bar_sel_anchor = None
 
-                elif formula_panel_open:
-                    step = max(30, int(60 * lo.s))
-                    if ev.key in (K_t, K_ESCAPE):
+                elif ev.key == K_t:
+                    # T = mở/đóng bảng công thức (KHÔNG modal -- hoạt động dù
+                    # đang gõ trong bar hay không, không chặn phím nào khác).
+                    if formula_panel_open or formula_window is not None:
                         formula_panel_open = False
-                    elif ev.key == K_UP:
-                        formula_scroll = max(0, formula_scroll - step)
-                    elif ev.key == K_DOWN:
-                        formula_scroll = min(formula_scroll_max, formula_scroll + step)
-                    elif ev.key == K_PAGEUP:
-                        formula_scroll = max(0, formula_scroll - step * 5)
-                    elif ev.key == K_PAGEDOWN:
-                        formula_scroll = min(formula_scroll_max, formula_scroll + step * 5)
-                    elif ev.key == K_HOME:
-                        formula_scroll = 0
-                    elif ev.key == K_END:
-                        formula_scroll = formula_scroll_max
+                        if formula_window is not None:
+                            try:
+                                formula_window.destroy()
+                            except Exception:
+                                pass
+                            formula_window = None
+                    else:
+                        start_cfop_job('formula')
+
+                elif (formula_panel_open or formula_window is not None) and ev.key == K_ESCAPE:
+                    # Đóng panel/cửa sổ trước (không thoát app), giống quy ước
+                    # đóng popup/overlay trên cùng trước tiên.
+                    formula_panel_open = False
+                    if formula_window is not None:
+                        try:
+                            formula_window.destroy()
+                        except Exception:
+                            pass
+                        formula_window = None
 
                 elif bar_active:
                     shift = bool(mods & KMOD_SHIFT)
@@ -610,9 +749,6 @@ def main():
 
                     elif ev.key == K_SLASH:
                         bar_active = True
-
-                    elif ev.key == K_t:
-                        start_cfop_job('formula')
 
                     elif ev.key == K_a:
                         start_cfop_job('solve')
@@ -804,7 +940,7 @@ def main():
             ("A",      "AI tự giải (Cross→F2L→OLL→PLL)"),
             ("H",      "AI gợi ý bước tiếp"),
             ("Tab",    "Copy gợi ý -> thanh công thức"),
-            ("T",      "Bảng công thức Cross→F2L→OLL→PLL"),
+            ("T",      "Bảng công thức (cửa sổ riêng nếu được, hoặc panel nổi)"),
         ]:
             ks = lo.sfont.render(k, True, GOLD)
             vs = lo.sfont.render(f"  {v}", True, HINT)
@@ -872,88 +1008,144 @@ def main():
             screen.blit(t, (lo.CX3 - t.get_width() // 2, lo.CY3 - 14))
 
         if formula_panel_open:
-            # ── Lớp phủ mờ toàn màn hình ────────────────────────────────────
-            overlay = pygame.Surface((lo.W, lo.H), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 190))
-            screen.blit(overlay, (0, 0))
+            # ── Panel NỔI (docked), KHÔNG modal: không dim/khoá phần còn lại
+            # của màn hình -- cube vẫn xoay/giải bình thường khi panel mở.
+            panel_w = min(int(420 * max(lo.s, 1.0)), lo.RIGHT_W - 20, lo.W - 20)
+            panel_w = max(panel_w, min(320, lo.W - 20))
+            panel_h = min(int(lo.H * 0.78), int(640 * max(lo.s, 1.0)))
+            panel_h = max(panel_h, min(360, lo.H - 20))
+            margin  = max(10, int(14 * lo.s))
+            panel_x = lo.W - panel_w - margin
+            panel_y = max(46, int(50 * lo.s))
 
-            panel_w = min(int(lo.W * 0.82), int(860 * max(lo.s, 1.0)))
-            panel_h = min(int(lo.H * 0.86), int(720 * max(lo.s, 1.0)))
-            panel_w = max(panel_w, min(560, lo.W - 20))
-            panel_h = max(panel_h, min(420, lo.H - 20))
-            panel_x = (lo.W - panel_w) // 2
-            panel_y = (lo.H - panel_h) // 2
+            formula_panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
 
-            pygame.draw.rect(screen, (20, 20, 30),
-                              (panel_x, panel_y, panel_w, panel_h), border_radius=10)
-            pygame.draw.rect(screen, GOLD,
-                              (panel_x, panel_y, panel_w, panel_h), width=2, border_radius=10)
+            panel_surf = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+            panel_surf.fill((18, 18, 28, 235))
+            screen.blit(panel_surf, (panel_x, panel_y))
+            pygame.draw.rect(screen, GOLD, formula_panel_rect, width=2, border_radius=10)
 
-            title = lo.bfont.render("Bảng công thức CFOP:  Cross → F2L → OLL → PLL", True, GOLD)
-            screen.blit(title, (panel_x + 18, panel_y + 14))
-            header_h = title.get_height() + 30
+            title = lo.mfont.render("Công thức CFOP (tham khảo)", True, GOLD)
+            screen.blit(title, (panel_x + 14, panel_y + 10))
 
-            footer_txt = lo.sfont.render(
-                "Nhấn T hoặc Esc để đóng   •   ↑/↓, PgUp/PgDn hoặc lăn chuột để cuộn",
-                True, HINT)
-            footer_h = footer_txt.get_height() + 16
-            screen.blit(footer_txt, (panel_x + 18, panel_y + panel_h - footer_h + 4))
+            close_sz = max(18, int(22 * lo.s))
+            formula_close_rect = pygame.Rect(
+                panel_x + panel_w - close_sz - 8, panel_y + 8, close_sz, close_sz)
+            pygame.draw.rect(screen, (60, 60, 75), formula_close_rect, border_radius=5)
+            xt = lo.sfont.render("X", True, (230, 230, 230))
+            screen.blit(xt, (formula_close_rect.centerx - xt.get_width() // 2,
+                              formula_close_rect.centery - xt.get_height() // 2))
+
+            header_h = max(title.get_height(), close_sz) + 16
+
+            stale = (formula_state_ver is not None and formula_state_ver != state_version)
+            stale_h = 0
+            if stale:
+                stale_txt = lo.sfont.render(
+                    "⚠ Cube đã đổi kể từ lúc tính -- bấm T để làm mới", True, (235, 180, 90))
+                screen.blit(stale_txt, (panel_x + 14, panel_y + header_h))
+                stale_h = stale_txt.get_height() + 6
+
+            footer_txt = lo.sfont.render("T/Esc: đóng  •  lăn chuột: cuộn", True, HINT)
+            footer_h = footer_txt.get_height() + 10
+            screen.blit(footer_txt, (panel_x + 14, panel_y + panel_h - footer_h))
+
+            btn_sz = max(20, int(24 * lo.s))
+            formula_down_rect = pygame.Rect(
+                panel_x + panel_w - btn_sz - 8,
+                panel_y + panel_h - footer_h - btn_sz - 4, btn_sz, btn_sz)
+            formula_up_rect = pygame.Rect(
+                formula_down_rect.x, formula_down_rect.y - btn_sz - 4, btn_sz, btn_sz)
+            for rct, sym in ((formula_up_rect, "^"), (formula_down_rect, "v")):
+                pygame.draw.rect(screen, (55, 55, 70), rct, border_radius=4)
+                st = lo.sfont.render(sym, True, (220, 220, 220))
+                screen.blit(st, (rct.centerx - st.get_width() // 2,
+                                  rct.centery - st.get_height() // 2))
 
             content_rect = pygame.Rect(
-                panel_x + 18, panel_y + header_h,
-                panel_w - 36, panel_h - header_h - footer_h - 6)
+                panel_x + 14, panel_y + header_h + stale_h,
+                panel_w - 28, panel_h - header_h - stale_h - footer_h - 4)
 
-            name_col_w = max(70, int(88 * lo.s))
-            row_gap    = max(2, int(3 * lo.s))
-            spacer_h   = max(6, int(10 * lo.s))
-            text_x0    = content_rect.x + 10 + name_col_w
-            wrap_w     = max(50, content_rect.width - 10 - name_col_w - 10)
+            fonts = {'header': lo.bfont, 'row': lo.mfont,
+                     'name_col_w': max(70, int(80 * lo.s)),
+                     'row_gap': max(2, int(3 * lo.s)),
+                     'spacer_h': max(6, int(10 * lo.s))}
+            formula_scroll_max, formula_scroll = _draw_formula_panel_content(
+                screen, content_rect, fonts, formula_lines, formula_scroll, GOLD)
 
-            # ── Pre-pass: dựng danh sách item cần vẽ (đã wrap chuỗi dài) ─────
-            draw_items = []
-            for row in formula_lines:
-                kind = row[0]
-                if kind == 'header':
-                    h = lo.bfont.get_height() + int(14 * lo.s)
-                    draw_items.append({'kind': 'header', 'text': row[1], 'h': h})
-                elif kind == 'spacer':
-                    draw_items.append({'kind': 'spacer', 'h': spacer_h})
-                elif kind == 'row':
-                    _, label, text, color = row
-                    wrapped = _wrap_text(text, lo.mfont, wrap_w)
-                    h0 = lo.mfont.get_height() + row_gap
-                    draw_items.append({'kind': 'row', 'label': label,
-                                        'text': wrapped[0], 'color': color, 'h': h0})
-                    for extra in wrapped[1:]:
-                        draw_items.append({'kind': 'rowcont', 'text': extra,
-                                            'color': color, 'h': h0})
+        if formula_window is not None:
+            # ── Vẽ + hiện cửa sổ OS riêng (thử nghiệm) ───────────────────────
+            # Cửa sổ này CHỈ ĐỂ XEM (không nhận click/cuộn riêng) -- đóng bằng
+            # phím T hoặc Esc ở cửa sổ chính. Bất kỳ lỗi nào cũng tự đóng
+            # cửa sổ và quay lại panel nổi (docked), không làm crash app.
+            try:
+                win_w, win_h = formula_window.size
+                if formula_win_fonts is None or formula_win_last_w != win_w:
+                    formula_win_surface = formula_window.get_surface()
+                    formula_win_last_w  = win_w
+                    fs = max(0.6, min(1.6, win_w / 460))
+                    formula_win_fonts = {
+                        'title':  pygame.font.SysFont("consolas", max(12, int(17 * fs)), bold=True),
+                        'header': pygame.font.SysFont("consolas", max(11, int(16 * fs)), bold=True),
+                        'row':    pygame.font.SysFont("consolas", max(10, int(13 * fs))),
+                        'footer': pygame.font.SysFont("consolas", max(9,  int(11 * fs))),
+                    }
 
-            total_h = sum(it['h'] for it in draw_items)
-            formula_scroll_max = max(0, total_h - content_rect.height)
-            formula_scroll = max(0, min(formula_scroll, formula_scroll_max))
+                surf = formula_win_surface
+                surf.fill((18, 18, 28))
+                pad = max(8, int(14 * (win_w / 460)))
 
-            # ── Vẽ, chỉ trong vùng content_rect (clip) ───────────────────────
-            prev_clip = screen.get_clip()
-            screen.set_clip(content_rect)
-            y = content_rect.y - formula_scroll
-            for it in draw_items:
-                h = it['h']
-                if y + h >= content_rect.y and y <= content_rect.bottom:
-                    if it['kind'] == 'header':
-                        txt = lo.bfont.render(it['text'], True, GOLD)
-                        screen.blit(txt, (content_rect.x, y))
-                    elif it['kind'] == 'row':
-                        n_txt = lo.mfont.render(it['label'], True, GOLD)
-                        s_txt = lo.mfont.render(it['text'], True, it['color'])
-                        screen.blit(n_txt, (content_rect.x + 10, y))
-                        screen.blit(s_txt, (text_x0, y))
-                    elif it['kind'] == 'rowcont':
-                        s_txt = lo.mfont.render(it['text'], True, it['color'])
-                        screen.blit(s_txt, (text_x0, y))
-                y += h
-            screen.set_clip(prev_clip)
+                title_txt = formula_win_fonts['title'].render(
+                    "Công thức CFOP: Cross → F2L → OLL → PLL", True, GOLD)
+                surf.blit(title_txt, (pad, pad))
+                header_h = title_txt.get_height() + pad + 6
+
+                win_stale = (formula_state_ver is not None and formula_state_ver != state_version)
+                win_stale_h = 0
+                if win_stale:
+                    stxt = formula_win_fonts['footer'].render(
+                        "⚠ Cube đã đổi -- mở lại bằng T ở cửa sổ chính để làm mới",
+                        True, (235, 180, 90))
+                    surf.blit(stxt, (pad, header_h))
+                    win_stale_h = stxt.get_height() + 6
+
+                foot_txt = formula_win_fonts['footer'].render(
+                    "Đóng bằng phím T (hoặc Esc) ở cửa sổ chính  •  cửa sổ này chỉ để xem",
+                    True, HINT)
+                foot_h = foot_txt.get_height() + pad
+                surf.blit(foot_txt, (pad, win_h - foot_h))
+
+                win_content_rect = pygame.Rect(
+                    pad, header_h + win_stale_h, win_w - 2 * pad,
+                    max(10, win_h - header_h - win_stale_h - foot_h - 4))
+                win_fonts_arg = {'header': formula_win_fonts['header'],
+                                  'row': formula_win_fonts['row'],
+                                  'name_col_w': max(60, int(80 * (win_w / 460))),
+                                  'row_gap': 2,
+                                  'spacer_h': max(6, int(8 * (win_w / 460)))}
+                # Cửa sổ chỉ xem -- không cuộn (scroll=0); nội dung dài quá sẽ
+                # bị cắt gọn ở cạnh dưới (set_clip) thay vì tràn ra ngoài.
+                _draw_formula_panel_content(
+                    surf, win_content_rect, win_fonts_arg, formula_lines, 0, GOLD)
+
+                formula_window.flip()
+            except Exception:
+                try:
+                    formula_window.destroy()
+                except Exception:
+                    pass
+                formula_window        = None
+                formula_win_supported = False
+                if formula_lines:
+                    formula_panel_open = True   # fallback về panel nổi khi cửa sổ lỗi
 
         pygame.display.flip()
+
+    if formula_window is not None:
+        try:
+            formula_window.destroy()
+        except Exception:
+            pass
 
     pygame.quit()
     sys.exit()
