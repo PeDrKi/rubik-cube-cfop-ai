@@ -171,6 +171,52 @@ toàn bộ `main.py`/`draw_helpers.py`/`layout.py` xác nhận không có text
 gán cứng tên màu theo mặt). 176/176 test vẫn pass, đã smoke-test headless
 xác nhận app vẽ đúng màu mới không lỗi.
 
+## CẬP NHẬT MỚI NHẤT 5 — Sửa UI: danh sách phím tắt bị khuất
+
+Phát hiện qua ảnh chụp màn hình người dùng gửi: dòng cuối ("H — AI gợi
+ý bước tiếp" và dòng ký hiệu U/u D/d...) bị đè lên/khuất bởi thanh
+Singmaster bar phía dưới. Nguyên nhân: khoảng trống dành cho panel này
+trong `main.py` bị **hardcode cứng** (`max(60, int(123*lo.s))`), không
+khớp với chiều cao nội dung thật (9 dòng phím tắt + 1 dòng ký hiệu = 10
+dòng). Đã sửa: tính khoảng trống **theo đúng số dòng thật**
+(`shortcuts_reserved_h`), dùng CHUNG 1 biến ở cả nơi tính giới hạn
+History (`hy_limit`) lẫn nơi đặt vị trí bảng phím tắt
+(`shortcuts_top_y`) và vòng lặp vẽ — tránh 3 nơi tính riêng dễ lệch
+nhau về sau như bug cũ. Đã mô phỏng headless xác nhận toàn bộ layout
+(History → CFOP box → Shortcuts → Bar) không còn chồng lấn, còn dư
+12px trước thanh bar.
+
+## CẬP NHẬT MỚI NHẤT 6 — Thanh Singmaster nâng cấp thành ô nhập liệu đầy đủ
+
+Trước đây thanh Singmaster chỉ hỗ trợ gõ nối đuôi + Backspace (không có
+con trỏ thật, không click chuột định vị, không copy/paste). Đã nâng
+cấp toàn diện trong `main.py` + `draw_helpers.py`:
+
+- **Con trỏ thật** (`bar_cursor`) — không còn ký tự `|` giả nối cuối
+  text như trước (sai vị trí khi con trỏ không ở cuối).
+- **Click chuột định vị con trỏ** — hàm mới `_bar_index_at_x()` tính
+  đúng vị trí ký tự gần nhất với toạ độ x của chuột (dùng
+  `font.size()` đo độ rộng từng đoạn text).
+- **Kéo chuột để chọn** (`bar_dragging`) — giữ chuột kéo trong lúc gõ
+  sẽ tô sáng vùng chọn, xử lý qua `MOUSEMOTION`.
+- **Phím tắt chuẩn**: mũi tên trái/phải di chuyển con trỏ, Shift+mũi
+  tên mở rộng vùng chọn, Home/End (+Shift) nhảy đầu/cuối, Delete xoá
+  ký tự sau con trỏ (khác Backspace xoá ký tự trước).
+- **Copy/Paste hệ thống thật**: Ctrl+A (chọn tất cả), Ctrl+C (copy),
+  Ctrl+X (cắt), Ctrl+V (dán) — dùng `pygame.scrap` (clipboard chuẩn
+  OS), có `try/except` an toàn nếu môi trường không hỗ trợ clipboard
+  (không crash app).
+- **`draw_bar()`** (trong `draw_helpers.py`) viết lại: nhận thêm tham
+  số `cursor_pos`, `sel_range`, vẽ đúng vị trí con trỏ nhấp nháy +
+  highlight vùng chọn (thay vì chỉ nối `|` vào cuối như trước).
+
+**Đã kiểm chứng bằng cách bơm sự kiện thật** (không chỉ chạy suông):
+mô phỏng click focus → gõ ký tự → Home → Shift+End (chọn hết) →
+Ctrl+C → Ctrl+V → mũi tên trái → Backspace → Delete → kéo chuột chọn —
+toàn bộ chuỗi chạy qua vòng lặp event thật của `main.py`, không có
+exception nào. 176/176 test solver vẫn pass (không liên quan tới thay
+đổi UI này).
+
 ## Venue dự kiến — xem chi tiết mục 9 trong `HUONG_DAN_CHAY.md`
 
 Hầu hết deadline 2026 (CoG, ICAPS/HAXP) đã qua tại thời điểm dự án thực

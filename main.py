@@ -30,6 +30,20 @@ SPEED_STEPS   = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]   # các mức tốc 
 SPEED_DEFAULT_IDX = SPEED_STEPS.index(1.0)
 
 
+def _bar_index_at_x(text, mouse_x, text_start_x, font):
+    """Tra ve vi tri ky tu (0..len(text)) gan nhat voi toa do x cua chuot,
+    dung khi bam/keo chuot trong Singmaster bar de dat con tro/chon text."""
+    best_i = len(text)
+    best_dist = abs(text_start_x + font.size(text)[0] - mouse_x)
+    for i in range(len(text) + 1):
+        w = font.size(text[:i])[0]
+        dist = abs(text_start_x + w - mouse_x)
+        if dist < best_dist:
+            best_dist = dist
+            best_i = i
+    return best_i
+
+
 def main():
     pygame.init()
 
@@ -37,6 +51,10 @@ def main():
     init_w = max(MIN_W, int(info.current_w * 0.92))
     init_h = max(MIN_H, int(info.current_h * 0.92))
     screen = pygame.display.set_mode((init_w, init_h), RESIZABLE)
+    try:
+        pygame.scrap.init()   # can cho copy/paste he thong (Ctrl+C/V) trong Singmaster bar
+    except Exception:
+        pass   # mot so moi truong (vd headless/sandbox) khong ho tro clipboard -- bo qua an toan
     pygame.display.set_caption(
         "Rubik's Cube — 6-Face · 3D  [F11=fullscreen]"
     )
@@ -87,6 +105,9 @@ def main():
     bar_status_timer = 0
     history          = []
     MAX_HIST         = 5
+    bar_cursor       = 0      # vi tri con tro trong bar_text (0..len(bar_text))
+    bar_sel_anchor   = None   # vi tri bat dau vung dang chon (None = khong chon gi)
+    bar_dragging     = False  # dang giu chuot keo de chon text trong bar
     hint_copy_rect   = None   # pygame.Rect cua nut "Copy -> thanh cong thuc"
                                # (None neu khong co hint dang hien thi), duoc
                                # ve lai moi frame, dung de hit-test click.
@@ -247,12 +268,18 @@ def main():
                 if hint_copy_rect and hint_copy_rect.collidepoint(mx, my):
                     # Chep gợi ý hien tai vao thanh Singmaster va focus vao do
                     # de nguoi dung xem/sua truoc khi bam Enter thuc thi.
-                    bar_text   = hint_moves_str[:BAR_MAX_LEN]
-                    bar_active = True
-                    bar_status = None
+                    bar_text       = hint_moves_str[:BAR_MAX_LEN]
+                    bar_active     = True
+                    bar_status     = None
+                    bar_cursor     = len(bar_text)
+                    bar_sel_anchor = None
 
                 elif lo.bar_rect().collidepoint(mx, my):
-                    bar_active = True
+                    bar_active     = True
+                    text_start_x   = lo.BAR_X + max(60, int(130 * lo.s))
+                    bar_cursor     = _bar_index_at_x(bar_text, mx, text_start_x, lo.mfont)
+                    bar_sel_anchor = bar_cursor   # bat dau 1 vung chon rong -- keo chuot se mo rong
+                    bar_dragging   = True
 
                 elif lo.AREA_3D.collidepoint(mx, my):
                     bar_active = False
@@ -277,13 +304,17 @@ def main():
                     zoom = max(zoom / 1.1, 45 * lo.s)
 
             elif ev.type == MOUSEBUTTONUP and ev.button == 1:
-                dragging3d = False
+                dragging3d   = False
+                bar_dragging = False
 
             elif ev.type == MOUSEMOTION:
                 if dragging3d:
                     yaw   = yaw0   + (mx - drag_start[0]) * 0.007
                     pitch = max(-1.48, min(1.48,
                                 pitch0 - (my - drag_start[1]) * 0.007))
+                elif bar_dragging:
+                    text_start_x = lo.BAR_X + max(60, int(130 * lo.s))
+                    bar_cursor   = _bar_index_at_x(bar_text, mx, text_start_x, lo.mfont)
 
             elif ev.type == KEYDOWN:
                 mods = pygame.key.get_mods()
@@ -299,16 +330,115 @@ def main():
                     zoom = lo.ZOOM0 * zoom_ratio2
 
                 elif bar_active:
+                    shift = bool(mods & KMOD_SHIFT)
+                    ctrl  = bool(mods & (KMOD_CTRL | KMOD_META))  # META cho Mac (Cmd)
+
+                    def _sel_range():
+                        if bar_sel_anchor is None or bar_sel_anchor == bar_cursor:
+                            return None
+                        return (min(bar_sel_anchor, bar_cursor), max(bar_sel_anchor, bar_cursor))
+
                     if ev.key in (K_RETURN, K_KP_ENTER):
                         execute_bar()
+                        if not bar_text:
+                            bar_cursor = 0; bar_sel_anchor = None
+                        else:
+                            bar_cursor = min(bar_cursor, len(bar_text))
                     elif ev.key == K_ESCAPE:
                         bar_active = False; bar_text = ""
+                        bar_cursor = 0; bar_sel_anchor = None
+
+                    elif ctrl and ev.key == K_a:
+                        bar_sel_anchor = 0; bar_cursor = len(bar_text)
+
+                    elif ctrl and ev.key in (K_c, K_x):
+                        sel = _sel_range()
+                        copy_text = bar_text[sel[0]:sel[1]] if sel else bar_text
+                        try:
+                            pygame.scrap.put(pygame.SCRAP_TEXT, copy_text.encode('utf-8'))
+                        except Exception:
+                            pass   # clipboard khong kha dung tren moi truong nay -- bo qua an toan
+                        if ev.key == K_x and sel:
+                            a, b = sel
+                            bar_text = bar_text[:a] + bar_text[b:]
+                            bar_cursor = a; bar_sel_anchor = None
+
+                    elif ctrl and ev.key == K_v:
+                        pasted = ''
+                        try:
+                            raw = pygame.scrap.get(pygame.SCRAP_TEXT)
+                            if raw:
+                                pasted = raw.decode('utf-8', errors='ignore').split('\x00')[0]
+                                pasted = ''.join(ch for ch in pasted if ch.isprintable())
+                        except Exception:
+                            pasted = ''
+                        if pasted:
+                            sel = _sel_range()
+                            if sel:
+                                a, b = sel
+                                bar_text = bar_text[:a] + bar_text[b:]
+                                bar_cursor = a; bar_sel_anchor = None
+                            room = BAR_MAX_LEN - len(bar_text)
+                            pasted = pasted[:max(0, room)]
+                            bar_text = bar_text[:bar_cursor] + pasted + bar_text[bar_cursor:]
+                            bar_cursor += len(pasted)
+
+                    elif ev.key == K_LEFT:
+                        sel = _sel_range()
+                        if shift:
+                            if bar_sel_anchor is None:
+                                bar_sel_anchor = bar_cursor
+                            bar_cursor = max(0, bar_cursor - 1)
+                        elif sel:
+                            bar_cursor = sel[0]; bar_sel_anchor = None
+                        else:
+                            bar_cursor = max(0, bar_cursor - 1)
+                    elif ev.key == K_RIGHT:
+                        sel = _sel_range()
+                        if shift:
+                            if bar_sel_anchor is None:
+                                bar_sel_anchor = bar_cursor
+                            bar_cursor = min(len(bar_text), bar_cursor + 1)
+                        elif sel:
+                            bar_cursor = sel[1]; bar_sel_anchor = None
+                        else:
+                            bar_cursor = min(len(bar_text), bar_cursor + 1)
+                    elif ev.key == K_HOME:
+                        bar_sel_anchor = bar_cursor if shift else None
+                        bar_cursor = 0
+                    elif ev.key == K_END:
+                        bar_sel_anchor = bar_cursor if shift else None
+                        bar_cursor = len(bar_text)
+
                     elif ev.key == K_BACKSPACE:
-                        bar_text = bar_text[:-1]
+                        sel = _sel_range()
+                        if sel:
+                            a, b = sel
+                            bar_text = bar_text[:a] + bar_text[b:]
+                            bar_cursor = a; bar_sel_anchor = None
+                        elif bar_cursor > 0:
+                            bar_text = bar_text[:bar_cursor - 1] + bar_text[bar_cursor:]
+                            bar_cursor -= 1
+                    elif ev.key == K_DELETE:
+                        sel = _sel_range()
+                        if sel:
+                            a, b = sel
+                            bar_text = bar_text[:a] + bar_text[b:]
+                            bar_cursor = a; bar_sel_anchor = None
+                        elif bar_cursor < len(bar_text):
+                            bar_text = bar_text[:bar_cursor] + bar_text[bar_cursor + 1:]
+
                     else:
                         ch = ev.unicode
-                        if ch and ch.isprintable() and len(bar_text) < BAR_MAX_LEN:
-                            bar_text += ch
+                        if ch and ch.isprintable():
+                            sel = _sel_range()
+                            if sel:
+                                a, b = sel
+                                bar_text = bar_text[:a] + bar_text[b:]
+                                bar_cursor = a; bar_sel_anchor = None
+                            if len(bar_text) < BAR_MAX_LEN:
+                                bar_text = bar_text[:bar_cursor] + ch + bar_text[bar_cursor:]
+                                bar_cursor += 1
 
                 else:
                     if ev.key == K_ESCAPE:
@@ -428,7 +558,16 @@ def main():
 
         # history
         hy = lo.PY0 + lo.LBL_H + 3 * (lo.PANEL + lo.LBL_H + 5) + 14
-        hy_limit = lo.BAR_Y - max(60, int(123 * lo.s)) - max(10, int(14 * lo.s)) \
+        # Khoang trong danh cho shortcuts panel: TINH THEO SO DONG THAT (9
+        # phim tat + 1 dong ky hieu U/u D/d...), khong hardcode nhu truoc
+        # (tung bi loi che khuat dong cuoi vi so voi noi dung thuc te). Dung
+        # CHUNG 1 gia tri nay o CA hy_limit lan shortcuts_top_y ben duoi de
+        # khong bao gio lech nhau.
+        _N_SHORTCUT_LINES = 9   # dung dung so dong trong list o duoi (khong tinh dong ky hieu)
+        _shortcut_line_h = max(10, int(15 * lo.s))
+        shortcuts_reserved_h = (_N_SHORTCUT_LINES + 1) * _shortcut_line_h + max(10, int(14 * lo.s))
+
+        hy_limit = lo.BAR_Y - shortcuts_reserved_h - max(10, int(14 * lo.s)) \
             - max(70, int(108 * lo.s)) - int(4 * lo.s)
         if history:
             screen.blit(
@@ -447,7 +586,7 @@ def main():
 
         # ── CFOP AI panel: vi tri CO DINH neo tu day (doc lap voi chieu cao
         # thay doi cua History o tren) -> khong bao gio de len shortcuts. ────
-        shortcuts_top_y = lo.BAR_Y - max(60, int(123 * lo.s))
+        shortcuts_top_y = lo.BAR_Y - shortcuts_reserved_h
         CFOP_H = max(70, int(108 * lo.s))
         cfop_top = shortcuts_top_y - max(10, int(14 * lo.s)) - CFOP_H
         cfop_box = pygame.Rect(lo.LEFT_X + 6, cfop_top, lo.LEFT_W - 12, CFOP_H)
@@ -543,13 +682,17 @@ def main():
             vs = lo.sfont.render(f"  {v}", True, HINT)
             screen.blit(ks, (lo.LEFT_X + 10, sy))
             screen.blit(vs, (lo.LEFT_X + 10 + ks.get_width(), sy))
-            sy += max(10, int(15 * lo.s))
+            sy += _shortcut_line_h
 
         # Notation hint dưới shortcut list
         nh = lo.sfont.render("  U/u D/d F/f B/b L/l R/r M E S x y z", True, (80, 80, 115))
         screen.blit(nh, (lo.LEFT_X + 6, sy))
 
-        draw_bar(screen, bar_text, bar_active, bar_status, lo)
+        _bar_sel = None
+        if bar_sel_anchor is not None and bar_sel_anchor != bar_cursor:
+            _bar_sel = (min(bar_sel_anchor, bar_cursor), max(bar_sel_anchor, bar_cursor))
+        draw_bar(screen, bar_text, bar_active, bar_status, lo,
+                 cursor_pos=bar_cursor, sel_range=_bar_sel)
 
         if undo_empty_flash > 0:
             msg = lo.sfont.render("nothing to undo", True, (200, 90, 90))

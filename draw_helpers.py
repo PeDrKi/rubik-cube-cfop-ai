@@ -86,15 +86,18 @@ def panel_hit(mx: int, my: int, lo) -> str | None:
 
 # ── Singmaster bar ────────────────────────────────────────────────────────────
 
-def draw_bar(surf: pygame.Surface, text: str, active: bool, status, lo) -> None:
+def draw_bar(surf: pygame.Surface, text: str, active: bool, status, lo,
+             cursor_pos=None, sel_range=None) -> None:
     """
     Vẽ Singmaster input bar ở cuối cột LEFT.
 
     Params:
-        text   : nội dung đang gõ
-        active : True nếu bar đang focus
-        status : None | 'ok' | 'error'
-        lo     : Layout
+        text       : nội dung đang gõ
+        active     : True nếu bar đang focus
+        status     : None | 'ok' | 'error'
+        lo         : Layout
+        cursor_pos : vị trí con trỏ (0..len(text)) hoặc None để ẩn con trỏ
+        sel_range  : (start, end) đã sắp xếp của vùng đang chọn, hoặc None
     """
     s = lo.s
     col_brd = {None: (80, 80, 110), 'ok': BAR_BOK, 'error': BAR_BER}[status]
@@ -109,11 +112,27 @@ def draw_bar(surf: pygame.Surface, text: str, active: bool, status, lo) -> None:
     surf.blit(lbl, (lo.BAR_X + max(4, int(8 * s)),
                     lo.BAR_Y + lo.BAR_H // 2 - lbl.get_height() // 2))
 
-    cursor = '|' if active and (pygame.time.get_ticks() // 500) % 2 == 0 else ' '
-    ts = lo.mfont.render(text + cursor, True,
+    text_x = lo.BAR_X + max(60, int(130 * s))
+    ts = lo.mfont.render(text, True,
                          (255, 255, 255) if active else (180, 180, 210))
-    surf.blit(ts, (lo.BAR_X + max(60, int(130 * s)),
-                   lo.BAR_Y + lo.BAR_H // 2 - ts.get_height() // 2))
+    text_top = lo.BAR_Y + lo.BAR_H // 2 - ts.get_height() // 2
+
+    # Highlight vung dang chon (ve TRUOC text de text nam de doc phia tren)
+    if active and sel_range:
+        a, b = sel_range
+        xa = text_x + lo.mfont.size(text[:a])[0]
+        xb = text_x + lo.mfont.size(text[:b])[0]
+        pygame.draw.rect(surf, (70, 95, 150),
+                         pygame.Rect(xa, text_top, max(1, xb - xa), ts.get_height()))
+
+    surf.blit(ts, (text_x, text_top))
+
+    # Con tro that (nhap nhay dung vi tri) -- KHONG con la ky tu '|' gia
+    # noi vao cuoi text nhu truoc (sai vi tri khi con tro khong o cuoi).
+    if active and cursor_pos is not None and (pygame.time.get_ticks() // 500) % 2 == 0:
+        cx = text_x + lo.mfont.size(text[:cursor_pos])[0]
+        pygame.draw.line(surf, (255, 255, 255),
+                         (cx, text_top), (cx, text_top + ts.get_height()), 2)
 
     if status == 'ok':
         m = lo.sfont.render("✓ ok", True, BAR_BOK)
