@@ -15,16 +15,9 @@ import time
 import threading
 import queue
 
-# ── Cửa sổ OS riêng cho bảng công thức (THỬ NGHIỆM / best-effort) ──────────
-# pygame >= 2.5 hỗ trợ đa cửa sổ qua pygame._sdl2.video.Window, nhưng hành
-# vi có thể khác nhau giữa các hệ điều hành/driver và KHÔNG được test trực
-# tiếp ở đây. Nếu import/tạo cửa sổ thất bại bất kỳ lúc nào, toàn bộ tính
-# năng tự vô hiệu hoá và app quay lại dùng panel nổi (docked) như bình
-# thường -- không bao giờ làm crash app chính.
-try:
-    from pygame._sdl2.video import Window as _SDLWindow
-except Exception:
-    _SDLWindow = None
+# ── Cửa sổ OS riêng cho bảng công thức: xem formula_panel.py ────────────────
+# (thu import _SDLWindow duoc chuyen het sang formula_panel.py, main.py chi
+# con dung formula_panel.sdl_window_available() de biet co the thu hay khong)
 
 from constants   import FPS, BG, GOLD, HINT, DIV
 from layout      import Layout
@@ -33,7 +26,8 @@ from cube_engine import (make_solved, scramble_cube, cube_solved,
 from renderer_3d import Rx, Ry, draw_cube_3d, hit_test_3d, ANIMATABLE_BASES
 from draw_helpers import draw_panels, panel_hit, draw_bar
 from solver import cfop_ai
-from solver.oll_algorithms import PRETTY_CASE_NAME as _PRETTY_CASE_NAME
+import formula_panel as fp
+import app_logic as al
 
 
 ANIM_DUR      = 0.13   # giây, 3D move animation (ở tốc độ x1)
@@ -80,245 +74,11 @@ def _clipboard_set(text):
         return False
 
 
-# ── Bảng công thức CFOP (Cross -> F2L -> OLL -> PLL), hiển thị khi bấm T ────
-# Khác với 1 bảng tra cứu tĩnh: nội dung được TÍNH TỪ TRẠNG THÁI CUBE HIỆN
-# TẠI (xem cfop_ai.full_solve_breakdown), nên mỗi bước hiện đúng chuỗi nước
-# đi cần làm để đi tới khi hoàn thành; bước nào đã xong sẵn ghi "DONE!".
-_ROW_GREEN = (110, 230, 140)   # DONE!
-_ROW_AMBER = (235, 180, 90)    # that bai trong ngan sach hien tai
-_ROW_GREY  = (140, 140, 175)   # chua toi luot
-_ROW_WHITE = (225, 225, 235)   # co chuoi nuoc di can lam
-
-
-# Ten hien thi "dep" hon cho nguoi dung (khac ten bien noi bo trong code) --
-# vd 'Dot_variant1' la ten bien ky thuat, khong phai thuat ngu CFOP chuan.
-
-
-def _stage_row(label, info):
-    """1 dong (kind='row') the hien 1 buoc/1 cap F2L, dua tren dict
-    {'status': 'done'|'moves'|'failed'|'not_reached', 'moves': [...],
-     'case_name': ten case (chi co o oll/pll) hoac None}.
-    Khi da nhan dien duoc TEN case cu the (vd 'Sune', 'T', 'OCLL'), THAY
-    THE nhan hien thi bang ten do (gon hon so voi nhan chung "OLL"/"PLL"
-    vốn đã lặp lại tiêu đề nhóm ngay phía trên) -- giúp người dùng HỌC
-    tên case thay vì chỉ thấy 1 chuỗi nước vô danh."""
-    status    = info.get('status')
-    case_name = info.get('case_name')
-    if status == 'moves' and case_name:
-        pretty = _PRETTY_CASE_NAME.get(case_name, case_name)
-        disp_label = f"{label}:{pretty}"
-    else:
-        disp_label = label
-    if status == 'done':
-        return ('row', label, 'DONE!', _ROW_GREEN)
-    if status == 'moves':
-        return ('row', disp_label, ' '.join(info['moves']), _ROW_WHITE)
-    if status == 'failed':
-        return ('row', label,
-                 '(chưa tìm được trong ngân sách hiện tại -- mở lại bảng (T) để thử lại)',
-                 _ROW_AMBER)
-    return ('row', label, '(chưa tới lượt -- cần xong bước trước)', _ROW_GREY)
-
-
-def build_formula_lines(breakdown):
-    """Tra ve danh sach (kind, *data) mo ta noi dung bang cong thuc CFOP tu
-    KET QUA cfop_ai.full_solve_breakdown(state), dung de ve trong panel
-    bat/tat bang phim T. kind:
-      'header' -> (kind, tieu de)
-      'row'    -> (kind, nhan, noi dung, mau)
-      'spacer' -> (kind,)  dong trong nho de tach nhom
-    """
-    lines = []
-    lines.append(('header', "1) CROSS"))
-    lines.append(_stage_row('Cross', breakdown['cross']))
-    lines.append(('spacer',))
-
-    lines.append(('header', "2) F2L  (4 cặp góc-cạnh)"))
-    for slot in ('DFR', 'DFL', 'DBR', 'DBL'):
-        lines.append(_stage_row(slot, breakdown['f2l'][slot]))
-    lines.append(('spacer',))
-
-    lines.append(('header', "3) OLL  (Orientation of Last Layer)"))
-    lines.append(_stage_row('OLL', breakdown['oll']))
-    lines.append(('spacer',))
-
-    lines.append(('header', "4) PLL  (Permutation of Last Layer)"))
-    lines.append(_stage_row('PLL', breakdown['pll']))
-
-    return lines
-
-
-def _formula_lines_to_text(formula_lines):
-    """Chuyen danh sach (kind, ...) tu build_formula_lines() thanh 1 doan
-    van ban thuong (plain text), dung de copy toan bo noi dung bang cong
-    thuc vao clipboard he thong (vi ban than cua so pygame khong ho tro
-    boi den/chon van ban truc tiep tren canvas ve)."""
-    out = []
-    for row in formula_lines:
-        kind = row[0]
-        if kind == 'header':
-            out.append(row[1])
-        elif kind == 'row':
-            _, label, text, _color = row
-            out.append(f"{label}: {text}")
-        elif kind == 'spacer':
-            out.append('')
-    return '\n'.join(out)
-
-
-def _formula_row_data(formula_lines):
-    """Tra ve 2 list SONG SONG (cung thu tu/row_idx ma
-    _draw_formula_panel_content() dung de gan nhan khi ve):
-      labels   -- ["Cross", "DFR", "DFL", ..., "PLL"]
-      formulas -- ["U' F2 B2 L D", "DONE!", "R U R'...", ...]  (CHỈ nội
-                  dung, KHÔNG kèm nhãn -- dùng để copy/áp dụng đúng 1 công
-                  thức mà không dính chữ "Cross: "/"DFR: " ở đầu).
-    """
-    labels, formulas = [], []
-    for row in formula_lines:
-        if row[0] == 'row':
-            _, label, text, _color = row
-            labels.append(label)
-            formulas.append(text)
-    return labels, formulas
-
-
-def _looks_like_moves(text):
-    """True neu `text` la 1 chuoi nuoc di Singmaster that su (khong phai
-    'DONE!' hay ghi chu dang '(...)'), dung de an/hien nut 'Ap dung -> bar'."""
-    t = (text or '').strip()
-    return bool(t) and t != 'DONE!' and not t.startswith('(')
-
-
-def _wrap_text(text, font, max_w):
-    """Chia `text` thanh nhieu dong sao cho moi dong vua voi chieu rong
-    max_w khi render bang `font` (wrap theo tu, cach nhau boi dau cach --
-    phu hop voi chuoi Singmaster vi moi nuoc di la 1 'tu'). Luon tra ve
-    it nhat 1 dong (co the rong)."""
-    words = text.split(' ')
-    lines = []
-    cur = ''
-    for w in words:
-        trial = w if not cur else cur + ' ' + w
-        if not cur or font.size(trial)[0] <= max_w:
-            cur = trial
-        else:
-            lines.append(cur)
-            cur = w
-    lines.append(cur)
-    return lines
-
-
-def _draw_formula_panel_content(surface, rect, fonts, formula_lines, scroll, gold_color,
-                                 selected_row=None, highlight_color=(90, 74, 20)):
-    """
-    Vẽ NỘI DUNG (header/rows, có scroll+clip) của bảng công thức vào
-    `surface`, giới hạn trong `rect`. KHÔNG vẽ khung ngoài / nút đóng / nút
-    cuộn -- những phần đó do nơi gọi tự vẽ. Tách riêng để dùng chung cho cả
-    panel nổi (docked, không modal) và -- nếu tạo được -- 1 cửa sổ OS riêng.
-
-    Mỗi dòng công thức ('row' -- vd Cross/DFR/OLL/PLL) có 1 chỉ số thứ tự
-    (row_idx, đếm theo thứ tự xuất hiện). Nếu `selected_row` khớp row_idx
-    của 1 dòng, dòng đó (và các dòng phụ do wrap dài) được TÔ NỀN để thể
-    hiện "đã chọn" (thay thế cho việc bôi đen văn bản thật không khả dụng
-    trên canvas pygame).
-
-    fonts: dict {'header': Font, 'row': Font, 'name_col_w': int,
-                 'row_gap': int, 'spacer_h': int}
-    Trả về (scroll_max, scroll_da_duoc_gioi_han, hit_rows) trong đó
-    hit_rows là list [(pygame.Rect_toa_do_man_hinh, row_idx), ...] cho MỌI
-    dòng 'row'/'rowcont' đã vẽ (kể cả nằm ngoài rect do đã cuộn) -- nơi gọi
-    tự lọc theo rect khi hit-test click.
-    """
-    bfont, mfont   = fonts['header'], fonts['row']
-    name_col_w     = fonts['name_col_w']
-    row_gap        = fonts['row_gap']
-    spacer_h       = fonts['spacer_h']
-    text_x0        = rect.x + 10 + name_col_w
-    wrap_w         = max(50, rect.width - 10 - name_col_w - 10)
-
-    draw_items = []
-    row_idx = -1
-    for row in formula_lines:
-        kind = row[0]
-        if kind == 'header':
-            h = bfont.get_height() + 14
-            draw_items.append({'kind': 'header', 'text': row[1], 'h': h})
-        elif kind == 'spacer':
-            draw_items.append({'kind': 'spacer', 'h': spacer_h})
-        elif kind == 'row':
-            row_idx += 1
-            _, label, text, color = row
-            wrapped = _wrap_text(text, mfont, wrap_w)
-            h0 = mfont.get_height() + row_gap
-            draw_items.append({'kind': 'row', 'label': label, 'row_idx': row_idx,
-                                'text': wrapped[0], 'color': color, 'h': h0})
-            for extra in wrapped[1:]:
-                draw_items.append({'kind': 'rowcont', 'text': extra, 'row_idx': row_idx,
-                                    'color': color, 'h': h0})
-
-    total_h    = sum(it['h'] for it in draw_items)
-    scroll_max = max(0, total_h - rect.height)
-    scroll     = max(0, min(scroll, scroll_max))
-
-    hit_rows  = []
-    prev_clip = surface.get_clip()
-    surface.set_clip(rect)
-    y = rect.y - scroll
-    for it in draw_items:
-        h = it['h']
-        if it['kind'] in ('row', 'rowcont'):
-            hit_rows.append((pygame.Rect(rect.x, y, rect.width, h), it['row_idx']))
-        if y + h >= rect.y and y <= rect.bottom:
-            if it['kind'] == 'header':
-                txt = bfont.render(it['text'], True, gold_color)
-                surface.blit(txt, (rect.x, y))
-            elif it['kind'] == 'row':
-                if it['row_idx'] == selected_row:
-                    pygame.draw.rect(surface, highlight_color, (rect.x, y, rect.width, h))
-                n_txt = mfont.render(it['label'], True, gold_color)
-                s_txt = mfont.render(it['text'], True, it['color'])
-                surface.blit(n_txt, (rect.x + 10, y))
-                surface.blit(s_txt, (text_x0, y))
-            elif it['kind'] == 'rowcont':
-                if it['row_idx'] == selected_row:
-                    pygame.draw.rect(surface, highlight_color, (rect.x, y, rect.width, h))
-                s_txt = mfont.render(it['text'], True, it['color'])
-                surface.blit(s_txt, (text_x0, y))
-        y += h
-    surface.set_clip(prev_clip)
-    return scroll_max, scroll, hit_rows
-
-
-def _try_open_formula_window():
-    """Cố tạo 1 cửa sổ OS THẬT SỰ riêng (dùng pygame._sdl2.video.Window) để
-    hiển thị bảng công thức, độc lập với cửa sổ chính. TÍNH NĂNG THỬ
-    NGHIỆM (best-effort): nếu thất bại ở bất kỳ bước nào (import không có,
-    driver không hỗ trợ đa cửa sổ, v.v.), trả về (None, None) -- nơi gọi sẽ
-    tự động dùng panel nổi (docked) thay thế, KHÔNG làm crash app.
-    """
-    if _SDLWindow is None:
-        return None, None
-    try:
-        win  = _SDLWindow("Công thức CFOP - Rubik AI", size=(460, 720), resizable=True)
-        surf = win.get_surface()
-        return win, surf
-    except Exception:
-        return None, None
-
-
 def _bar_index_at_x(text, mouse_x, text_start_x, font):
-    """Tra ve vi tri ky tu (0..len(text)) gan nhat voi toa do x cua chuot,
-    dung khi bam/keo chuot trong Singmaster bar de dat con tro/chon text."""
-    best_i = len(text)
-    best_dist = abs(text_start_x + font.size(text)[0] - mouse_x)
-    for i in range(len(text) + 1):
-        w = font.size(text[:i])[0]
-        dist = abs(text_start_x + w - mouse_x)
-        if dist < best_dist:
-            best_dist = dist
-            best_i = i
-    return best_i
+    """Wrapper mong quanh app_logic.bar_index_at_x() (logic thuan, co test
+    rieng trong test_app_logic2.py) -- chi bo qua doi tuong Font pygame
+    thanh callable font.size de ham loi khong phu thuoc pygame."""
+    return al.bar_index_at_x(text, mouse_x, text_start_x, font.size)
 
 
 def main():
@@ -337,6 +97,7 @@ def main():
     )
     clock      = pygame.time.Clock()
     fullscreen = False
+    show_perf  = False   # bat/tat bang phim P -- xem ghi chu o handler K_p
 
     def make_layout():
         w, h = screen.get_size()
@@ -422,6 +183,11 @@ def main():
     cfop_busy       = False    # True trong khi thread AI dang tinh
     cfop_job_kind   = None     # 'solve' hoac 'hint'
     cfop_result_q   = queue.Queue()
+    cfop_start_time = None     # time.perf_counter() luc bat dau job -- de hien
+                                # thoi gian da troi qua (progress) trong luc cho
+    cfop_cancel_event = None   # threading.Event hien tai -- set() de yeu cau huy
+                                # job dang chay (nguoi dung bam Esc). Xem
+                                # solver/search_utils.py:set_cancel_event().
     hint_label      = None     # nhan hien thi cua goi y gan nhat (vd "F2L - cap DFR")
     hint_moves_str  = None     # chuoi Singmaster cua goi y (khong tu dong thuc thi)
     cfop_note       = None     # thong bao ngan (vd "Da giai xong Cross+F2L")
@@ -434,32 +200,48 @@ def main():
     last_hint_failed     = False
 
     def start_cfop_job(kind):
-        nonlocal cfop_busy, cfop_job_kind
+        nonlocal cfop_busy, cfop_job_kind, cfop_start_time, cfop_cancel_event
         if cfop_busy:
             return
         cfop_busy = True
         cfop_job_kind = kind
+        cfop_start_time = time.perf_counter()
+        cfop_cancel_event = threading.Event()
+        cancel_event = cfop_cancel_event   # bien local rieng cho closure cua worker() ben duoi
+                                            # (tranh worker() vo tinh doc cfop_cancel_event MOI
+                                            # neu nguoi dung bam job khac ngay sau khi job nay xong)
         snapshot = copy.deepcopy(state)
 
         retry = False
         if kind == 'hint':
             cur_stage = cfop_ai.stage_of(snapshot)   # re, khong search, an toan goi dong bo
-            retry = (last_hint_failed and last_hint_stage == cur_stage
-                     and last_hint_move_count == move_count)
+            # logic quyet dinh retry tach ra app_logic.should_retry_hint(),
+            # co test rieng (test_should_retry_hint_*) -- xem app_logic.py
+            retry = al.should_retry_hint(last_hint_failed, last_hint_stage,
+                                          last_hint_move_count, cur_stage, move_count)
 
         def worker():
             try:
                 if kind == 'solve':
-                    res = cfop_ai.full_solve(snapshot, retry=retry)
+                    res = cfop_ai.full_solve(snapshot, retry=retry, cancel_event=cancel_event)
                 elif kind == 'formula':
-                    res = cfop_ai.full_solve_breakdown(snapshot, retry=retry)
+                    res = cfop_ai.full_solve_breakdown(snapshot, retry=retry, cancel_event=cancel_event)
                 else:
-                    res = cfop_ai.hint(snapshot, retry=retry)
+                    res = cfop_ai.hint(snapshot, retry=retry, cancel_event=cancel_event)
                 cfop_result_q.put((kind, res, None))
             except Exception as exc:
                 cfop_result_q.put((kind, None, str(exc)))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def cancel_cfop_job():
+        """Yeu cau huy job AI dang chay (phim Esc trong luc cfop_busy). KHONG
+        tat cfop_busy ngay -- doi ket qua ('cancelled': True) tra ve qua
+        cfop_result_q nhu binh thuong roi moi tat, tranh 2 job chay chong cheo
+        neu worker thread chua kip dung han (check_cancel() chi kiem tra dinh
+        ky moi ~2048 node, xem solver/search_utils.py)."""
+        if cfop_busy and cfop_cancel_event is not None:
+            cfop_cancel_event.set()
 
     def apply_cfop_solution(moves):
         nonlocal move_count, timer_start, scrambled
@@ -475,10 +257,11 @@ def main():
         return Ry(yaw) @ Rx(pitch)
 
     def push_undo():
-        """Lưu state hiện tại vào undo_stack, áp dụng giới hạn UNDO_MAX nhất quán."""
+        """Lưu state hiện tại vào undo_stack, áp dụng giới hạn UNDO_MAX nhất
+        quán (logic cắt bớt phần tử cũ tách ra app_logic.trim_undo_stack(),
+        có test riêng -- xem test_trim_undo_stack_matches_undo_max_used_in_main)."""
         undo_stack.append(copy.deepcopy(state))
-        if len(undo_stack) > UNDO_MAX:
-            undo_stack.pop(0)
+        al.trim_undo_stack(undo_stack, UNDO_MAX)
 
     def enqueue(mv):
         nonlocal move_count, timer_start, scrambled
@@ -539,31 +322,30 @@ def main():
             pass
         else:
             cfop_busy = False
+            cfop_cancel_event = None
             if err is not None:
                 cfop_note = f'Lỗi AI: {err}'
                 cfop_note_timer = 200
+            elif res is not None and res.get('cancelled'):
+                cfop_note = 'AI: đã huỷ theo yêu cầu (Esc)'
+                cfop_note_timer = 150
             elif kind == 'solve':
                 apply_cfop_solution(res['all_moves'])
-                msgs = {
-                    'solved':      f"AI: 🎉 GIẢI XONG cả cube ({len(res['all_moves'])} nước)!",
-                    'pll_partial': "AI: xong Cross+F2L+OLL, PLL còn dở (case khó, thử lại 'A')",
-                    'oll_partial': "AI: xong Cross+F2L, OLL còn dở (case khó, thử lại 'A')",
-                    'f2l_done':    f"AI: đã giải Cross + F2L ({len(res['all_moves'])} nước)",
-                    'f2l_partial': "AI: giải được Cross + một phần F2L (cặp khó, thử lại 'A' lần nữa)",
-                }
-                cfop_note = msgs.get(res['reached'], f"AI: đã đi {len(res['all_moves'])} nước")
-                cfop_note_timer = 220
+                # noi dung thong bao tach ra app_logic.solve_result_message()
+                # (co test rieng cho ca 5 'reached' hop le + fallback generic)
+                cfop_note, _ = al.solve_result_message(res)
+                cfop_note_timer = 260
             elif kind == 'formula':
-                formula_lines       = build_formula_lines(res)
-                formula_row_labels, formula_row_formulas = _formula_row_data(formula_lines)
+                formula_lines       = fp.build_formula_lines(res)
+                formula_row_labels, formula_row_formulas = fp.formula_row_data(formula_lines)
                 formula_selected_row = None   # dữ liệu mới -> bỏ chọn dòng cũ
                 formula_scroll      = 0
                 formula_state_ver   = state_version
 
                 used_real_window = False
-                if formula_win_supported and _SDLWindow is not None:
+                if formula_win_supported and fp.sdl_window_available():
                     if formula_window is None:
-                        formula_window, formula_win_surface = _try_open_formula_window()
+                        formula_window, formula_win_surface = fp.try_open_formula_window()
                         if formula_window is None:
                             formula_win_supported = False   # thử 1 lần/phiên, tránh spam lỗi
                     if formula_window is not None:
@@ -589,12 +371,15 @@ def main():
                 running = False
 
             elif ev.type == VIDEORESIZE:
-                new_w, new_h = max(MIN_W, ev.w), max(MIN_H, ev.h)
+                # clamp_window_size()/rescale_zoom(): logic thuan tach ra
+                # app_logic.py, co test rieng (test_clamp_window_size_*,
+                # test_rescale_zoom_*)
+                new_w, new_h = al.clamp_window_size(ev.w, ev.h, MIN_W, MIN_H)
+                old_zoom0 = lo.ZOOM0
                 if (new_w, new_h) != (ev.w, ev.h):
                     screen = pygame.display.set_mode((new_w, new_h), RESIZABLE)
                 lo = make_layout()
-                zoom_ratio = zoom / lo.ZOOM0
-                zoom = lo.ZOOM0 * zoom_ratio
+                zoom = al.rescale_zoom(zoom, old_zoom0, lo.ZOOM0)
 
             elif (formula_panel_open and ev.type == MOUSEBUTTONDOWN
                   and ev.button in (4, 5)
@@ -619,7 +404,7 @@ def main():
                         cp_txt  = formula_row_formulas[formula_selected_row]
                         cp_note = f"Đã copy: {formula_row_labels[formula_selected_row]}"
                     else:
-                        cp_txt  = _formula_lines_to_text(formula_lines)
+                        cp_txt  = fp.formula_lines_to_text(formula_lines)
                         cp_note = "Đã copy toàn bộ công thức vào clipboard!"
                     formula_copy_note = (cp_note if _clipboard_set(cp_txt) else
                                           "Không copy được (clipboard không khả dụng ở máy này)")
@@ -630,7 +415,7 @@ def main():
                     # Enter thực thi trên cube.
                     if (formula_selected_row is not None
                             and formula_selected_row < len(formula_row_formulas)
-                            and _looks_like_moves(formula_row_formulas[formula_selected_row])):
+                            and fp.looks_like_moves(formula_row_formulas[formula_selected_row])):
                         bar_text       = formula_row_formulas[formula_selected_row][:BAR_MAX_LEN]
                         bar_active     = True
                         bar_status     = None
@@ -709,14 +494,22 @@ def main():
                 mods = pygame.key.get_mods()
 
                 if ev.key == K_F11:
+                    # BUG DA SUA (phat hien khi doc lai code, khong phai loi
+                    # moi gay ra): ban goc gan `lo = make_layout()` TRUOC khi
+                    # tinh ty le zoom, nen `zoom / lo.ZOOM0` chia cho chinh
+                    # ZOOM0 MOI -> luon la php tinh vo nghia (zoom giu nguyen
+                    # gia tri TUYET DOI thay vi theo TY LE khi bat/tat
+                    # fullscreen, khac voi nhanh VIDEORESIZE ben tren von lam
+                    # dung). Sua bang cach chup old_zoom0 TRUOC khi doi lo,
+                    # dung chung ham rescale_zoom() cho nhat quan.
                     fullscreen = not fullscreen
+                    old_zoom0 = lo.ZOOM0
                     if fullscreen:
                         screen = pygame.display.set_mode((0, 0), FULLSCREEN)
                     else:
                         screen = pygame.display.set_mode((init_w, init_h), RESIZABLE)
                     lo = make_layout()
-                    zoom_ratio2 = zoom / lo.ZOOM0
-                    zoom = lo.ZOOM0 * zoom_ratio2
+                    zoom = al.rescale_zoom(zoom, old_zoom0, lo.ZOOM0)
 
                 elif ev.key == K_TAB and hint_moves_str:
                     # Tab = copy nhanh gợi ý hiện tại xuống thanh Singmaster,
@@ -741,11 +534,17 @@ def main():
                         txt  = formula_row_formulas[formula_selected_row]
                         note = f"Đã copy: {formula_row_labels[formula_selected_row]}"
                     else:
-                        txt  = _formula_lines_to_text(formula_lines)
+                        txt  = fp.formula_lines_to_text(formula_lines)
                         note = "Đã copy toàn bộ công thức vào clipboard!"
                     formula_copy_note = (note if _clipboard_set(txt) else
                                           "Không copy được (clipboard không khả dụng ở máy này)")
                     formula_copy_note_timer = 150
+
+                elif ev.key == K_p:
+                    # P = bat/tat overlay hieu nang (FPS + frame time) -- huu
+                    # ich de theo doi renderer 3D phan mem thuan (numpy, khong
+                    # GPU) co bi cham khong o may/kich thuoc cua so cu the.
+                    show_perf = not show_perf
 
                 elif ev.key == K_t:
                     # T = mở/đóng bảng công thức (KHÔNG modal -- hoạt động dù
@@ -882,7 +681,10 @@ def main():
 
                 else:
                     if ev.key == K_ESCAPE:
-                        running = False
+                        if cfop_busy:
+                            cancel_cfop_job()   # uu tien huy job AI truoc, KHONG thoat app
+                        else:
+                            running = False
 
                     elif ev.key == K_SPACE:
                         push_undo()
@@ -913,11 +715,11 @@ def main():
                             undo_empty_flash = 90
 
                     elif ev.key in (K_MINUS, K_KP_MINUS, K_LEFTBRACKET):
-                        speed_idx   = max(0, speed_idx - 1)
+                        speed_idx   = al.speed_idx_down(speed_idx)
                         speed_flash = 90
 
                     elif ev.key in (K_EQUALS, K_PLUS, K_KP_PLUS, K_RIGHTBRACKET):
-                        speed_idx   = min(len(SPEED_STEPS) - 1, speed_idx + 1)
+                        speed_idx   = al.speed_idx_up(speed_idx, len(SPEED_STEPS))
                         speed_flash = 90
 
                     elif ev.key in (K_UP, K_RIGHT) and sel_face:
@@ -1058,7 +860,9 @@ def main():
 
         if cfop_busy:
             dots = '.' * (1 + (pygame.time.get_ticks() // 300) % 3)
-            busy_txt = lo.sfont.render(f"AI đang tính{dots}", True, (255, 210, 0))
+            elapsed = (time.perf_counter() - cfop_start_time) if cfop_start_time else 0.0
+            busy_txt = lo.sfont.render(f"AI đang tính{dots} ({elapsed:0.1f}s, Esc để huỷ)",
+                                        True, (255, 210, 0))
             screen.blit(busy_txt, (ax, ay))
             ay += int(15 * lo.s)
         elif cfop_note:
@@ -1236,7 +1040,7 @@ def main():
 
             can_apply = (formula_selected_row is not None
                          and formula_selected_row < len(formula_row_formulas)
-                         and _looks_like_moves(formula_row_formulas[formula_selected_row]))
+                         and fp.looks_like_moves(formula_row_formulas[formula_selected_row]))
             if can_apply:
                 apply_txt_s = lo.sfont.render("Áp dụng -> bar", True, (30, 30, 20))
                 apply_w = apply_txt_s.get_width() + 14
@@ -1286,7 +1090,7 @@ def main():
                      'name_col_w': max(90, int(108 * lo.s)),
                      'row_gap': max(2, int(3 * lo.s)),
                      'spacer_h': max(6, int(10 * lo.s))}
-            formula_scroll_max, formula_scroll, formula_hit_rows = _draw_formula_panel_content(
+            formula_scroll_max, formula_scroll, formula_hit_rows = fp.draw_formula_panel_content(
                 screen, content_rect, fonts, formula_lines, formula_scroll, GOLD,
                 selected_row=formula_selected_row)
 
@@ -1342,7 +1146,7 @@ def main():
                                   'spacer_h': max(6, int(8 * (win_w / 460)))}
                 # Cửa sổ chỉ xem -- không cuộn (scroll=0); nội dung dài quá sẽ
                 # bị cắt gọn ở cạnh dưới (set_clip) thay vì tràn ra ngoài.
-                _draw_formula_panel_content(
+                fp.draw_formula_panel_content(
                     surf, win_content_rect, win_fonts_arg, formula_lines, 0, GOLD)
 
                 formula_window.flip()
@@ -1355,6 +1159,22 @@ def main():
                 formula_win_supported = False
                 if formula_lines:
                     formula_panel_open = True   # fallback về panel nổi khi cửa sổ lỗi
+
+        if show_perf:
+            # Overlay hieu nang don gian: FPS thuc te (theo clock.tick()) +
+            # thoi gian frame vua roi (ms). Dat o goc tren-trai, khong che
+            # UI khac. Xem ghi chu ve renderer software-only trong
+            # REFACTOR_NOTES.md -- overlay nay la cong cu chan doan, KHONG
+            # phai ban than 1 ban toi uu hoa renderer.
+            perf_fps = clock.get_fps()
+            perf_txt = lo.sfont.render(
+                f"FPS: {perf_fps:0.0f}  frame: {dt * 1000:0.1f}ms  [P để tắt]",
+                True, (0, 255, 120))
+            perf_bg = pygame.Surface((perf_txt.get_width() + 12, perf_txt.get_height() + 8))
+            perf_bg.set_alpha(160)
+            perf_bg.fill((0, 0, 0))
+            screen.blit(perf_bg, (6, 6))
+            screen.blit(perf_txt, (12, 10))
 
         pygame.display.flip()
 

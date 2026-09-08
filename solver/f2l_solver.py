@@ -21,6 +21,9 @@ from .full_state import from_facelets, apply_move, cross_ok, pair_ok, NO_D_MOVES
 from . import edge_model as EM
 from . import corner_model as CM
 from .pdb_builder import build_pdb_edges, build_pdb_corners, build_pdb_pair
+from .search_utils import check_cancel
+
+_CANCEL_CHECK_EVERY = 512   # dong bo voi search_utils.py -- xem ghi chu do dac o do
 
 F2L_ORDER = ['DFR', 'DFL', 'DBR', 'DBL']
 
@@ -115,6 +118,8 @@ def _solve_pair(full_start, slot, done_slots, max_nodes=120_000, max_depth=13, m
         nodes += 1
         if nodes > max_nodes:
             return None
+        if nodes % _CANCEL_CHECK_EVERY == 0:
+            check_cancel()   # xem solver/search_utils.py -- huy job AI giua chung
         for mv in moves:
             face = mv[0]
             if face == last_face:

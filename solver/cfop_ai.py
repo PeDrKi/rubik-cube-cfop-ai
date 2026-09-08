@@ -26,6 +26,7 @@ from .pll_solver import (solve_pll, corners_home, edges_home,
                           solve_pll_corners_only, solve_pll_edges_only)
 from .full_state import from_facelets
 from .move_simplify import simplify
+from .search_utils import set_cancel_event, clear_cancel_event, SearchCancelled
 
 
 def stage_of(state):
@@ -194,25 +195,70 @@ def _hint_raw(state, retry=False):
     return {'stage': 'done', 'label': 'Cube đã giải xong! 🎉', 'moves': []}
 
 
-def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, retry=False):
+def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000,
+                retry=False, cancel_event=None):
     """Wrapper cua _full_solve_raw(): rut gon chuoi nuoc di cuoi cung
-    (simplify.py) truoc khi tra ve, khong doi ket qua/tinh dung dan."""
-    res = _full_solve_raw(state, f2l_depths=f2l_depths,
-                           f2l_nodes_per_depth=f2l_nodes_per_depth, retry=retry)
-    res['all_moves'] = simplify(res['all_moves'])
-    return res
+    (simplify.py) truoc khi tra ve, khong doi ket qua/tinh dung dan.
+
+    cancel_event: threading.Event tuy chon -- neu duoc set() giua luc dang
+    tim kiem (vd nguoi dung bam Huy tren UI), ham nay dung lai SOM va tra ve
+    {'cancelled': True, 'all_moves': [], ...cac key khac de rong...} thay vi
+    ket qua giai day du. Khong anh huong hanh vi cu neu khong truyen (mac
+    dinh None -> khong bao gio bi huy, giong nguyen ban)."""
+    set_cancel_event(cancel_event)
+    try:
+        res = _full_solve_raw(state, f2l_depths=f2l_depths,
+                               f2l_nodes_per_depth=f2l_nodes_per_depth, retry=retry)
+        res['all_moves'] = simplify(res['all_moves'])
+        res['cancelled'] = False
+        return res
+    except SearchCancelled:
+        return {'cross_moves': [], 'f2l_moves': [], 'f2l_per_slot': {},
+                'oll_moves': [], 'pll_moves': [], 'all_moves': [],
+                'reached': None, 'oll_pll_stage_count': 0, 'oll_pll_named_count': 0,
+                'cancelled': True}
+    finally:
+        clear_cancel_event()
 
 
-def hint(state, retry=False):
+def hint(state, retry=False, cancel_event=None):
     """Wrapper cua _hint_raw(): rut gon chuoi nuoc di cua goi y truoc khi
-    tra ve, khong doi ket qua/tinh dung dan."""
-    res = _hint_raw(state, retry=retry)
-    if res.get('moves'):
-        res['moves'] = simplify(res['moves'])
-    return res
+    tra ve, khong doi ket qua/tinh dung dan. Xem full_solve() ve cancel_event."""
+    set_cancel_event(cancel_event)
+    try:
+        res = _hint_raw(state, retry=retry)
+        if res.get('moves'):
+            res['moves'] = simplify(res['moves'])
+        res['cancelled'] = False
+        return res
+    except SearchCancelled:
+        return {'stage': None, 'label': None, 'moves': [], 'cancelled': True}
+    finally:
+        clear_cancel_event()
 
 
-def full_solve_breakdown(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, retry=False):
+def full_solve_breakdown(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000,
+                          retry=False, cancel_event=None):
+    """Xem full_solve() ve y nghia tham so cancel_event -- neu bi huy giua
+    chung, tra ve dict voi moi buoc = {'status': 'not_reached', ...} va
+    them key 'cancelled': True o cap ngoai cung.
+    """
+    set_cancel_event(cancel_event)
+    try:
+        res = _full_solve_breakdown_raw(state, f2l_depths=f2l_depths,
+                                         f2l_nodes_per_depth=f2l_nodes_per_depth, retry=retry)
+        res['cancelled'] = False
+        return res
+    except SearchCancelled:
+        empty = {'status': 'not_reached', 'moves': [], 'case_name': None}
+        return {'cross': {'status': 'not_reached', 'moves': []},
+                'f2l': {s: {'status': 'not_reached', 'moves': []} for s in F2L_ORDER},
+                'oll': dict(empty), 'pll': dict(empty), 'cancelled': True}
+    finally:
+        clear_cancel_event()
+
+
+def _full_solve_breakdown_raw(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, retry=False):
     """
     Giai toan bo CFOP tu state hien tai (KHONG doi state truyen vao),
     nhung -- khac voi full_solve() -- tra ve ket qua CHIA THEO TUNG BUOC

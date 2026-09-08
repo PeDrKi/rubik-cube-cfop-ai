@@ -30,6 +30,52 @@ import heapq
 _FOUND = -1
 _BUDGET_EXCEEDED = -2
 
+# ── Ho tro huy tim kiem giua chung (nguoi dung bam Esc/Huy trong khi AI
+#    dang tinh) ────────────────────────────────────────────────────────────
+# Dung 1 bien module-level (khong phai tham so xuyen suot moi ham) vi kien
+# truc app CHI CHAY 1 job AI tai 1 thoi diem (co UI khoa bang cfop_busy
+# truoc khi cho phep bam job moi) -- xem main.py: start_cfop_job(). Neu sau
+# nay can chay NHIEU job song song, phai doi sang truyen cancel_event lam
+# tham so tuong minh cho tung ham search.
+_cancel_event = None
+_CANCEL_CHECK_EVERY = 512   # kiem tra moi N node (tranh goi is_set() qua nhieu)
+# Da do thuc te (xem REFACTOR_NOTES.md muc 2): do tre huy o muc ~130-250ms,
+# CHU YEU den tu overhead NGOAI vong lap search (khoi dong thread, solve_cross()
+# luon chay het vi da bounded <=20 buoc va khong co checkpoint huy, build PDB
+# theo cap F2L cu the neu chua cache) chu KHONG PHAI do khoang cach node nay --
+# giam tu 2048 xuong 512 la bien phong thu cho cac pha sau hon (OLL/PLL IDA*
+# co the ton nhieu cong viec/node hon), khong ky vong thay doi lon o benchmark
+# hien co.
+
+
+class SearchCancelled(Exception):
+    """Nem ra tu a_star()/ida_star() khi cancel_event duoc set() giua chung.
+    Duoc cfop_ai.py bat o tang tren cung de tra ve ket qua 'cancelled'
+    thay vi de loi lan ra ngoai worker thread."""
+    pass
+
+
+def set_cancel_event(event):
+    """Goi 1 lan truoc khi bat dau 1 job AI (tu cfop_ai.py). event la
+    threading.Event; job se bi huy giua chung neu event.is_set() == True."""
+    global _cancel_event
+    _cancel_event = event
+
+
+def clear_cancel_event():
+    """Goi trong finally cua job AI de don du lieu, tranh anh huong job sau."""
+    global _cancel_event
+    _cancel_event = None
+
+
+def check_cancel():
+    """Kiem tra co dang bi yeu cau huy khong; nem SearchCancelled neu co.
+    Cac vong lap search (a_star/ida_star o day, va _solve_pair trong
+    f2l_solver.py) goi ham nay dinh ky, KHONG phai moi node (is_set() co
+    chi phi, goi qua day se lam cham tim kiem mot cach khong can thiet)."""
+    if _cancel_event is not None and _cancel_event.is_set():
+        raise SearchCancelled()
+
 
 def move_order(moves, shuffled):
     """Thu tu duyet nuoc di cho 1 lan goi search. Neu shuffled=True, tra ve
@@ -76,6 +122,8 @@ def a_star(full_start, goal_fn, heuristic_fn, max_nodes, max_depth, moves):
         nodes += 1
         if nodes > max_nodes:
             return None
+        if nodes % _CANCEL_CHECK_EVERY == 0:
+            check_cancel()
         for mv in moves:
             face = mv[0]
             if face == last_face:
@@ -124,6 +172,9 @@ def ida_star(full_start, goal_fn, heuristic_fn, max_threshold, moves, node_budge
         nodes[0] += 1
         if nodes[0] > node_budget:
             return _BUDGET_EXCEEDED
+        if nodes[0] % _CANCEL_CHECK_EVERY == 0:
+            check_cancel()   # nem SearchCancelled -> troi qua cac frame dfs()
+                              # de nguoc len tan cfop_ai.py (khong bat o day)
 
         min_next = None
         for mv in moves:
