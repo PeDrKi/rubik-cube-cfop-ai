@@ -15,6 +15,7 @@ Khong dung nuoc D trong pha nay (giu nguyen Cross da giai o lop D).
 """
 
 import heapq
+import random
 
 from .full_state import from_facelets, apply_move, cross_ok, pair_ok, NO_D_MOVES, F2L_EDGE_OF
 from . import edge_model as EM
@@ -69,10 +70,11 @@ def _heuristic(full, slot, done_slots):
     return base + penalty
 
 
-def _solve_pair(full_start, slot, done_slots, max_nodes=400_000, max_depth=13):
+def _solve_pair(full_start, slot, done_slots, max_nodes=120_000, max_depth=13, moves=NO_D_MOVES):
     """A*/greedy-best-first tim chuoi nuoc (khong dung D) dua slot ve dung
     vi tri, uu tien manh giu nguyen Cross va cac slot trong done_slots.
-    Tra ve list moves hoac None neu khong tim thay trong ngan sach cho phep."""
+    Tra ve list moves hoac None neu khong tim thay trong ngan sach cho phep.
+    `moves`: thu tu duyet nuoc di -- co the xao tron cho lan 'thu lai'."""
 
     def goal(full):
         if not cross_ok(full):
@@ -101,7 +103,7 @@ def _solve_pair(full_start, slot, done_slots, max_nodes=400_000, max_depth=13):
         nodes += 1
         if nodes > max_nodes:
             return None
-        for mv in NO_D_MOVES:
+        for mv in moves:
             face = mv[0]
             if face == last_face:
                 continue   # tranh lap lai cung 1 mat lien tiep (khong bao gio toi uu)
@@ -118,21 +120,34 @@ def _solve_pair(full_start, slot, done_slots, max_nodes=400_000, max_depth=13):
     return None
 
 
-def _solve_pair_ladder(full, slot, done, depths=(8, 10, 12, 14), nodes_per_depth=120_000):
+def _move_order(shuffled):
+    """Xao tron ngau nhien NO_D_MOVES cho lan 'thu lai' (retry) -- cung
+    ngan sach node/RAM nhung kham pha nhanh khac lan truoc, vi tim kiem
+    von tat dinh nen thu lai voi thu tu cu se that bai y het lan truoc."""
+    if not shuffled:
+        return NO_D_MOVES
+    mv = list(NO_D_MOVES)
+    random.shuffle(mv)
+    return mv
+
+
+def _solve_pair_ladder(full, slot, done, depths=(8, 10, 12, 14), nodes_per_depth=120_000,
+                        shuffled=False):
     for depth in depths:
-        mvs = _solve_pair(full, slot, done, max_nodes=nodes_per_depth, max_depth=depth)
+        mvs = _solve_pair(full, slot, done, max_nodes=nodes_per_depth, max_depth=depth,
+                           moves=_move_order(shuffled))
         if mvs is not None:
             return mvs
     return None
 
 
-def solve_f2l(state, slots=None, depths=(8, 10, 12, 14), nodes_per_depth=120_000):
+def solve_f2l(state, slots=None, depths=(8, 10, 12, 14), nodes_per_depth=120_000, retry=False):
     """
     Giai F2L tu trang thai facelet hien tai (Cross phai da xong truoc do).
     Tra ve dict: {'moves': [...tat ca nuoc noi tiep...],
                   'per_slot': {slot: [moves] hoac None neu that bai},
                   'solved_slots': [...]}
-    Khong thay doi state truyen vao.
+    Khong thay doi state truyen vao. retry=True: xem _move_order().
     """
     slots = slots or F2L_ORDER
     full = from_facelets(state)
@@ -147,7 +162,8 @@ def solve_f2l(state, slots=None, depths=(8, 10, 12, 14), nodes_per_depth=120_000
             per_slot[slot] = []
             done.append(slot)
             continue
-        mvs = _solve_pair_ladder(full, slot, done, depths=depths, nodes_per_depth=nodes_per_depth)
+        mvs = _solve_pair_ladder(full, slot, done, depths=depths, nodes_per_depth=nodes_per_depth,
+                                  shuffled=retry)
         per_slot[slot] = mvs
         if mvs is None:
             break   # giu MVP: dung lai o cap dau tien khong giai duoc

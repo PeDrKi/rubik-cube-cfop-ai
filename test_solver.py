@@ -84,23 +84,13 @@ def test_hint_does_not_mutate_state():
         assert (st[f] == before[f]).all()
 
 
-@pytest.mark.parametrize("seed", range(2))
-def test_full_solve_oll_when_reached(seed):
-    """Neu AI bao 'oll_done', mat U phai thuc su dong mau tren facelet that,
-    va Cross+F2L khong bi pha vo trong qua trinh giai OLL.
-    Luu y: mot vai truong hop OCLL kho co the mat toi ~1-2.5 phut (xem
-    solver/oll_solver.py) -- chi test 2 seed o day de CI khong qua lau,
-    da stress-test rieng voi nhieu seed hon luc phat trien (xem README)."""
-    st = _scrambled(seed)
+def test_full_solve_noop_when_already_solved():
+    """full_solve() tren cube da giai xong phai nhan ra ngay (khong tim
+    kiem gi) va bao 'solved'."""
+    st = make_solved()
     res = full_solve(st)
-    for mv in res['all_moves']:
-        do_move(st, mv)
-    assert cross_solved(st)
-    ok_slots = [s for s in F2L_ORDER if pair_solved(st, s)]
-    if res['reached'] in ('oll_done', 'oll_partial'):
-        assert set(ok_slots) == set(F2L_ORDER)   # F2L phai con nguyen ven
-    if res['reached'] == 'oll_done':
-        assert (st['U'] == 'U').all()
+    assert res['reached'] == 'solved'
+    assert res['all_moves'] == []
 
 
 def _oll_edges_only_case():

@@ -39,7 +39,7 @@ def stage_of(state):
     return 'done'
 
 
-def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000):
+def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000, retry=False):
     """
     Giai toan bo CFOP (Cross + F2L + OLL + PLL) tu state hien tai.
     KHONG thay doi state truyen vao.
@@ -60,7 +60,7 @@ def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000):
         for mv in cross_moves:
             do_move(st, mv)
 
-    f2l_res = solve_f2l(st, depths=f2l_depths, nodes_per_depth=f2l_nodes_per_depth)
+    f2l_res = solve_f2l(st, depths=f2l_depths, nodes_per_depth=f2l_nodes_per_depth, retry=retry)
     for mv in f2l_res['moves']:
         do_move(st, mv)
     f2l_done = len(f2l_res['solved_slots']) == len(F2L_ORDER)
@@ -71,7 +71,7 @@ def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000):
 
     if f2l_done:
         reached = 'f2l_done'
-        oll_res = solve_oll(st)
+        oll_res = solve_oll(st, retry=retry)
         if oll_res['moves']:
             oll_moves = oll_res['moves']
             for mv in oll_moves:
@@ -80,7 +80,7 @@ def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000):
         reached = 'oll_done' if oll_done_flag else 'oll_partial'
 
         if oll_done_flag:
-            pll_res = solve_pll(st)
+            pll_res = solve_pll(st, retry=retry)
             if pll_res['moves']:
                 pll_moves = pll_res['moves']
                 for mv in pll_moves:
@@ -98,7 +98,7 @@ def full_solve(state, f2l_depths=(8, 10, 12, 14), f2l_nodes_per_depth=120_000):
     }
 
 
-def hint(state):
+def hint(state, retry=False):
     """
     Tra ve goi y CHO BUOC TIEP THEO duy nhat (khong thuc thi):
       {'stage': 'cross', 'label': 'Cross', 'moves': [...]}
@@ -106,6 +106,12 @@ def hint(state):
       {'stage': 'oll_edges'/'oll_corners', 'label': '...', 'moves': [...]}
       {'stage': 'pll_corners'/'pll_edges', 'label': '...', 'moves': [...]}
       {'stage': 'done', 'label': 'Cube da giai xong!', 'moves': []}
+
+    retry=True: xao tron thu tu nuoc di trong search (cung ngan sach
+    node/RAM, KHONG tang) de kham pha nhanh KHAC voi lan goi truoc -- dung
+    khi nguoi dung bam Hint lai cho CUNG 1 giai doan vua that bai (tim
+    kiem von tat dinh, goi lai voi cung state se cho ket qua GIONG HET
+    lan truoc neu khong xao tron).
     """
     stage = stage_of(state)
 
@@ -116,7 +122,7 @@ def hint(state):
         done = f2l_solved_slots(state)
         remaining = [s for s in F2L_ORDER if s not in done]
         target = remaining[0]
-        res = solve_f2l(state, slots=[target])
+        res = solve_f2l(state, slots=[target], retry=retry)
         mvs = res['per_slot'].get(target)
         if mvs is None:
             return {'stage': 'f2l', 'label': f'F2L - cặp {target} (chưa tìm được trong ngân sách)',
@@ -130,17 +136,17 @@ def hint(state):
         # thoi gian vo ich khi hint() chi can 1 pha.
         full = from_facelets(state)
         if not edges_oriented(full):
-            mvs = solve_oll_edges_only(state)
+            mvs = solve_oll_edges_only(state, retry=retry)
             if mvs is None:
                 return {'stage': 'oll_edges',
-                        'label': 'OLL - Định hướng 4 cạnh (chưa tìm được trong ngân sách)',
+                        'label': 'OLL - Định hướng 4 cạnh (chưa tìm được, bấm H lại để thử hướng khác)',
                         'moves': []}
             return {'stage': 'oll_edges', 'label': 'OLL - Định hướng 4 cạnh', 'moves': mvs}
         else:
-            mvs = solve_oll_corners_only(state)
+            mvs = solve_oll_corners_only(state, retry=retry)
             if mvs is None:
                 return {'stage': 'oll_corners',
-                        'label': 'OLL - Định hướng 4 góc (chưa tìm được trong ngân sách, thử lại)',
+                        'label': 'OLL - Định hướng 4 góc (chưa tìm được, bấm H lại để thử hướng khác)',
                         'moves': []}
             return {'stage': 'oll_corners', 'label': 'OLL - Định hướng 4 góc', 'moves': mvs}
 
@@ -148,17 +154,17 @@ def hint(state):
         # Cung ly do toc do nhu OLL o tren: chi goi dung pha can.
         full = from_facelets(state)
         if not corners_home(full):
-            mvs = solve_pll_corners_only(state)
+            mvs = solve_pll_corners_only(state, retry=retry)
             if mvs is None:
                 return {'stage': 'pll_corners',
-                        'label': 'PLL - Hoán vị 4 góc (chưa tìm được, thử lại)',
+                        'label': 'PLL - Hoán vị 4 góc (chưa tìm được, bấm H lại để thử hướng khác)',
                         'moves': []}
             return {'stage': 'pll_corners', 'label': 'PLL - Hoán vị 4 góc', 'moves': mvs}
         else:
-            mvs = solve_pll_edges_only(state)
+            mvs = solve_pll_edges_only(state, retry=retry)
             if mvs is None:
                 return {'stage': 'pll_edges',
-                        'label': 'PLL - Hoán vị 4 cạnh (case khó, thử lại)',
+                        'label': 'PLL - Hoán vị 4 cạnh (chưa tìm được, bấm H lại để thử hướng khác)',
                         'moves': []}
             return {'stage': 'pll_edges', 'label': 'PLL - Hoán vị 4 cạnh', 'moves': mvs}
 

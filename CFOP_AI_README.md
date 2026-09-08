@@ -73,6 +73,32 @@ cache/                  PDB đã build, cache ra đĩa (.pkl) — build 1 lần
 test_solver.py           unit + stress test
 ```
 
+## Cập nhật quan trọng: A* → IDA* (khắc phục OOM và tăng tỉ lệ giải được)
+
+Trong quá trình tối ưu, phát hiện A* (heapq + dict `best_g` lưu mọi trạng
+thái đã thăm) làm bộ nhớ tăng **tuyến tính theo số node duyệt** — máy chạy
+chỉ có **~4GB RAM** (đã kiểm tra qua `/proc/meminfo`), nên ~300k node đã
+chiếm ~3GB, có nguy cơ bị **kernel OOM-kill cả tiến trình** (crash toàn bộ
+app) nếu tăng ngân sách tìm kiếm để giải case khó hơn.
+
+**Đã chuyển sang IDA\* (Iterative Deepening A\*)** — kỹ thuật kinh điển
+Korf (1997) dùng cho chính solver Rubik tối ưu, lý do gốc cũng là vì
+không gian trạng thái quá lớn để lưu toàn bộ visited-set:
+- Bộ nhớ chỉ **O(độ sâu tìm kiếm)** (vài chục phần tử), không phụ thuộc số
+  node đã duyệt → **không bao giờ OOM**, đã kiểm chứng thực tế: chạy hơn
+  4 phút liên tục, bộ nhớ giữ nguyên ~65-500MB (so với A* cũ có thể chạm
+  3GB+ chỉ sau vài chục giây).
+- Kết hợp với **heuristic mạnh hơn hẳn**: tái sử dụng chính PDB của Cross
+  (`cross_solver.py`) và PDB từng cặp F2L (`f2l_solver.py`) làm cận dưới
+  **admissible thực sự** (không phải cờ phạt 0/1 tùy ý như trước) cho việc
+  "Cross/F2L có đang bị phá hay không, và phá bao nhiêu bước để sửa".
+- Kết quả: case OCLL khó nhất từng gặp (2 góc xoay ngược chiều — **A\* cũ
+  thất bại hoàn toàn dù đã dùng tới ~3GB RAM**) nay **giải được trong
+  109 giây, chỉ dùng 121MB**. Case PLL cạnh (U-perm) từ ~45 giây (A\*)
+  xuống còn **~9 giây** (IDA\* + heuristic mới).
+- Xem `solver/search_utils.py` (IDA* dùng chung) và
+  `solver/oll_solver.py::_cross_f2l_lower_bound()` (heuristic mới).
+
 ## Tối ưu đã thực hiện
 
 - **Tốc độ:** các hàm kiểm tra trạng thái trong hot-path của A* (`cross_ok`,

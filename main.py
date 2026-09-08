@@ -96,6 +96,12 @@ def main():
     hint_moves_str  = None     # chuoi Singmaster cua goi y (khong tu dong thuc thi)
     cfop_note       = None     # thong bao ngan (vd "Da giai xong Cross+F2L")
     cfop_note_timer = 0
+    # theo doi de nhan biet "bam H lai cho CUNG 1 giai doan vua that bai ma
+    # cube CHUA doi gi" -> tim kiem von tat dinh nen phai xao tron nuoc di
+    # (retry=True) moi co y nghia, khong thi se that bai y het lan truoc.
+    last_hint_stage      = None
+    last_hint_move_count = None
+    last_hint_failed     = False
 
     def start_cfop_job(kind):
         nonlocal cfop_busy, cfop_job_kind
@@ -105,12 +111,18 @@ def main():
         cfop_job_kind = kind
         snapshot = copy.deepcopy(state)
 
+        retry = False
+        if kind == 'hint':
+            cur_stage = cfop_ai.stage_of(snapshot)   # re, khong search, an toan goi dong bo
+            retry = (last_hint_failed and last_hint_stage == cur_stage
+                     and last_hint_move_count == move_count)
+
         def worker():
             try:
                 if kind == 'solve':
-                    res = cfop_ai.full_solve(snapshot)
+                    res = cfop_ai.full_solve(snapshot, retry=retry)
                 else:
-                    res = cfop_ai.hint(snapshot)
+                    res = cfop_ai.hint(snapshot, retry=retry)
                 cfop_result_q.put((kind, res, None))
             except Exception as exc:
                 cfop_result_q.put((kind, None, str(exc)))
@@ -208,6 +220,9 @@ def main():
             else:   # hint
                 hint_label = res['label']
                 hint_moves_str = ' '.join(res['moves']) if res['moves'] else None
+                last_hint_stage = res.get('stage')
+                last_hint_move_count = move_count
+                last_hint_failed = not res['moves']
 
         mx, my = pygame.mouse.get_pos()
         R = Rm()

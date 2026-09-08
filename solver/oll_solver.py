@@ -11,30 +11,47 @@ Nhan xet quan trong (suy ra tu Cross+F2L da xong):
   nhung chac chan o lop U) -- vi khong con khe nao khac trong.
 
 Kien truc: "2-Look OLL" (dung ky thuat CFOP that: tach OLL thanh 2 pha rieng,
-thay vi tim ca 8 quan cung luc -- ca hai deu dung PDB + A* CUA CHINH TA,
-KHONG phai bang tra 57 cong thuc hoc thuoc long tu nguon ngoai):
+thay vi tim ca 8 quan cung luc -- da thu va qua cham vi khong gian tuong tac
+giua canh+goc qua lon de lam PDB dung nghia):
 
   Pha A - Orient Edges (EOLL): chi xoay huong 4 canh U, dung PDB "gop" cho
-    canh (da xay o F2L/Cross-tuong-tu, 190,080 trang thai, CHINH XAC tuyet
-    doi) -- giong tinh than solve_cross (PDB chinh xac -> tim nhanh).
+    canh (190,080 trang thai, CHINH XAC tuyet doi).
 
   Pha B - Orient Corners (OCLL): sau khi canh da huong dung, xoay huong 4
-    goc U ma KHONG lam sai huong canh vua xong, dung PDB "gop" cho goc
-    (136,080 trang thai, chinh xac tuyet doi) + penalty giu canh/Cross/F2L.
+    goc U ma KHONG lam sai huong canh vua xong.
 
-Tach lam 2 pha (thay vi 1 pha tim ca 8 quan) giup khong gian tim kiem nho
-lai rat nhieu (heuristic khop sat voi tung pha), nhanh hon nhieu so voi
-tim dong thoi ca edge+corner (da thu nghiem: tim chung mat >60s, tach pha
-mat <2s/pha o da so truong hop).
+TIM KIEM: dung IDA* (khong phai A*+dict) -- ly do:
+  A* voi dict luu tat ca trang thai da tham chiem RAM O(so node), va may
+  chay chi co ~4GB RAM (da kiem tra qua /proc/meminfo) -- ~300k node A* da
+  gan cham RAM, hon nua co the bi kernel OOM-kill CA TIEN TRINH. IDA* (DFS
+  lap sau tang dan) chi ton RAM O(do sau tim kiem) (vai chuc phan tu), cho
+  phep duyet nhieu trieu node ma khong lo het RAM -- doi lai co the duyet
+  lai 1 nhanh nhieu lan (khong memo hoa). Day la ly do Korf (1997) dung
+  IDA* cho solver Rubik toi uu thay vi A* thuan.
+
+HEURISTIC: h(state) = max(
+    PDB "gop" huong cua 4 goc U (hoac 4 canh U o pha A),
+    PDB Cross (dung lai nguyen ban tu cross_solver.py) neu Cross dang bi vo,
+    PDB tung cap F2L (dung lai nguyen ban tu f2l_solver.py) neu cap do bi vo,
+  )
+  Day la CAN DUOI THUC SU ADMISSIBLE (khong phai penalty tuy y nhu ban truoc):
+  neu Cross dang bi lech d buoc so voi trang thai da giai, thi CHAC CHAN can
+  it nhat d buoc nua de sua no (bat ke sua gi khac) -- nen max(...) khong
+  bao gio danh gia CAO HON so thuc te. Manh hon nhieu so voi "co/khong bi
+  vo" (0/1) dung truoc day -- chinh nho heuristic nay ma IDA* giai duoc ca
+  cac case OCLL kho nhat da gap trong qua trinh phat trien (VD 2 goc xoay
+  nguoc chieu -- truoc day A* that bai hoan toan du dung toi RAM toi da).
 """
-
-import heapq
 
 from .full_state import (from_facelets, apply_move, NO_D_MOVES, cross_f2l_ok,
                           u_edges_oriented, u_corners_oriented)
 from . import edge_model as EM
 from . import corner_model as CM
 from .pdb_builder import build_pdb_edges_group_anyperm, build_pdb_corners_group_anyperm
+from .cross_solver import get_pdb as _get_cross_pdb
+from .f2l_solver import _pair_pdb, F2L_EDGE_OF
+from .facelets import F2L_ORDER
+from .search_utils import ida_star, move_order
 
 U_EDGES = ('UF', 'UB', 'UL', 'UR')
 U_CORNERS = ('UFR', 'UFL', 'UBR', 'UBL')
@@ -58,8 +75,7 @@ def _corner_pdb():
 
 
 # edges_oriented/corners_oriented: alias sang ban toi uu (khong tra dict
-# theo ten, so sanh thang chi so) trong full_state.py -- xem benchmark
-# trong CFOP_AI_README.md (~1.5x nhanh hon ban vong lap cu).
+# theo ten, so sanh thang chi so) trong full_state.py.
 edges_oriented = u_edges_oriented
 corners_oriented = u_corners_oriented
 
@@ -68,8 +84,20 @@ def oll_done(full):
     return edges_oriented(full) and corners_oriented(full)
 
 
-def _cross_f2l_penalty(full):
-    return 0 if cross_f2l_ok(full) else 1
+def _cross_f2l_lower_bound(full):
+    """Can duoi THUC SU (khong phai co/khong) cho so buoc can de phuc hoi
+    Cross+F2L neu dang bi vo, tai su dung nguyen PDB cua cross_solver.py va
+    f2l_solver.py (khong xay PDB moi)."""
+    ep, eo, cp, co = full
+    best = _get_cross_pdb().get((ep[4:8], eo[4:8]), 8)
+    for slot in F2L_ORDER:
+        ci = CM.SLOT_INDEX[slot]
+        ei = EM.SLOT_INDEX[F2L_EDGE_OF[slot]]
+        key = ((ep[ei],), (eo[ei],), (cp[ci],), (co[ci],))
+        d = _pair_pdb(slot).get(key, 8)
+        if d > best:
+            best = d
+    return best
 
 
 def _edge_key(full):
@@ -84,44 +112,7 @@ def _corner_key(full):
     return (tuple(cp[i] for i in idx), tuple(co[i] for i in idx))
 
 
-def _search_generic(full_start, goal_fn, heuristic_fn, max_nodes, max_depth):
-    """A* tong quat (dung chung cho ca 2 pha), giong f2l_solver.py."""
-    if goal_fn(full_start):
-        return []
-
-    h0 = heuristic_fn(full_start)
-    counter = 0
-    heap = [(h0, 0, counter, full_start, (), None)]
-    best_g = {full_start: 0}
-    nodes = 0
-
-    while heap:
-        f, g, _, cur, path, last_face = heapq.heappop(heap)
-        if g > best_g.get(cur, 1 << 30):
-            continue
-        if g >= max_depth:
-            continue
-        nodes += 1
-        if nodes > max_nodes:
-            return None
-        for mv in NO_D_MOVES:
-            face = mv[0]
-            if face == last_face:
-                continue
-            nxt = apply_move(cur, mv)
-            ng = g + 1
-            if ng < best_g.get(nxt, 1 << 30):
-                best_g[nxt] = ng
-                npath = path + (mv,)
-                if goal_fn(nxt):
-                    return list(npath)
-                counter += 1
-                h = heuristic_fn(nxt)
-                heapq.heappush(heap, (ng + h, ng, counter, nxt, npath, face))
-    return None
-
-
-def _solve_phase_A(full, max_nodes=200_000, max_depth=10):
+def _solve_phase_A(full, max_threshold, node_budget, moves=NO_D_MOVES):
     """Orient Edges: chi can 4 canh U huong dung, khong quan tam goc."""
     epdb = _edge_pdb()
 
@@ -129,64 +120,67 @@ def _solve_phase_A(full, max_nodes=200_000, max_depth=10):
         return cross_f2l_ok(f) and edges_oriented(f)
 
     def heuristic(f):
-        base = epdb.get(_edge_key(f), 8)
-        return base + 3 * _cross_f2l_penalty(f)
+        return max(epdb.get(_edge_key(f), 8), _cross_f2l_lower_bound(f))
 
-    return _search_generic(full, goal, heuristic, max_nodes, max_depth)
+    return ida_star(full, goal, heuristic, max_threshold, moves, node_budget)
 
 
-def _solve_phase_B(full, max_nodes=200_000, max_depth=13):
+def _solve_phase_B(full, max_threshold, node_budget, moves=NO_D_MOVES):
     """Orient Corners: 4 goc U huong dung, GIU NGUYEN canh (da xong o pha A)."""
     cpdb = _corner_pdb()
-
-    def edge_penalty(f):
-        return 0 if edges_oriented(f) else 1
 
     def goal(f):
         return cross_f2l_ok(f) and edges_oriented(f) and corners_oriented(f)
 
     def heuristic(f):
-        base = cpdb.get(_corner_key(f), 8)
-        return base + 3 * _cross_f2l_penalty(f) + 4 * edge_penalty(f)
+        base = max(cpdb.get(_corner_key(f), 8), _cross_f2l_lower_bound(f))
+        if not edges_oriented(f):
+            base = max(base, 1)   # canh cung phai duoc giu nguyen
+        return base
 
-    return _search_generic(full, goal, heuristic, max_nodes, max_depth)
+    return ida_star(full, goal, heuristic, max_threshold, moves, node_budget)
 
 
-def _solve_phase_A_ladder(full):
-    for nodes, depth in ((80_000, 8), (200_000, 10), (400_000, 12)):
-        mvs = _solve_phase_A(full, max_nodes=nodes, max_depth=depth)
+# Ngan sach IDA*: KHONG anh huong RAM (chi anh huong thoi gian cho phep) vi
+# IDA* khong luu visited-state -- co the dat lon hon nhieu so voi A* truoc
+# day ma van an toan (da benchmark: ~65-120MB kha ca voi 3 trieu node).
+_TIERS_A = ((10, 300_000), (14, 2_000_000))
+_TIERS_B = ((10, 300_000), (13, 1_000_000), (16, 4_000_000))
+
+
+def _solve_phase_A_ladder(full, shuffled=False):
+    for threshold, budget in _TIERS_A:
+        mvs = _solve_phase_A(full, threshold, budget, moves=move_order(NO_D_MOVES, shuffled))
         if mvs is not None:
             return mvs
     return None
 
 
-def _solve_phase_B_ladder(full):
-    # da so truong hop (Sune/Anti-Sune/T/U ...) giai nhanh voi ngan sach nho;
-    # mot so truong hop hiem (VD H-case) can toi da sau hon -> ngan sach lon
-    # hon nhieu nhung chi tra gia khi thuc su can (chay nen, khong dong UI).
-    # Da gioi han tang cuoi de tranh cho qua lau (~1 phut toi da thuc te).
-    for nodes, depth in ((80_000, 9), (150_000, 11), (300_000, 13), (500_000, 14)):
-        mvs = _solve_phase_B(full, max_nodes=nodes, max_depth=depth)
+def _solve_phase_B_ladder(full, shuffled=False):
+    for threshold, budget in _TIERS_B:
+        mvs = _solve_phase_B(full, threshold, budget, moves=move_order(NO_D_MOVES, shuffled))
         if mvs is not None:
             return mvs
     return None
 
 
-def solve_oll_edges_only(state):
+def solve_oll_edges_only(state, retry=False):
     """Chi giai pha A (dinh huong canh). Dung cho hint() de tranh tinh
-    thua pha B khi chua can toi (xem ghi chu trong cfop_ai.hint())."""
+    thua pha B khi chua can toi (xem ghi chu trong cfop_ai.hint()).
+    retry=True: xao tron thu tu nuoc di cho lan 'thu lai'."""
     full = from_facelets(state)
-    return _solve_phase_A_ladder(full)
+    return _solve_phase_A_ladder(full, shuffled=retry)
 
 
-def solve_oll_corners_only(state):
+def solve_oll_corners_only(state, retry=False):
     """Chi giai pha B (dinh huong goc), GIA SU canh da huong dung san.
-    Dung cho hint() de tranh tinh thua pha A."""
+    Dung cho hint() de tranh tinh thua pha A. retry=True: xem
+    solve_oll_edges_only()."""
     full = from_facelets(state)
-    return _solve_phase_B_ladder(full)
+    return _solve_phase_B_ladder(full, shuffled=retry)
 
 
-def solve_oll(state):
+def solve_oll(state, retry=False):
     """
     Giai OLL (2-look) tu trang thai facelet hien tai (Cross+F2L phai da xong).
     Tra ve dict:
@@ -194,19 +188,20 @@ def solve_oll(state):
        'moves': edge_moves + corner_moves (noi tiep, de animate truc tiep)}
     Khong thay doi state truyen vao.
 
-    Ghi chu: da so truong hop giai <2s. Mot vai truong hop OCLL kho (VD
-    H-case) co the mat toi ~1 phut do phai leo thang ngan sach tim kiem --
-    chay nen (thread) nen khong lam dong UI.
+    Ghi chu: da so truong hop giai <2s. Mot vai truong hop OCLL kho co the
+    mat toi ~1-2 phut do phai leo thang ngan sach tim kiem -- chay nen
+    (thread) nen khong lam dong UI, va KHONG BAO GIO lam het RAM (IDA*).
+    retry=True: xao tron thu tu nuoc di cho lan thu lai kham pha khac.
     """
     full = from_facelets(state)
 
-    edge_moves = _solve_phase_A_ladder(full)
+    edge_moves = _solve_phase_A_ladder(full, shuffled=retry)
     if edge_moves is None:
         return {'edge_moves': None, 'corner_moves': None, 'moves': None}
     for mv in edge_moves:
         full = apply_move(full, mv)
 
-    corner_moves = _solve_phase_B_ladder(full)
+    corner_moves = _solve_phase_B_ladder(full, shuffled=retry)
     if corner_moves is None:
         return {'edge_moves': edge_moves, 'corner_moves': None, 'moves': edge_moves}
 
