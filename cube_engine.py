@@ -247,18 +247,41 @@ ALL_MOVES = [
 
 # ── Scramble & solved check ───────────────────────────────────────────────────
 
+def random_scramble_moves(st, n=20, rng=random):
+    """Ap n nuoc ngau nhien len st (tai cho), tranh 2 nuoc lien tiep cung
+    mat (vd R roi R' la lang phi 1 nuoc). Tra ve DANH SACH nuoc da di --
+    day la ham DUY NHAT chua logic nay trong toan bo project (truoc day
+    bi copy-paste rieng o 5 noi: scramble_cube ben duoi, demo_ai_search.py,
+    benchmark.py, research/scramble_utils.py, research/run_experiment.py
+    -- xem CHANGELOG_SESSION.md).
+
+    `rng`: doi tuong co .choice() (mac dinh la module `random` toan cuc,
+    dung random.seed() de dieu khien; co the truyen 1 `random.Random(seed)`
+    rieng de co 1 luong ngau nhien doc lap, vd research/scramble_utils.py
+    dung cach nay de khong lam nhieu seed toan cuc cua thi nghiem chinh).
+    """
+    prev_face = None
+    moves = []
+    for _ in range(n):
+        candidates = [m for m in ALL_MOVES if m[0] != prev_face] if prev_face else ALL_MOVES
+        mv = rng.choice(candidates)
+        do_move(st, mv)
+        moves.append(mv)
+        prev_face = mv[0]
+    return moves
+
+
 def scramble_cube(st, n=20):
     """
     Scramble n nước ngẫu nhiên, tránh 2 nước cùng mặt liên tiếp
     (vì R rồi R' = lãng phí 1 nước).
+
+    Giu nguyen API cu (khong tra ve gi) de tuong thich nguoc voi main.py
+    va cac noi da goi scramble_cube(st) truoc day. Neu can DANH SACH
+    nuoc da scramble (vd de in ra man hinh, ghi log), dung truc tiep
+    random_scramble_moves(st, n) thay vi ham nay.
     """
-    prev_face = None
-    for _ in range(n):
-        # Lọc bỏ các move cùng mặt với nước trước
-        candidates = [m for m in ALL_MOVES if m[0] != prev_face] if prev_face else ALL_MOVES
-        mv = random.choice(candidates)
-        do_move(st, mv)
-        prev_face = mv[0]
+    random_scramble_moves(st, n)
 
 def cube_solved(st):
     return all(len(set(st[f].flatten())) == 1 for f in FACES)

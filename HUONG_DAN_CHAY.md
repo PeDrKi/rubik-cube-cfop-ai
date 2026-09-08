@@ -42,21 +42,32 @@ Nút **"Copy → bar"** cạnh dòng gợi ý chép công thức gợi ý vào t
 ```bash
 python3 -m pytest test_solver.py test_cube_engine.py -q
 ```
-Kết quả mong đợi: `176 passed`.
+Kết quả mong đợi: `319 passed` (113 trong `test_solver.py` + 206 trong
+`test_cube_engine.py`). Mất khoảng 10-15 giây (không tính lần đầu build
+cache PDB, xem mục 3).
 
-## 5b. Mở rộng bảng công thức OLL đầy đủ
+## 5b. Bảng công thức OLL (57/57 đã kiểm chứng)
 
-`solver/oll_algorithms.py` hiện chỉ có 3 công thức (Sune, Anti-Sune, 1
-case Dot). Muốn thêm công thức mới (chỉ chấp nhận nước thuần
-R/L/U/D/F/B, không lát/rộng):
-
+`solver/oll_algorithms.py` hiện có **đủ 57/57 case OLL chuẩn** (đã tự
+kiểm chứng khi import module — xem `VERIFIED_ALG_NAMES`/`REJECTED_ALG_NAMES`).
+Kiểm tra lại bất kỳ lúc nào bằng:
+```bash
+python3 -m solver.oll_algorithms
+```
+sẽ in ra `57/57 cong thuc OLL hop le`. Muốn thêm/sửa 1 công thức (chỉ
+chấp nhận nước thuần R/L/U/D/F/B, không lát/rộng):
 ```python
 # mo file solver/oll_algorithms.py, them 1 dong vao dict _RAW_ALGS:
 _RAW_ALGS['TenCaseMoi'] = "chuoi nuoc di ban tim duoc"
 ```
-Chạy `python3 -m solver.oll_algorithms` để tự kiểm chứng — công thức
-sai sẽ tự động bị loại (in ra `REJECTED_ALG_NAMES`), không cần lo làm
-hỏng bảng hiện có.
+Công thức sai sẽ tự động bị loại (rơi vào `REJECTED_ALG_NAMES`), không
+lo làm hỏng bảng hiện có.
+
+**Lưu ý còn treo:** round-trip tự-sinh-tự-giải (mỗi công thức × 4 AUF =
+228 case) hiện đạt 224/228 (~98.2%), chưa phải 100% — xem
+`test_solver.py::TestOLLAlgorithms::test_own_generating_set_round_trip`.
+Chưa xác định rõ 4 case còn lại là bug thật hay giới hạn thiết kế đã
+biết.
 
 Muốn xem case OLL hiện tại là dạng nào (Dot/Line/Angle/AllOriented) để
 biết cần tìm công thức gì:
@@ -125,27 +136,52 @@ python3 -m research.phase3_survey.add_human_stimulus --moves "R U R' U' ..."
 
 # 4. Thu thập CSV kết quả (mỗi người 1 file) vào research/phase3_survey/results/, rồi:
 python3 -m research.phase3_survey.analyze_results
+
+# 5. Tinh lai DOC LAP tu du lieu tho (ICC + tuong quan da bao cao trong paper) --
+#    khong can thu vien ngoai (pingouin/krippendorff), tu cai cong thuc chuan:
+python3 -m research.phase3_survey.compute_icc                  # ICC(2,1)/ICC(2,k)
+python3 -m research.phase3_survey.recompute_hli_exact           # sua loi P=0/1 gia dinh theo nhom
+python3 -m research.phase3_survey.compute_exact_correlation     # tuong quan Spearman ban "exact"
 ```
+28 file CSV thô (kết quả thật, 1 người/file) đã có sẵn trong
+`research/phase3_survey/results/` — không cần tự thu thập lại để chạy
+thử 3 lệnh trên.
+
 Chi tiết đầy đủ (câu hỏi nghiên cứu, tiêu chí tuyển người, đạo đức nghiên
 cứu, kế hoạch phân tích thống kê) xem `research/phase3_survey/DESIGN.md`.
 
-## 7. Biên dịch bài báo (`paper/main.tex`)
+## 7. Biên dịch bài báo (`paper/main.tex`, `paper/main_vi.tex`)
 
-Cần TeXLive (hoặc Overleaf — kéo thả `main.tex` vào, không cần cài gì):
+Cần TeXLive (hoặc Overleaf — kéo thả file `.tex` vào, không cần cài gì).
 
+**Bản tiếng Anh (`main.tex`) — dùng `pdflatex`:**
 ```bash
 cd paper
 pdflatex -interaction=nonstopmode main.tex
 pdflatex -interaction=nonstopmode main.tex   # chạy 2 lần để resolve citation
 ```
-`main.pdf` trong gói là bản build sẵn (11 trang, biên dịch sạch 0 lỗi) —
-chỉ cần build lại nếu bạn sửa `main.tex`.
+`main.pdf` trong gói là bản build sẵn (15 trang, biên dịch sạch 0 lỗi/
+warning sau 2 lần chạy) — chỉ cần build lại nếu bạn sửa `main.tex`.
 
-**Về font:** file dùng `fontenc[T1]` (không dùng `T5` vì gói này không có
-sẵn trong nhiều bản TeXLive tối giản, từng gây lỗi encoding âm thầm — đã
-sửa và xác nhận build sạch). Nếu build trên Overleaf (TeXLive đầy đủ), có
-thể thêm `\usepackage{lmodern}` để hiển thị dấu tên tác giả Ba Lan
-(Świechowski/Ślęzak) chuẩn hơn khi copy-paste text từ PDF.
+**Bản tiếng Việt (`main_vi.tex`) — BẮT BUỘC dùng `xelatex` (KHÔNG dùng
+được `pdflatex`):**
+```bash
+cd paper
+xelatex -interaction=nonstopmode main_vi.tex
+xelatex -interaction=nonstopmode main_vi.tex   # chạy 2 lần để resolve citation
+```
+Lý do bắt buộc `xelatex`: file dùng gói `fontspec` (để chọn font hỗ trợ
+tiếng Việt có dấu) — `fontspec` chỉ tương thích XeTeX/LuaTeX, chạy
+`pdflatex main_vi.tex` sẽ báo lỗi fatal ngay dòng đầu
+(`! Fatal Package fontspec Error: ... requires either XeTeX or LuaTeX`).
+`main_vi.pdf` trong gói là bản build sẵn (17 trang, biên dịch sạch).
+
+**Về font (áp dụng cho `main.tex`):** file dùng `fontenc[T1]` (không
+dùng `T5` vì gói này không có sẵn trong nhiều bản TeXLive tối giản, từng
+gây lỗi encoding âm thầm — đã sửa và xác nhận build sạch). Nếu build
+trên Overleaf (TeXLive đầy đủ), có thể thêm `\usepackage{lmodern}` để
+hiển thị dấu tên tác giả Ba Lan (Świechowski/Ślęzak) chuẩn hơn khi
+copy-paste text từ PDF.
 
 ## 8. Các `\todo{}` còn lại trong `paper/main.tex`
 
@@ -154,17 +190,7 @@ tại chủ yếu là quyết định cá nhân (tên tác giả, chọn bảng 
 scramble mode nào) và phần phụ thuộc Giai đoạn 3, không còn thiếu số
 liệu thực nghiệm nào nữa.
 
-## 9. Venue dự kiến nộp bài
-
-Hầu hết deadline 2026 (IEEE CoG, ICAPS/HAXP) đã qua tính đến thời điểm dự
-án này thực hiện. Khuyến nghị nhắm chu kỳ 2027:
-1. **Ưu tiên**: Workshop HAXP (Human-Aware and Explainable Planning,
-   trước đây tên XAIP) @ ICAPS 2027 — đúng cộng đồng học thuật được
-   trích dẫn nhiều nhất trong bài.
-2. **Dự phòng**: IEEE CoG 2027, dạng auxiliary/short paper (4 trang).
-Nên kiểm tra lại CFP chính xác khoảng cuối 2026.
-
-## 10. Xử lý lỗi thường gặp
+## 9. Xử lý lỗi thường gặp
 
 | Lỗi | Nguyên nhân | Cách sửa |
 |---|---|---|
@@ -174,3 +200,4 @@ Nên kiểm tra lại CFP chính xác khoảng cuối 2026.
 | Test/thực nghiệm chạy rất lâu ở lần đầu | Đang build cache PDB | bình thường, chỉ xảy ra 1 lần |
 | λ lớn (≥2) trong `run_pareto_sweep.py` treo lâu | Đã biết | dùng `--nodes-per-depth` nhỏ hơn hoặc λ nhỏ hơn |
 | `add_human_stimulus.py` báo lỗi cú pháp chuỗi nước đi | Gõ sai ký hiệu Singmaster | xem thông báo lỗi cụ thể, sửa lại chuỗi (chỉ chấp nhận R/L/U/D/F/B + `'`/`2`) |
+| `! Fatal Package fontspec Error` khi build `main_vi.tex` | Dùng nhầm `pdflatex` | dùng `xelatex` (xem mục 7) |

@@ -1,6 +1,6 @@
 import sys, time, random, statistics
 sys.path.insert(0, '.')
-from cube_engine import make_solved, do_move, ALL_MOVES
+from cube_engine import make_solved, do_move, ALL_MOVES, random_scramble_moves
 from solver import cfop_ai
 
 random.seed(7)
@@ -12,12 +12,7 @@ reached_counts = {}
 
 for i in range(N):
     st = make_solved()
-    prev_face = None
-    for _ in range(25):
-        candidates = [m for m in ALL_MOVES if m[0] != prev_face] if prev_face else ALL_MOVES
-        mv = random.choice(candidates)
-        do_move(st, mv)
-        prev_face = mv[0]
+    random_scramble_moves(st, n=25)
 
     t0 = time.time()
     res = cfop_ai.full_solve(st)

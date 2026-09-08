@@ -1,6 +1,6 @@
 import sys, time, random
 sys.path.insert(0, '.')
-from cube_engine import make_solved, do_move, ALL_MOVES
+from cube_engine import make_solved, do_move, ALL_MOVES, random_scramble_moves
 from solver.full_state import from_facelets
 from solver.cross_solver import solve_cross, get_pdb
 from solver.f2l_solver import solve_f2l
@@ -14,14 +14,8 @@ print('  -> chi can greedy (luon chon nuoc giam khoang cach 1) la ra loi giai TO
 
 st = make_solved()
 random.seed(42)
-scramble_moves = []
-prev_face = None
-for _ in range(20):
-    candidates = [m for m in ALL_MOVES if m[0] != prev_face] if prev_face else ALL_MOVES
-    mv = random.choice(candidates)
-    do_move(st, mv)
-    scramble_moves.append(mv)
-    prev_face = mv[0]
+scramble_moves = random_scramble_moves(st, n=20)
+
 print()
 print('Scramble ngau nhien (20 nuoc):', ' '.join(scramble_moves))
 

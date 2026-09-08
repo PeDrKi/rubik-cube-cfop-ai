@@ -34,16 +34,16 @@ import sys
 
 sys.path.insert(0, '.')
 
-from cube_engine import make_solved, do_move, ALL_MOVES
+from cube_engine import make_solved, do_move, ALL_MOVES, random_scramble_moves
 
 
 def _random_walk(st, n, rng):
-    prev_face = None
-    for _ in range(n):
-        cand = [m for m in ALL_MOVES if m[0] != prev_face] if prev_face else ALL_MOVES
-        mv = rng.choice(cand)
-        do_move(st, mv)
-        prev_face = mv[0]
+    """Wrapper mong cho tuong thich nguoc (khong tra ve gi, chi ap len
+    st) -- logic that su nam trong cube_engine.random_scramble_moves,
+    dung chung voi scramble_cube(), demo_ai_search.py, benchmark.py,
+    research/run_experiment.py (truoc day 5 noi nay moi noi tu viet lai
+    cung 1 doan logic, xem CHANGELOG_SESSION.md)."""
+    random_scramble_moves(st, n, rng=rng)
 
 
 def _invert(moves):

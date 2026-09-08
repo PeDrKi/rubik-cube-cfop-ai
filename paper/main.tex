@@ -38,9 +38,9 @@ Solutions for Rubik's Cube: A Trigger-Biased Search Approach}
 % GHI CHU: doi ten tac gia/don vi truoc khi nop. Xoa comment neu venue
 % yeu cau double-blind (thuong phai an danh ban thao khi submit).
 \author{
-  \todo{Ten tac gia} \\
-  \todo{Don vi / Truong}\\
-  \todo{email}
+  Pham Dang Khue \\
+  Faculty of Information Technology, Electric Power University\\
+  pdkhue2004@gmail.com
 }
 
 \date{}
@@ -66,15 +66,17 @@ three measurable components (stage segmentability, named-algorithm
 pattern-conformity, and finger-trick trigger-overlap), and introduce
 \emph{Trigger-Biased A* Search}, a heuristic-search modification that
 explicitly rewards search branches overlapping with a corpus of
-human finger-tricks. Pilot experiments (N=100 for the baseline comparison, N=60 for the
-Pareto sweep) show that biasing the F2L search heuristic increases
+human finger-tricks. Pilot experiments (N=60 random-state scrambles
+for the baseline comparison, robustness-checked on N=100 random-move
+scrambles, N=60 for the Pareto sweep) show that biasing the F2L
+search heuristic increases
 trigger-overlap from a baseline of 9.0\% to 25.5\% at $\lambda=1.0$
 (Wilcoxon $p=8.3\times10^{-8}$), at a move-count cost of only 7.4\%
 (Wilcoxon $p=0.0014$), revealing a favorable, though non-linear (in
 compute time), Pareto trade-off. A blinded, BotPrize-style
 \citep{hingston2009} human-judge study (24 stimuli, 28 raters)
 confirms HLI's construct validity (Spearman $\rho=0.487$,
-$p=0.031$ against mean human-likeness ratings) and shows that
+$p=0.016$ against mean human-likeness ratings) and shows that
 Trigger-Biased Search moves AI-generated solves from
 statistically-distinguishable-from-human ($p=0.005$) to
 statistically-indistinguishable-from-human ($p=0.109$) in blinded
@@ -86,6 +88,7 @@ believable-agent AI research.
 
 % ============================================================
 \section{Introduction}
+\label{sec:intro}
 
 Solving the Rubik's Cube has long served as a benchmark domain for
 heuristic search and combinatorial optimization
@@ -105,13 +108,39 @@ and 21 named PLL cases; a widely-used simplified variant
 (``2-look OLL/PLL'') solves each stage in two sequential passes using
 a much smaller subset of algorithms, at the cost of extra moves. Our
 system implements a verified table of all 21 PLL cases
-(Section~\ref{sec:hli-conformity}) but only a 2-look OLL
-(2 generator algorithms, Sune/Anti-Sune, rather than the full 57);
-this asymmetry is itself informative for Pattern-conformity
-measurement (Section~\ref{sec:method}).
+(Section~\ref{sec:hli-conformity}). At the time the experiments
+reported in this paper were run, OLL coverage was limited to a
+2-look decomposition (2 generator algorithms, Sune/Anti-Sune, rather
+than the full 57); this asymmetry is itself informative for
+Pattern-conformity measurement (Section~\ref{sec:method}). The
+solver has since been extended to a verified single-look table
+covering 55 of the 57 OLL cases (43 confirmed against the standard
+community numbering, the remainder auto-derived and self-verified
+via exhaustive search); the 2 unresolved cases (OLL~2 and OLL~20)
+provably admit no pure face-turn algorithm shorter than 13 moves
+(established by bidirectional meet-in-the-middle search over the
+full cube-state graph) and fall back to the same verified 2-look
+decomposition. This upgrade postdates data collection and does not
+alter the results reported in Section~\ref{sec:results}, which
+reflect the 2-generator OLL table described above.
 
-\todo{Doan nay tom tat khoang trong nghien cuu -- xem phan Related Work
-ben duoi, viet lai ngan gon o day, ket bang cau dan vao contributions}
+Three related research directions (Section~\ref{sec:related}) currently
+do not intersect: computer-optimal Rubik's Cube solvers
+(Section~\ref{sec:related-optimal}) disregard interpretability entirely;
+human-aware AI planning (Section~\ref{sec:related-explicability}) has
+formalized explicability but only for small-scale symbolic
+task-planning problems, not for a large-scale combinatorial search
+domain such as the Rubik's Cube; and the game-AI community
+(Section~\ref{sec:related-believability}) has developed a rigorous
+blinded human-judge methodology for measuring human-likeness
+(BotPrize) but has never applied it to a combinatorial puzzle-solving
+agent. The closest CFOP tutoring system (ALLURE,
+Section~\ref{sec:related-allure}) covers only the Cross sub-goal and
+reports no comparable blinded human-likeness evaluation. This paper
+closes that gap by combining all three threads: a human-likeness
+metric formalized in the vocabulary of explicability, a search
+mechanism that explicitly optimizes for that metric, and a blinded
+human-judge study that validates both.
 
 \paragraph{Contributions.} This paper makes the following contributions:
 \begin{enumerate}
@@ -137,8 +166,10 @@ ben duoi, viet lai ngan gon o day, ket bang cau dan vao contributions}
 
 % ============================================================
 \section{Related Work}
+\label{sec:related}
 
 \subsection{Computer-optimal Rubik's Cube solvers}
+\label{sec:related-optimal}
 Korf's IDA* with additive pattern databases \citep{korf1997} was the
 first method to find provably optimal solutions for arbitrary
 scrambles. Rokicki et al.\ \citep{rokicki2014} established that every
@@ -155,6 +186,7 @@ interpretable in terms any human learner would recognize --- they are,
 in our terminology, maximally \emph{computer-like}.
 
 \subsection{Human-aware planning and explicability}
+\label{sec:related-explicability}
 A separate line of work in AI planning studies how autonomous agents
 should behave when observed or assisted by humans with an internal,
 possibly imperfect mental model of the agent. Kulkarni et
@@ -167,25 +199,32 @@ Section~\ref{sec:method}, but applied here to symbolic task planning
 rather than a large combinatorial puzzle domain. Chakraborti et
 al.\ \citep{chakraborti2019} survey this landscape (explicability,
 legibility, predictability, transparency), which we adopt as the
-theoretical vocabulary for this paper. \todo{Neu tim them duoc bai
-lien quan (vd Zhang et al. 2017 ve legibility trong robot task
-planning), them 1-2 cau o day.}
+theoretical vocabulary for this paper. Zhang et al.\ \citep{zhang2017}
+propose a way to compute explicability/predictability specifically
+for robot task planning by learning a labeling function from
+training data, in contrast to the direct, learning-free measurement
+approach we use for HLI's components (Section~\ref{sec:method}).
 
 \subsection{Human-likeness / believability of game-playing agents}
+\label{sec:related-believability}
 Independently, the game-AI community has long studied how to make
 autonomous agents \emph{appear} human. The 2K BotPrize competition
 \citep{hingston2009} operationalized this as a Turing-test variant in
 which human judges rate both human and bot players on a 1--5
-human-likeness scale, without being told which is which. \todo{1 cau
-ve ket qua BotPrize 2012 (UT\^{}2, MirrorBot vuot qua nguong) -- da co
-du lieu tu tim kiem web o buoc truoc, dien vao day, PARAPHRASE khong
-trich nguyen van}. A recent survey \citep{humanlike2025} frames
+human-likeness scale, without being told which is which. In the 2012
+edition, two bots --- UT\^{}2 (University of Texas at Austin) and
+MirrorBot (Mihai Polceanu) --- were the first to cross the 50\%
+threshold for being rated human, in fact scoring higher than the
+real human players in that year's contest, demonstrating that an
+agent explicitly optimized to appear human can outscore actual
+humans on that very measure. A recent survey \citep{humanlike2025} frames
 human-like game AI research around two questions --- how to
 model/implement human-like behavior, and how to measure its degree
 --- which we adopt as the organizing structure for this paper's two
 main contributions (Sections~\ref{sec:method}).
 
 \subsection{CFOP-specific tutoring systems}
+\label{sec:related-allure}
 Closest to our work, the ALLURE system \citep{allure} pairs an
 automatic solver (DeepCubeA-based search over subgoals) with an
 interactive chatbot tutor to help learners understand explainable
@@ -246,9 +285,17 @@ Restricted to the OLL and PLL stages (where a finite, named
 case-to-algorithm mapping exists in CFOP), $P(\pi)$ is the fraction
 of solved stages whose corresponding sub-sequence exactly matches an
 entry in a verified table of canonical algorithms (Aa, Ab, \ldots,
-Z for PLL; Sune/Anti-Sune generators for 2-look OLL) rather than an
-unstructured search fallback. \todo{Trich so lieu: X/Y PLL case
-verified, bang chung minh bang \texttt{verify\_and\_build\_table()}}.
+Z for PLL; Sune/Anti-Sune generators for 2-look OLL, the table in
+effect at data-collection time --- see Section~\ref{sec:intro} for
+the subsequent 55/57 single-look upgrade, which does not affect the
+figures below) rather than an
+unstructured search fallback. All 21/21 PLL cases in the table are
+verified automatically on first module import via
+\texttt{verify\_and\_build\_table()}
+(\texttt{solver/pll\_algorithms.py}); we confirmed this by re-running
+the function directly, obtaining exactly 21 verified case names (Aa,
+Ab, E, F, Ga, Gb, Gc, Gd, H, Ja, Jb, Na, Nb, Ra, Rb, T, Ua, Ub, V, Y,
+Z).
 
 \paragraph{Trigger-overlap $O(\pi) \in [0,1]$.}
 \label{sec:hli-trigger}
@@ -258,9 +305,12 @@ measure the fraction of moves covered by a greedy longest-match
 segmentation of $\pi$ against a seed corpus $T$ of $|T|=11$ common
 human finger-tricks (e.g.\ the ``sexy move'' $R\,U\,R'\,U'$,
 ``sledgehammer'' $R'\,F\,R\,F'$; full corpus in
-Appendix~\todo{X}). \todo{GHI RO trong bai: day la seed corpus thu
-cong, de xuat mo rong bang thong ke n-gram tren log solve nguoi that
-(vd CSTimer) o ban mo rong.}
+Appendix~\ref{app:corpus}). This is a manually curated seed corpus
+drawn from common speedcubing-community knowledge, not derived from
+n-gram statistics on real solve logs; an extended version should
+replace or augment it with statistics computed directly from real
+solve logs (e.g.\ CSTimer \texttt{.log} files) to reduce
+self-selection bias in the corpus.
 
 \paragraph{Composite HLI.}
 $$\mathrm{HLI}(\pi) = w_S \cdot S(\pi) + w_P \cdot P(\pi) + w_O \cdot O(\pi), \quad w_S{+}w_P{+}w_O = 1$$
@@ -310,25 +360,32 @@ empirically, compute time) for trigger-overlap.
 \citep{kociemba}, via the public \texttt{kociemba} Python package,
 run on identical scrambles.
 
-\textbf{Scramble generation.} Primary results use random-move
-scrambles (20 moves, no immediately-repeated face) for consistency
-across Experiments~1--2. We additionally implemented a WCA-style
-\emph{random-state} scrambler (long random walk to approximate a
-uniform state distribution, followed by inverting a near-optimal
-Kociemba solve of that state --- guaranteeing the scramble requires
-close to the optimal move count to undo, matching real competition
-scrambler methodology) and validated that results are consistent
-between the two generators (Section~\ref{sec:discussion}).
+\textbf{Scramble generation.} Experiment~1's primary results
+(Table~\ref{tab:exp1}) use a WCA-style \emph{random-state} scrambler
+(long random walk to approximate a uniform state distribution,
+followed by inverting a near-optimal Kociemba solve of that state ---
+guaranteeing the scramble requires close to the optimal move count
+to undo), since this more closely matches real competition scrambler
+methodology. Experiment~2 uses random-move scrambles (20 moves, no
+immediately-repeated face) throughout. We additionally re-ran
+Experiment~1 on random-move scrambles as a robustness check and
+validated that results are consistent between the two generators
+(Section~\ref{sec:discussion}).
 
 \textbf{Hardware / implementation.} Single-core cloud sandbox (1 vCPU,
 4GB RAM), Python 3.12, NumPy-based cube representation. All
 experiments used a fixed base seed per condition
-(\texttt{random.Random(seed)}, seeds 1000--1099 for Experiment~1,
-2000--2059 for Experiment~2) for reproducibility. \todo{Neu chuyen
-sang may manh hon truoc khi cong bo chinh thuc, cap nhat lai thong so
-va CHAY LAI toan bo thi nghiem -- ty le timeout 22\% co the giam dang
-ke tren may nhieu core/nhanh hon, nen KHONG dung nguyen so lieu nay
-neu doi phan cung.}
+(\texttt{random.Random(seed)}, seeds 5000--5059 for the primary
+Experiment~1 (random-state), 1000--1099 for the random-move
+robustness check, and 2000--2059 for Experiment~2) for
+reproducibility. We report all
+figures on this single-core hardware for the present draft; the
+observed timeout rate (20--22\%, Section~\ref{sec:pathological}) is a
+property of this specific hardware/node-budget setting and would
+likely be lower on faster/multi-core hardware --- a known limitation
+of the results, not a universal property of Trigger-Biased Search,
+and should be re-stated if a future formal submission uses different
+hardware.
 
 \textbf{Statistical testing.} Wilcoxon signed-rank test (paired, per
 scramble) for move-count and HLI differences between conditions;
@@ -339,32 +396,38 @@ report effect size $r = Z/\sqrt{N}$.
 \label{sec:results}
 
 \subsection{Experiment 1: Baseline human-likeness gap}
-Table~\ref{tab:exp1} reports results on $N=100$ random-move scrambles
-(20 moves each, seeds 1000--1099). Group A used a reduced F2L node
-budget (40{,}000 nodes/depth, down from the 120{,}000 default) and a
-20-second wall-clock timeout per solve to accommodate our
-single-core evaluation hardware; $22\%$ of scrambles ($22/100$)
-exceeded this timeout and are excluded from the paired statistics
-below (see Section~\ref{sec:pathological} for discussion of this
-phenomenon). Among the $78$ scrambles solved by both groups, a
+Table~\ref{tab:exp1} reports results on $N=60$ WCA-style
+random-state scrambles (Section~\ref{sec:setup}: a long random walk,
+followed by inverting a near-optimal Kociemba solve; seeds
+5000--5059), chosen as the primary result since it more closely
+matches real competition scrambler methodology. Group A used a
+reduced F2L node budget (40{,}000 nodes/depth, down from the
+120{,}000 default) and a 20-second wall-clock timeout per solve to
+accommodate our single-core evaluation hardware; $20\%$ of scrambles
+($12/60$) exceeded this timeout and are excluded from the paired
+statistics below. Among the $48$ scrambles solved by both groups, a
 Wilcoxon signed-rank test confirms Group A requires significantly
-more moves than Group B ($W=0$, $p=1.65\times10^{-14}$,
-$r=0.87$, a very large effect), while by construction only Group A
-has non-zero HLI.
+more moves than Group B ($W=0$, $p=1.61\times10^{-9}$, $r=0.87$, a
+very large effect), while by construction only Group A has non-zero
+HLI. We also re-ran the same comparison on $N=100$ random-move
+scrambles as a robustness check --- results were nearly identical,
+including a notable search non-convergence phenomenon ($22\%$
+timeout); see Sections~\ref{sec:pathological} and~\ref{sec:discussion}
+for a detailed discussion of this check.
 
 \begin{table}[h]
 \centering
-\caption{Group A (AI-CFOP) vs Group B (Kociemba), N=100 scrambles,
-78 paired successes (Wilcoxon $p=1.65\times10^{-14}$, $r=0.87$ for
-move-count difference)}
+\caption{Group A (AI-CFOP) vs Group B (Kociemba), N=60 WCA-style
+random-state scrambles, 48 paired successes (Wilcoxon
+$p=1.61\times10^{-9}$, $r=0.87$ for move-count difference)}
 \begin{tabular}{lcc}
 \toprule
  & Group A (AI-CFOP) & Group B (Kociemba) \\
 \midrule
-Mean move count (sd) & 67.2 (11.1) & 20.6 (1.1) \\
-Move count range & 47--105 & 16--22 \\
-Mean HLI (sd) & 0.655 (0.096) & 0 (by definition) \\
-Solve success rate & 78\% (22\% timeout) & 100\% \\
+Mean move count (sd) & 66.3 (9.5) & 20.6 (0.9) \\
+Move count range & 53--104 & 18--22 \\
+Mean HLI (sd) & 0.658 (0.093) & 0 (by definition) \\
+Solve success rate & 80\% (20\% timeout) & 100\% \\
 \bottomrule
 \end{tabular}
 \label{tab:exp1}
@@ -487,10 +550,12 @@ This does not contradict the separately-observed non-linear
 convergence appears more reliable, but individual worst-case runs
 can still take substantially longer, i.e.\ trigger-biasing trades
 convergence \emph{reliability} for search-time \emph{variance}.
-\todo{Dieu tra sau: co the day la trung hop ngau nhien voi N=60, nen
-lam lai voi N lon hon va nhieu muc lambda hon (0.25, 0.75...) de xac
-nhan xu huong nay on dinh, truoc khi khang dinh chac chan trong ban
-cong bo chinh thuc.} A formal analysis of exactly how much
+We note this finding is based on $N=60$ scrambles and only three
+$\lambda$ levels (0, 0.5, 1.0); we have not yet confirmed this trend
+is stable at larger sample sizes or intermediate $\lambda$ levels
+(e.g.\ 0.25, 0.75), and treat this as a limitation to be addressed in
+follow-up work (Section~\ref{sec:future}) before it can be asserted
+with confidence in a formal publication. A formal analysis of exactly how much
 admissibility is lost is given below.
 
 \paragraph{How much admissibility is lost?} The original heuristic
@@ -519,7 +584,8 @@ comparable to the existing penalty term.
 
 \subsection{Pathological scrambles and search non-convergence}
 \label{sec:pathological}
-During Experiment 1, $22\%$ of scrambles ($22/100$) failed to
+In the robustness-check run using $N=100$ random-move scrambles
+(Section~\ref{sec:discussion}), $22\%$ of scrambles ($22/100$) failed to
 complete within a 20-second wall-clock budget even at a reduced
 40{,}000-node-per-depth search budget --- notably, several such
 failures clustered consecutively (e.g.\ seeds 1059--1061 in our
@@ -533,7 +599,8 @@ per-pair penalty-augmented A* heuristic used for F2L
 (Section~\ref{sec:setup}) is occasionally led into pathologically
 unproductive search regions --- an important robustness limitation
 distinct from, but potentially compounded by, the trigger-bias
-mechanism of Section~\ref{sec:method}. Note that Experiment~1 used
+mechanism of Section~\ref{sec:method}. Note that both the primary run
+(random-state, Table~\ref{tab:exp1}) and this check used
 $\lambda=0$ throughout (no trigger bias applied to the F2L stage);
 we separately measured the relationship between $\lambda$ and
 convergence failure rate using the Experiment~2 data
@@ -545,31 +612,48 @@ expectation --- that higher $\lambda$ was associated with
 \section{Threats to Validity}
 \begin{itemize}
   \item \textbf{Search non-convergence}: as reported in
-    Section~\ref{sec:pathological}, $22\%$ of scrambles in our
-    evaluation hardware/budget setting did not complete within a
-    20-second timeout; results are conditioned on the $78\%$ that
-    did, which may not be a representative subsample (e.g.\ if
-    difficulty correlates with trigger-overlap potential).
+    Section~\ref{sec:pathological}, $22\%$ of scrambles in the
+    random-move robustness-check run ($N=100$) and $20\%$ of
+    scrambles in the primary random-state run ($N=60$,
+    Table~\ref{tab:exp1}) did not complete within a 20-second timeout
+    in our evaluation hardware/budget setting; results are
+    conditioned on the scrambles that did complete, which may not be
+    a representative subsample (e.g.\ if difficulty correlates with
+    trigger-overlap potential).
   \item \textbf{Construct validity of HLI}: the metric is
-    hand-designed, not yet validated against human judgment ---
-    addressed by the proposed Phase~3 protocol
-    (Section~\ref{sec:future}).
+    hand-designed, validated against human judgment via
+    Experiment~3 (Section~\ref{sec:exp3}).
+  \item \textbf{Inter-rater reliability}: individual raters showed
+    only modest agreement (ICC(2,1)$=0.26$, below the commonly-used
+    $0.4$ acceptable-agreement threshold), but the $N=28$ rater pool
+    gives the mean rating used in the RQ-V1 correlation high
+    reliability (ICC(2,k)$=0.91$) --- the RQ-V1 correlation should
+    be read as a correlation with a stable group mean, not with any
+    single rater's judgment. \emph{Note: these ICC figures are
+    reported from the survey write-up and have not yet been
+    independently re-derived from the raw per-rater rating matrix in
+    this repository; re-verify before a formal submission.}
   \item \textbf{Corpus bias}: the finger-trick corpus $T$ is
     manually curated (11 tricks), not derived from real solve logs;
     results may not generalize to solvers with different trigger
     vocabularies.
-  \item \textbf{Scramble generation (checked)}: we implemented a
-    WCA-style random-state scrambler (Section~\ref{sec:setup}) and
-    re-ran Experiment~1 on $N=60$ random-state scrambles as a
-    robustness check. Results were consistent with the random-move
-    condition (80\% vs.\ 78\% solve rate; mean moves 66.3 vs.\ 67.2;
-    mean HLI 0.658 vs.\ 0.655), suggesting our original random-move
-    results were not an artifact of systematically easier scrambles.
-    We nonetheless report results from both generators transparently
-    (Table~\ref{tab:exp1} uses random-move for consistency with
-    Experiment~2; \todo{neu muon, doi Table 1 chinh sang dung
-    random-state lam ket qua chinh, giu random-move nhu robustness
-    check phu -- ca 2 cach deu chap nhan duoc, tuy quyet dinh}).
+  \item \textbf{Scramble generation (checked)}: Table~\ref{tab:exp1}
+    (Section~\ref{sec:results}) uses a WCA-style random-state
+    scrambler (Section~\ref{sec:setup}) as the primary result, since
+    it more closely matches real competition scrambler methodology.
+    We also re-ran Experiment~1 on $N=100$ random-move scrambles
+    (seeds 1000--1099, the generator used for Experiment~2) as a
+    robustness check. Results were consistent between the two
+    generators ($78\%$ vs.\ $80\%$ solve rate; mean moves 67.2 vs.\
+    66.3; mean HLI 0.655 vs.\ 0.658), suggesting our primary results
+    are not an artifact of the specific scramble generator chosen.
+    This random-move run is also where we observed the notable
+    search non-convergence phenomenon ($22\%$ timeout, see
+    Section~\ref{sec:pathological}); we did not observe a comparable
+    failure cluster in the $N=60$ random-state sample (lower,
+    $20\%$, timeout rate), though the smaller sample size makes a
+    direct comparison of failure clustering between the two
+    generators inconclusive.
   \item \textbf{Single-domain generalizability}: results are specific
     to the Rubik's Cube; claims about explicability more broadly
     should be limited accordingly.
@@ -599,14 +683,29 @@ any single solver's habits) would tighten confidence intervals on
 the group comparisons in Section~\ref{sec:exp3}.
 
 \paragraph{Extending pattern-conformity to Cross/F2L.}
-\todo{y tuong: xay dung bang case F2L 41-case chuan (nhu OLL/PLL da
-co), thay the mot phan trigger-overlap bang pattern-conformity that
-su cho F2L.}
+Pattern-conformity $P(\pi)$ currently applies only to OLL/PLL, since
+these are the only two stages with a finite, named
+case-to-algorithm table in our system; Cross and F2L are instead
+measured indirectly via Trigger-overlap rather than true
+Pattern-conformity. Building a canonical F2L case table (e.g.\
+following the widely-used 41-case system in the speedcubing
+community) together with a case-recognition mechanism analogous to
+\texttt{verify\_and\_build\_table()} (already used for PLL) would
+allow part of Trigger-overlap to be replaced by true
+Pattern-conformity for F2L, making HLI more accurately reflect this
+stage's structure.
 
 \paragraph{Alternative bias mechanisms.}
-\todo{So sanh trigger-biased A* voi cach khac, vd fine-tune trong so
-PDB, hoac hoc trong so bonus tu du lieu solve nguoi (thay vi $\lambda$
-co dinh tay).}
+Trigger-Biased Search currently uses a single, hand-chosen
+hyperparameter $\lambda$. Follow-up work could compare this
+mechanism against alternatives: for instance, directly fine-tuning
+the pattern-database weights used for F2L rather than adding a
+separate bonus term, or learning the $\mathrm{bonus}(\mathrm{path})$
+weighting from real human solve data (e.g.\ regressing on observed
+trigger frequency in CSTimer logs) instead of fixing $\lambda$ by
+hand --- turning the seed corpus $T$ (Appendix~\ref{app:corpus})
+from a manually curated list into a model learned directly from real
+solvers' behavior.
 
 % ============================================================
 \section{Conclusion}
@@ -615,9 +714,10 @@ plans that are correct but uninterpretable to human learners; human
 speedcubers instead use CFOP, trading optimality for structure and
 learnability. We formalized this trade-off in the vocabulary of
 human-aware AI planning as a measurable \emph{Human-Likeness Index}
-(HLI), and showed empirically ($N=100$ scrambles) that our
+(HLI), and showed empirically ($N=60$ random-state scrambles,
+robustness-checked on $N=100$ random-move scrambles) that our
 AI-CFOP solver scores substantially higher on this index than a
-computer-optimal Kociemba baseline (mean HLI $0.655$ vs.\ $0$ by
+computer-optimal Kociemba baseline (mean HLI $0.658$ vs.\ $0$ by
 construction), a gap that is robust across a wide range of
 component weightings (Section~\ref{sec:method}). We then introduced
 \emph{Trigger-Biased A* Search}, a minimal, backward-compatible
@@ -666,7 +766,7 @@ P.~Hingston.
 \bibitem[Kociemba()]{kociemba}
 H.~Kociemba.
 \newblock Cube explorer / two-phase algorithm.
-\newblock \url{http://kociemba.org/cube.htm}, accessed \todo{ngay truy cap}.
+\newblock \url{http://kociemba.org/cube.htm}, accessed July 26, 2026.
 
 \bibitem[Korf(1997)]{korf1997}
 R.~E. Korf.
@@ -719,6 +819,49 @@ K.~Vanacore, J.~Ocumpaugh, F.~Agostinelli, D.~Wu, S.~Vuruma, and M.~Irvin.
   submission at time of writing --- verify publication status before citing
   as peer-reviewed.
 
+\bibitem[Zhang et~al.(2017)]{zhang2017}
+Y.~Zhang, S.~Sreedharan, A.~Kulkarni, T.~Chakraborti, H.~H. Zhuo, and
+  S.~Kambhampati.
+\newblock Plan explicability and predictability for robot task planning.
+\newblock In \emph{Proceedings of the IEEE International Conference on
+  Robotics and Automation (ICRA)}, 2017.
+
 \end{thebibliography}
+
+\appendix
+\section{Seed corpus $T$: 11 finger-tricks}
+\label{app:corpus}
+
+Table~\ref{tab:corpus} lists the full seed corpus $T$ used to compute
+Trigger-overlap $O(\pi)$ (Section~\ref{sec:hli-trigger}) and the
+$\mathrm{bonus}(\mathrm{path})$ term in Trigger-Biased Search
+(Section~\ref{sec:hli-trigger}), taken directly from
+\texttt{research/finger\_tricks.py}. Each trigger is listed in its
+canonical (R-based) form; the system automatically generates the
+mirrored variant (L-based, swapping R$\leftrightarrow$L) when
+matching.
+
+\begin{table}[h]
+\centering
+\caption{Seed corpus $T$ ($|T|=11$)}
+\label{tab:corpus}
+\begin{tabular}{ll}
+\toprule
+Name & Move sequence \\
+\midrule
+sexy\_move & $R\,U\,R'\,U'$ \\
+sexy\_move\_inv & $U\,R\,U'\,R'$ \\
+reverse\_sexy & $R'\,U'\,R\,U$ \\
+sledgehammer & $R'\,F\,R\,F'$ \\
+sledgehammer\_inv & $F\,R'\,F'\,R$ \\
+hedgehog & $R\,U'\,R'$ \\
+triple\_sexy & $(R\,U\,R'\,U')^3$ \\
+sune\_trigger & $R\,U\,R'\,U\,R\,U2\,R'$ \\
+ubl\_insert & $U'\,R\,U$ \\
+urf\_insert & $U\,R\,U'$ \\
+niklas & $R\,U\,R'\,U'\,R'\,F\,R\,F'$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \end{document}

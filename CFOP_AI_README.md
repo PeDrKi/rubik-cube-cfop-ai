@@ -1,5 +1,7 @@
 # CFOP AI — Kiến trúc & Ghi chú đồ án
 
+**License:** MIT — xem file [`LICENSE`](LICENSE).
+
 ## Tổng quan
 
 Module `solver/` là một AI giải Rubik **đầy đủ theo phương pháp CFOP**

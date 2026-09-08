@@ -133,7 +133,7 @@
 <div class="card">
   <div class="step-label">Đối chiếu màu (cập nhật theo từng nước bạn bấm)</div>
   <div class="cube-net" id="cube-net"></div>
-  <div class="net-caption">Vàng=U · Trắng=D · Cam=R · Đỏ=L · Xanh lá=F · Xanh dương=B<br>Xoay cube thật sao cho mặt F (xanh lá) hướng về phía bạn, D (trắng) ở dưới, R (cam) bên tay phải — rồi đối chiếu từng ô.</div>
+  <div class="net-caption">Vàng=U · Trắng=D · Đỏ=R · Cam=L · Xanh dương=F · Xanh lá=B<br>Xoay cube thật sao cho mặt F (xanh dương) hướng về phía bạn, D (trắng) ở dưới, R (đỏ) bên tay phải — rồi đối chiếu từng ô.</div>
 </div>
 
 <div class="card">
@@ -261,12 +261,12 @@ function doMove(st, mv) {
 }
 
 // ── Ve hinh khai trien 6 mat (net) ────────────────────────────────────────
-// Bang mau theo dung yeu cau: F=Xanh la, tu do suy ra (theo dung quy tac
-// mau doi dien chuan Do-Cam, Trang-Vang, Xanh la-Xanh duong khong doi):
-// R=Cam, L=Do, B=Xanh duong (doi dien Xanh la). Da kiem chung day la phep
-// xoay 180 do quanh truc F-B (dinh thuc +1, vat ly hop le) so voi so do
-// truoc (F=Xanh duong) -- xem CHANGELOG_SESSION.md.
-const FACE_COLOR = { U: '#ffd500', D: '#f5f5f5', R: '#ff5800', L: '#c41e3a', F: '#009e60', B: '#0051ba' };
+// Bang mau theo DUNG cach ban cam cube: Trang o duoi (D), Do o ben phai
+// (R), tu do suy ra (theo dung quy tac mau doi dien chuan: Trang-Vang,
+// Do-Cam, Xanh la-Xanh duong khong doi cho nhau) -- Xanh duong phai la
+// mat truoc (F), Xanh la la mat sau (B). Day la phep xoay 180 do quanh
+// truc Trai-Phai (R-L) so voi so do chuan (Trang tren, Xanh la truoc).
+const FACE_COLOR = { U: '#ffd500', D: '#f5f5f5', R: '#c41e3a', L: '#ff5800', F: '#0051ba', B: '#009e60' };
 
 // Vi tri 12 cot x 9 hang cua tung mat trong luoi net (hang chu thap chuan)
 const NET_LAYOUT = {

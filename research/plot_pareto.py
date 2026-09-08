@@ -7,8 +7,13 @@ Ve 3 bieu do tu file CSV do research/run_pareto_sweep.py sinh ra:
   3. Scatter Pareto: so nuoc vs trigger-overlap, mau theo lambda
      (bieu do quan trong nhat cho bai bao -- cho thay duong bien Pareto)
 
-Chay:  python3 -m research.plot_pareto --csv research/pareto_n20.csv \
-           --out research/pareto_figure.png
+Chay:  python3 -m research.plot_pareto --csv research/pareto_n60.csv \
+           --out research/pareto_figure_n60.png
+
+(Day la file/lenh THAT SU dung trong bai bao -- xem paper/main_vi.tex,
+Hinh~\ref{fig:pareto}, "N=60 scramble". Ban pilot N=20 cu da chuyen vao
+research/archive/ lam bang chung lich su, khong con dung de tao hinh
+chinh thuc nua.)
 """
 
 import argparse

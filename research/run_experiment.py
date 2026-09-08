@@ -17,7 +17,7 @@ import time
 
 sys.path.insert(0, '.')
 
-from cube_engine import make_solved, do_move, ALL_MOVES, cube_solved
+from cube_engine import make_solved, do_move, ALL_MOVES, cube_solved, random_scramble_moves as random_scramble
 from solver import cfop_ai
 from research.baseline_kociemba import solve_baseline
 from research.hli_metrics import compute_hli, move_count_ratio, GODS_NUMBER_HTM
@@ -53,16 +53,11 @@ def _full_solve_with_timeout(state, timeout_s, **kwargs):
         signal.signal(signal.SIGALRM, old_handler)
 
 
-def random_scramble(st, n=20, rng=random):
-    prev_face = None
-    moves = []
-    for _ in range(n):
-        cand = [m for m in ALL_MOVES if m[0] != prev_face] if prev_face else ALL_MOVES
-        mv = rng.choice(cand)
-        do_move(st, mv)
-        moves.append(mv)
-        prev_face = mv[0]
-    return moves
+# random_scramble() truoc day dinh nghia rieng o day, trung logic voi 4
+# noi khac (cube_engine.scramble_cube, demo_ai_search.py, benchmark.py,
+# research/scramble_utils.py). Da gop ve 1 noi duy nhat:
+# cube_engine.random_scramble_moves (xem import o dau file, alias
+# "as random_scramble" de khong phai sua loi goi ben duoi).
 
 
 def run_one(scramble_seed, scramble_len=20, timeout_flag_moves=200, f2l_nodes_per_depth=120_000,

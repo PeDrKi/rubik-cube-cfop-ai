@@ -217,20 +217,102 @@ toàn bộ chuỗi chạy qua vòng lặp event thật của `main.py`, không c
 exception nào. 176/176 test solver vẫn pass (không liên quan tới thay
 đổi UI này).
 
-## Venue dự kiến — xem chi tiết mục 9 trong `HUONG_DAN_CHAY.md`
+## CẬP NHẬT MỚI NHẤT 7 — Bổ sung test suite, verify độc lập số liệu Giai đoạn 3, dọn dẹp repo
 
-Hầu hết deadline 2026 (CoG, ICAPS/HAXP) đã qua tại thời điểm dự án thực
-hiện. Khuyến nghị nhắm chu kỳ 2027, ưu tiên workshop **HAXP @ ICAPS
-2027** (đổi tên từ XAIP, đúng cộng đồng học thuật được trích dẫn nhiều
-nhất).
+Phiên làm việc riêng, không sửa hành vi solver/UI — tập trung vào tính
+tái lập, kiểm chứng độc lập, và vệ sinh gói nộp.
 
-## Việc còn lại — chỉ còn phụ thuộc Giai đoạn 3
+**1. Bổ sung test suite (trước đây thiếu hoàn toàn):**
+- `test_solver.py` (mới, 113 test) — bao phủ `solver/` theo đúng thứ tự
+  CFOP (edge/corner model → full_state → cross → f2l → oll → pll →
+  cfop_ai) + `move_simplify`. Có kiểm tra bất biến nhóm cube (tổng
+  hướng góc/cạnh bất biến), đối chiếu PDB Cross bằng tổ hợp học độc lập
+  (190.080 trạng thái, max depth 8), đối chiếu 288 trạng thái PLL hợp
+  lệ, round-trip tự-sinh-tự-giải cho bảng OLL (224/228 ~98.2% — CHƯA
+  100%, xem `TestOLLAlgorithms::test_own_generating_set_round_trip`).
+- `test_cube_engine.py` (trước đây RỖNG 0 byte trong gói cũ, nay 206
+  test) — bất biến nhóm ($m^4=e$, $m \cdot m'=e$) cho cả 18 base move
+  (outer/slice/rotation/wide), đối chiếu công thức wide-move tài liệu
+  hoá (`u=U+E'`...), parser Singmaster (group lồng nhau, chuẩn hoá
+  suffix, case-sensitivity).
+- **Tổng: 319 passed, 0 failed** (`pytest test_solver.py
+  test_cube_engine.py`) — con số "176 passed" nhắc ở các bản ghi cũ bên
+  trên không còn đúng (bộ test cũ đã thất lạc trước phiên này, không rõ
+  lý do; 319 là bộ MỚI viết lại từ đầu, không phải khôi phục bản cũ).
 
-1. Thêm 6 bài giải người thật vào `stimuli.json` (dùng
-   `add_human_stimulus.py`).
-2. Tuyển 15-20 người biết CFOP, gửi khảo sát, thu thập CSV.
-3. Chạy `analyze_results.py`, gửi lại `analysis_summary.csv` để điền
-   nốt phần Results Giai đoạn 3 vào bài báo.
+**2. Merge dữ liệu thô Giai đoạn 3 + verify độc lập toàn bộ số liệu paper:**
+- Nhận `research.zip` chứa 28 file CSV thô (kết quả thật, 1 giám khảo/
+  file) — merge vào `research/phase3_survey/results/` (giữ nguyên 4
+  file cũ không có trong zip mới: `analysis_summary_exact.csv`,
+  `exact_components.json`, `human_solves_log.txt`,
+  `recompute_hli_exact.py`; cập nhật `move_recorder.html` theo bản đã
+  sửa lỗi màu — bản cũ gán nhầm F=xanh lá, bản mới đúng quy ước
+  Trắng-Vàng/Đỏ-Cam/Xanh lá-Xanh dương đối diện).
+- Chạy `analyze_results.py` có sẵn trên dữ liệu thật → khớp
+  **chính xác** với paper: proxy ρ=0.440 (p=0.031), trigger-overlap
+  ρ=0.605 (p=0.0017).
+- **Viết mới `research/phase3_survey/compute_icc.py`** — tự cài công
+  thức ICC(2,1)/ICC(2,k) chuẩn (Shrout & Fleiss 1979, ANOVA 2 chiều,
+  không cần `pingouin`/`krippendorff`). Kết quả: **ICC(2,1)=0,2563,
+  ICC(2,k)=0,9061** — khớp chính xác 2 chữ số thập phân với paper
+  (0,26 / 0,91). Đây là phép verify độc lập đầu tiên cho con số mà
+  chính paper tự ghi "chưa được tính lại độc lập từ ma trận đánh giá
+  tho".
+- **Viết mới `research/phase3_survey/compute_exact_correlation.py`** —
+  paper dùng **ρ=0,487 (p=0,016)** làm kết quả CHÍNH cho RQ-V1 (bản đã
+  sửa lỗi giả định Pattern-conformity=0 cho Nhóm H trong
+  `recompute_hli_exact.py`), nhưng trước đây KHÔNG có script nào nối
+  `analysis_summary_exact.csv` → phép tính tương quan này (phải tự chạy
+  tay). Đã verify: khớp chính xác (0,4867 ≈ 0,487).
 
-Không còn việc "code/phân tích tự động" nào khác có thể làm tiếp mà
-không cần dữ liệu con người thật.
+**3. Sửa `requirements.txt`** — thiếu `scipy`, `matplotlib`, `kociemba`
+(dùng thật trong `research/` nhưng không khai báo — ai làm đúng theo
+`HUONG_DAN_CHAY.md` sẽ không chạy được các script này).
+
+**4. Dọn dẹp repo:**
+- Xoá `solver/oll_recognition.py.bak`, toàn bộ `__pycache__/` bị đóng
+  gói nhầm trong zip nộp.
+- Chuyển 4 file dữ liệu/hình đã bị thay thế vào `research/archive/`
+  (kèm `README.md` giải thích): `pareto_test.csv`, `results_test.csv`
+  (output smoke-test dev, không dùng phân tích), `pareto_n20.csv`,
+  `pareto_figure.png` (pilot N=20, paper dùng N=60 —
+  `pareto_n60.csv`/`pareto_figure_n60.png`).
+- **Gộp logic scramble bị copy-paste ở 5 nơi** (`cube_engine.scramble_cube`,
+  `demo_ai_search.py`, `benchmark.py`, `research/scramble_utils.py`,
+  `research/run_experiment.py`) thành 1 hàm gốc duy nhất
+  `cube_engine.random_scramble_moves(st, n, rng=random)` — nhận `rng`
+  tuỳ chọn nên vẫn giữ đúng tính chất "độc lập với `random.seed()` toàn
+  cục" mà `scramble_utils.py` cần (đã verify riêng). `scramble_cube()`
+  cũ giữ nguyên API (không trả về gì) để không phá `main.py`.
+
+**5. Compile-test cả 2 bản paper** (chưa từng làm trước đây) —
+`main.tex` qua `pdflatex` (2 lần, sạch, 15 trang) và `main_vi.tex` qua
+**`xelatex`** (bắt buộc, `pdflatex` báo lỗi fatal ngay vì dùng
+`fontspec` — phát hiện mới, đã thêm vào `HUONG_DAN_CHAY.md` mục 7).
+
+Toàn bộ 319 test + cả 2 script verify ICC/correlation đã chạy lại lần
+cuối sau khi refactor xong — không có gì bị phá vỡ.
+
+## Việc còn lại (đã cập nhật sau CẬP NHẬT MỚI NHẤT 7)
+
+Giai đoạn 3 **đã xong** (28 CSV thật, đã phân tích, đã verify độc lập —
+xem CẬP NHẬT MỚI NHẤT 7 phía trên; 3 mục cũ liệt kê ở đây trước đó
+không còn đúng).
+
+Việc còn mở, theo mức ưu tiên:
+1. **Điều tra 4 case OLL round-trip thất bại** (224/228, xem
+   `test_solver.py::TestOLLAlgorithms::test_own_generating_set_round_trip`)
+   — chưa rõ là bug thật hay giới hạn thiết kế đã biết.
+2. Xác định `human_solves_log.txt` thu thập trước hay sau bugfix màu
+   trong `move_recorder.html` (xem CẬP NHẬT MỚI NHẤT 4 và mục 2 của
+   CẬP NHẬT MỚI NHẤT 7) — nếu không xác định được, cần ghi chú thận
+   trọng trong paper.
+3. ~~Thêm `LICENSE` nếu định public source code.~~ **Đã xong** — MIT,
+   xem `LICENSE` (đứng tên Pham Dang Khue theo `paper/main.tex`).
+4. Đọc lại toàn bộ prose 2 bản paper lần cuối trước khi nộp chính thức.
+5. "Fresh-clone test": giải nén gói ở máy sạch, chạy đúng theo từng
+   bước `HUONG_DAN_CHAY.md` từ đầu đến cuối — phép thử cuối cùng trước
+   khi nộp.
+
+Không còn việc "code/phân tích tự động" nào bắt buộc phải làm trước khi
+nộp — các mục còn lại chủ yếu là quyết định nội dung/soát lỗi cuối.
