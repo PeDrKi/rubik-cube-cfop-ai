@@ -151,18 +151,25 @@ Bổ sung sau khi hoàn tất Giai đoạn 3, giải quyết điểm yếu "OLL 
 `corner_source == 'named'` trong `cfop_ai.py` không đổi ý nghĩa, tương
 thích ngược hoàn toàn (176/176 test vẫn pass sau mỗi bước sửa).
 
-## CẬP NHẬT MỚI NHẤT 4 — Đổi bảng màu move_recorder.html theo yêu cầu
+## CẬP NHẬT MỚI NHẤT 4 — Đổi bảng màu R/L theo yêu cầu (SỬA ĐỦ CẢ 2 NƠI)
 
 Theo yêu cầu người dùng: F=Xanh lá → suy ra R=Cam, L=Đỏ (đã kiểm chứng
 bằng toán: đây là phép xoay 180° hợp lệ quanh trục F-B, định thức +1,
 không phải đối xứng gương bất khả thi). Bảng màu đầy đủ mới:
 U=Vàng, D=Trắng, F=Xanh lá, B=Xanh dương, R=Cam, L=Đỏ.
 
-Chỉ sửa `research/phase3_survey/move_recorder.html` (`FACE_COLOR` +
-chú thích hướng dẫn) — đây là nơi DUY NHẤT trong dự án có định nghĩa
-màu sticker cụ thể (app `main.py` chính chỉ dùng ký tự U/D/L/R/F/B,
-không render màu). Logic xoay cube (JS engine) không đổi, đã test lại
-khớp Python và không phá vỡ gì (176/176 test vẫn pass).
+**Lần sửa đầu chỉ sửa `move_recorder.html`** — sau đó người dùng gửi ảnh
+chụp app `main.py` (3D View) cho thấy vẫn hiển thị màu cũ (R=Đỏ,
+L=Cam), phát hiện lần tìm kiếm đầu bị SÓT `constants.py` (do lệnh grep
+ban đầu không khớp đúng từ khóa). Đã sửa nốt:
+- **`constants.py`** — `COL3D` (màu 3D) và `FACE_LC` (màu panel 6-mặt),
+  đây mới là nguồn màu THẬT của app chính `main.py`.
+- **`research/phase3_survey/move_recorder.html`** — đã sửa từ trước.
+
+Không còn nơi nào khác trong dự án định nghĩa màu sticker (đã grep lại
+toàn bộ `main.py`/`draw_helpers.py`/`layout.py` xác nhận không có text
+gán cứng tên màu theo mặt). 176/176 test vẫn pass, đã smoke-test headless
+xác nhận app vẽ đúng màu mới không lỗi.
 
 ## Venue dự kiến — xem chi tiết mục 9 trong `HUONG_DAN_CHAY.md`
 
