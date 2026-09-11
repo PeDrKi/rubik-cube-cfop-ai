@@ -85,8 +85,8 @@ thực thi**:
 ```
 target/release/lich_su_oll_pll.tsv
 epoch_giay  thoi_gian_utc        loai  ten_the  so_nuoc
-1789023176  2026-09-10 06:52:56  OLL   OLL27    7
-1789023176  2026-09-10 06:52:56  PLL   T        14
+0000000000  yyyy-mm-dd hh:mm:ss  OLL   OLLxx    x
+0000000000  yyyy-mm-dd hh:mm:ss  PLL   x        x
 ```
 
 Định dạng TSV thuần, mở được bằng Notepad lẫn Excel. Cột thời gian là
