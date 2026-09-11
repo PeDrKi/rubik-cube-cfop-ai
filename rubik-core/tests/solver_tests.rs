@@ -100,17 +100,31 @@
     }
 
     #[test]
-    fn oll_table_size_matches_python_reference() {
-        // Python: OLL verified 55, table size 55 (khong trung key).
+    fn oll_table_covers_all_57_cases() {
+        // Bản Python chỉ có 55 công thức -> 55 thế. Bản Rust ĐÃ VƯỢT mốc đó:
+        // thêm 2 thế "chấm" còn thiếu để đủ 57 thế OLL chuẩn. Hai thế đó
+        // trước đây làm `full_solve_breakdown` trả `StageStatus::Failed`
+        // (mất cả OLL lẫn PLL) vì `oll_solver::solve_oll_search` cũng không
+        // giải được chúng.
+        //
+        // Phép kiểm phủ trọn 57/57 nằm trong oll_algorithms::tests.
         let t = rubik_core::oll_algorithms::table();
-        assert_eq!(t.table.len(), 55);
+        assert_eq!(t.table.len(), 57);
     }
 
     #[test]
-    fn pll_table_size_matches_python_reference() {
-        // Python: PLL verified 21, table size 47.
+    fn pll_table_covers_every_last_layer_state() {
+        // Bản Python có 47 mục (thuận/nghịch/gương/gương-nghịch) và để lọt
+        // 99/288 trạng thái xuống `macro_solver`. Bản Rust nạp mỗi công
+        // thức kèm mọi tổ hợp AUF trước/sau, nên bảng lớn hơn nhiều và
+        // không còn trạng thái nào lọt.
+        //
+        // Không chốt con số tuyệt đối ở đây (nó phụ thuộc cách sinh biến
+        // thể); điều cần bảo đảm là PHỦ TRỌN, và phép kiểm đó nằm trong
+        // pll_algorithms::tests::tra_duoc_moi_trang_thai.
         let t = rubik_core::pll_algorithms::table();
-        assert_eq!(t.table.len(), 47);
+        assert!(t.table.len() >= 47, "bảng PLL nhỏ hơn cả bản Python: {}", t.table.len());
+        assert_eq!(t.table.len(), t.name_table.len());
     }
 
     #[test]
@@ -121,11 +135,15 @@
         let (prefix, mvs, name) = rubik_core::oll_algorithms::solve_oll_with_auf(full).unwrap();
         st.apply_sequence(&prefix);
         st.apply_sequence(&mvs);
-        // Doi chieu voi Python: solve_oll_with_auf() tren state nay tra ve
-        // 'AntiSune' (khong phai 'Sune') -- da xac nhan Python CUNG tra ve
-        // dung ten nay (khop bang theo TRANG THAI can giai, khong phai
-        // theo ten nuoc da tao ra no).
-        assert_eq!(name, "AntiSune");
+        // Ap Sune len khoi da giai thi TAO RA the AntiSune, nen bang tra
+        // ve ten cua AntiSune chu khong phai Sune -- bang khop theo TRANG
+        // THAI CAN GIAI, khong phai theo ten nuoc da tao ra no. (Ban Python
+        // cung tra ve dung nhu vay.)
+        //
+        // Ten bay gio la so OLL chuan: AntiSune = OLL 26. So nay do bang
+        // may chu khong chep tay (xem examples/oll_number.rs), va chinh
+        // test nay la mot phep kiem cheo cho no.
+        assert_eq!(name, "OLL26");
         let full_after = rubik_core::full_state::from_facelets(&st);
         assert!(rubik_core::full_state::cross_f2l_ok(&full_after));
         let (_, eo, _, co) = full_after;
@@ -211,7 +229,12 @@
     }
 
     #[test]
-    fn pll_macro_solves_when_lookup_would_miss() {
+    fn pll_macro_van_giai_duoc_khi_duoc_goi_truc_tiep() {
+        // TEN CU: `pll_macro_solves_when_lookup_would_miss`. Ten do khong
+        // con dung: sau khi sua bang PLL thi bo tra KHONG bao giờ miss nua
+        // (287/288 trang thai, cai con lai la khoi da giai). `macro_solver`
+        // gio la duong du phong khong bao giờ duoc goi den trong thuc te --
+        // nhung van giu test de no khong muc nat.
         let mut st = CubeState::solved();
         st.apply_sequence(&["R'", "F", "R'", "B2", "R", "F'", "R'", "B2", "R2"]); // Aa
         st.apply_sequence(&["R", "U'", "R", "U", "R", "U", "R", "U'", "R'", "U'", "R2"]); // Edge3
@@ -290,7 +313,21 @@
             let mut st = CubeState::solved();
             let mut r = rand::rngs::StdRng::seed_from_u64(5000 + seed);
             cube::random_scramble_moves(&mut st, 25, &mut r);
-            if rubik_core::solve::solve_full_cube(&st, 2).is_some() {
+            // KHONG chi kiem `.is_some()`. Ban cu lam vay, nghia la neu
+            // bo giai tra ve mot chuoi SAI -- hoac `move_simplify` cat nham
+            // mot nuoc -- thi test van xanh. Ma `move_simplify` chay tren
+            // MOI loi giai (solve.rs:73), nen do dung la cho can canh nhat.
+            // O day ap that loi giai vao roi doi chieu voi khoi da giai.
+            if let Some(mvs) = rubik_core::solve::solve_full_cube(&st, 2) {
+                let refs: Vec<&str> = mvs.iter().map(|m| m.as_str()).collect();
+                let mut check = st;
+                check.apply_sequence(&refs);
+                assert_eq!(
+                    check,
+                    CubeState::solved(),
+                    "seed {seed}: bo giai tra ve {} nuoc nhung KHONG giai duoc khoi",
+                    mvs.len()
+                );
                 solved += 1;
             }
         }

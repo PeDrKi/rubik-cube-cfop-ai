@@ -1,74 +1,62 @@
 # rubik-vision-ml — dò vị trí mặt cube bằng CNN (THỬ NGHIỆM)
 
-## Trạng thái
+## Trạng thái thật, nói thẳng
 
-- Model (`models/face_detector.onnx`, ~551 KB / 564.450 byte) đã huấn
-  luyện xong, xuất ONNX, và **đã kiểm chứng khớp 100% với PyTorch gốc**
-  (sai số ~6×10⁻⁸). Model được nhúng thẳng vào binary qua `include_bytes!`.
-- Crate này **đã là thành viên của workspace chính** (`members` trong
-  `Cargo.toml` gốc) và **đã được nối vào `rubik-app`** qua feature
-  `ml_detect` — không còn ở dạng "viết xong nhưng chưa nối" như trước.
-- Tuy vậy feature **TẮT mặc định**: `cargo build`/`cargo run -p rubik-app`
-  bình thường KHÔNG kéo `ort`/ONNX Runtime vào. Chỉ khi bật `--features
-  ml_detect` thì crate này mới được biên dịch.
-- Lý do vẫn tách feature: `ort` 2.0 (release-candidate — bản duy nhất còn
-  trên crates.io, toàn bộ dòng 1.x đã bị gỡ) cần Rust khá mới (~1.88+).
-  Giữ nó sau feature-gate để phần lõi đã test kỹ
-  (`rubik-core`/`rubik-vision`/`rubik-app`) luôn build được kể cả khi
-  toolchain chưa đủ mới cho `ort`.
+- Model (`models/face_detector.onnx`, 253KB) đã huấn luyện xong, xuất ONNX,
+  và **đã kiểm chứng khớp 100% với PyTorch gốc** (sai số ~6×10⁻⁸).
+- Code Rust (`src/lib.rs`) **CHƯA build-test được** — môi trường tôi dùng để
+  viết code này có cargo quá cũ (1.75), còn crate `ort` (ONNX Runtime cho
+  Rust) bản duy nhất còn trên crates.io (2.0 release-candidate — toàn bộ
+  dòng 1.x đã bị gỡ) cần Rust ~1.88+. Bạn cần build thử trên máy mình để
+  biết chắc code có đúng cú pháp/API không.
+- Crate này **CỐ TÌNH tách khỏi workspace chính** (`rubik-core`/`rubik-app`/
+  `rubik-vision`) — không đụng gì đến phần đã test kỹ, dù build ở đây có
+  lỗi gì cũng không ảnh hưởng app chính.
 
-## Dùng trong app
+## Bước 1 — Thử build độc lập
 
 ```bash
-cargo run --release -p rubik-app --features ml_detect
+cd rubik-vision-ml
+cargo build
 ```
 
-Rồi bấm `Ctrl+K` mở cửa sổ quét, chọn chế độ **"ML (thử nghiệm)"** cạnh
-chế độ dò hình học. Model chạy **song song** để so sánh, không thay thế
-`detect::detect_cube_face`. Nếu build KHÔNG bật feature mà vẫn chọn chế
-độ này, app chỉ hiện cảnh báo "chưa bật tính năng ML" chứ không crash.
+Nếu lỗi vì **"requires rustc 1.88"** hoặc tương tự: chạy `rustup update`
+rồi thử lại.
 
-## Thử độc lập, không cần UI
+Nếu lỗi vì **thiếu `onnxruntime.dll`/`.so` lúc chạy** (không phải lúc
+build): `ort` mặc định tự tải sẵn thư viện onnxruntime phù hợp lúc build
+(feature `download-binaries`, đã bật theo mặc định) — nếu vẫn thiếu, xem
+tài liệu `ort` (https://ort.pyke.io) phần "Cargo features" / "Linking".
 
-`examples/try.rs` chạy model trên 1 ảnh và vẽ khung đỏ tại vị trí dò được:
+Nếu lỗi vì **API không khớp** (ví dụ `try_extract_array` đổi tên/chữ ký):
+crate `ort` 2.0 còn ở dạng release-candidate, API có thể đổi giữa các bản
+rc — báo lỗi cụ thể lại, tôi sẽ sửa theo đúng bản bạn có.
 
+## Bước 2 — Test nhanh không cần UI
+
+Đã viết sẵn `examples/try.rs`. Chạy:
 ```bash
-cargo run -p rubik-vision-ml --example try -- duong/dan/toi/1_anh_cube.png
+cargo run --example try -- duong/dan/toi/1_anh_cube.png
 ```
+In ra toạ độ dò được + lưu `ket_qua.png` có vẽ khung đỏ tại vị trí đó —
+mở lên xem bằng mắt có đúng quanh mặt cube không. Thử với vài ảnh khác
+nhau (kể cả ảnh không phải cube, ảnh mờ...) trước khi nối vào UI.
 
-In ra toạ độ vùng vuông + lưu `ket_qua.png` (cùng thư mục chạy lệnh) —
-mở lên xem bằng mắt có đúng quanh mặt cube không. Nên thử với vài ảnh
-khác nhau (kể cả ảnh không phải cube, ảnh mờ) để nắm giới hạn của model.
-Lưu ý: model luôn trả về đúng 1 dự đoán; `None` nghĩa là có lỗi kỹ thuật
-khi chạy suy luận, không phải "không tìm thấy".
+## Bước 3 — Nối vào rubik-app (nếu Bước 1+2 ổn)
 
-## Nếu build lỗi
+Thêm vào `rubik-app/Cargo.toml`:
+```toml
+rubik-vision-ml = { path = "../rubik-vision-ml" }
+```
+Rồi trong `scan_ui.rs`, thêm 1 lựa chọn chế độ dò thứ 3 ("ML — thử nghiệm")
+cạnh khung xanh/vàng hiện có, gọi `rubik_vision_ml::MlDetector::load()` một
+lần lúc mở webcam, và `detector.detect(&img)` mỗi khi có frame mới — thay
+cho (hoặc cùng hiển thị song song để so sánh với) `detect_cube_face`.
+Báo tôi kết quả Bước 1+2, tôi sẽ viết phần nối UI này cụ thể theo đúng
+API đã xác nhận chạy được trên máy bạn.
 
-- **"requires rustc 1.88"** hoặc tương tự → `rustup update` rồi thử lại.
-- **Thiếu `onnxruntime.dll`/`.so` lúc chạy** (không phải lúc build) →
-  `ort` mặc định bật feature `download-binaries` để tự tải thư viện
-  onnxruntime phù hợp lúc build; nếu vẫn thiếu, xem
-  https://ort.pyke.io phần "Cargo features" / "Linking".
-- **API `ort` không khớp** (ví dụ hàm đổi tên/chữ ký giữa các bản rc) →
-  báo lỗi cụ thể kèm phiên bản `ort` đang dùng để sửa cho đúng.
+## Huấn luyện lại / cải thiện thêm
 
-Cách lùi nhanh nếu `ort` gây lỗi khi build TOÀN BỘ workspace trên
-máy/CI khác: bỏ `rubik-vision-ml` khỏi `members` ở `Cargo.toml` gốc và
-thêm lại dòng `[workspace]` rỗng trong `rubik-vision-ml/Cargo.toml` để
-cô lập hoàn toàn (khi đó chạy `cd rubik-vision-ml && cargo build` riêng).
-
-## Huấn luyện lại / cải thiện
-
-Toàn bộ script và dữ liệu nằm ở thư mục **`../train_detect/`** đi kèm dự
-án. Cần PyTorch + bộ ảnh gốc (Bielefeld) để chạy lại; không cần gì trong
-đây nếu chỉ dùng model có sẵn.
-
-| File | Vai trò |
-|---|---|
-| `prepare_data.py` | Sinh dữ liệu huấn luyện (tăng cường cắt-dán nền) |
-| `train.py` | Huấn luyện CNN, xuất `face_detector.onnx` |
-| `train_state.pt` | Checkpoint PyTorch (train dở có thể tiếp tục) |
-| `face_detector.pt` | Model PyTorch gốc — dùng đối chiếu với bản ONNX |
-| `face_detector.onnx` | Bản ONNX xuất ra (giống hệt file trong `models/` của crate này) |
-| `train_log.txt` | Nhật ký huấn luyện |
-| `*_sanity.png`, `full_frame_test*.png`, `sanity_grid.png` | Ảnh kiểm tra kết quả bằng mắt |
+Toàn bộ script huấn luyện (`prepare_data.py`, `train.py`) nằm ở
+`/train_detect/` gửi kèm riêng (không đóng gói vào đây vì cần PyTorch +
+bộ ảnh gốc, không cần thiết nếu chỉ muốn dùng model đã có sẵn).

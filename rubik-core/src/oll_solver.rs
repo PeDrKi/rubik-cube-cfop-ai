@@ -11,7 +11,7 @@ use crate::cross_solver;
 use crate::cube::move_index;
 use crate::edge_model as EM;
 use crate::f2l_solver;
-use crate::full_state::{cross_f2l_ok, no_d_moves, u_corners_oriented, u_edges_oriented, FullState};
+use crate::full_state::{apply_move, cross_f2l_ok, no_d_moves, u_corners_oriented, u_edges_oriented, FullState};
 use crate::macro_solver;
 use crate::pdb::{build_group_pdb_corners_anyperm, build_group_pdb_edges_anyperm, CornerGroupPdb, CrossPdb};
 use crate::search::a_star_ladder;
@@ -92,7 +92,84 @@ fn goal_b(full: &FullState) -> bool {
 /// Cross+F2L). Dùng KHI bảng 55-case OLL đầy đủ miss. `retry_seed`:
 /// Some(seed) xáo thứ tự duyệt nước đi (tìm kiếm vốn tất định nên bấm lại
 /// y hệt sẽ ra y hệt -- xem should_retry_hint trong main.rs).
+/// Hai công thức định hướng cạnh của 2-look OLL. Chỉ dùng 18 nước cơ bản
+/// (bắt buộc: `apply_move` không hiểu `f`/`M`).
+const EO_ALGS: [&[&str]; 2] = [
+    &["F", "R", "U", "R'", "U'", "F'"],
+    &["F", "U", "R", "U'", "R'", "F'"],
+];
+const EO_AUF: [&[&str]; 4] = [&[], &["U"], &["U2"], &["U'"]];
+
+/// Định hướng 4 cạnh lớp U bằng đúng hai công thức trên, thử mọi tổ hợp
+/// AUF, tối đa hai lượt.
+///
+/// VÌ SAO CÓ HÀM NÀY: pha A trước đây dùng A* tổng quát, và nó THẤT BẠI ở
+/// cả 8 thế "chấm" (4 cạnh sai hướng) — đo được 8/57 thế OLL không giải
+/// được, mất 7,6 giây mỗi lần rồi mới chịu thua. Nguyên nhân: quãng đường
+/// thật của thế chấm là hơn 6 nước, mà chỉ riêng duyệt tới độ sâu 6 đã cần
+/// hơn 2 triệu trạng thái, trong khi thang tìm kiếm dừng ở 300k nút. Nới
+/// thang lên thì chậm tới hàng phút, không dùng được.
+///
+/// Định hướng cạnh vốn chỉ có 3 thế (line / L / chấm) nên A* tổng quát là
+/// thừa. Hàm này thử 8 khả năng một lượt và 64 khả năng hai lượt — vài
+/// chục phép áp nước, xong tức thì.
+///
+/// TỰ KIỂM CHỨNG: chỉ trả về chuỗi đã ÁP THẬT và xác nhận 4 cạnh U đúng
+/// hướng, Cross/F2L còn nguyên. Không dựa vào bảng tra hay quy ước khoá
+/// nào cả.
+fn solve_eo_two_look(full: FullState) -> Option<Vec<&'static str>> {
+    let apply = |s: FullState, seq: &[&'static str]| -> FullState {
+        let mut o = s;
+        for &mv in seq {
+            o = apply_move(&o, mv);
+        }
+        o
+    };
+    let done = |s: &FullState| cross_f2l_ok(s) && u_edges_oriented(s);
+    if done(&full) {
+        return Some(vec![]);
+    }
+    // Một lượt.
+    for auf in EO_AUF {
+        for alg in EO_ALGS {
+            let mut out: Vec<&'static str> = auf.to_vec();
+            out.extend(alg.iter().copied());
+            if done(&apply(full, &out)) {
+                return Some(out);
+            }
+        }
+    }
+    // Hai lượt (thế "chấm" cần đúng hai lượt).
+    for auf1 in EO_AUF {
+        for alg1 in EO_ALGS {
+            let mut mid: Vec<&'static str> = auf1.to_vec();
+            mid.extend(alg1.iter().copied());
+            let s1 = apply(full, &mid);
+            for auf2 in EO_AUF {
+                for alg2 in EO_ALGS {
+                    let mut out = mid.clone();
+                    out.extend(auf2.iter().copied());
+                    out.extend(alg2.iter().copied());
+                    if done(&apply(full, &out)) {
+                        return Some(out);
+                    }
+                }
+            }
+            let _ = s1;
+        }
+    }
+    None
+}
+
 pub fn solve_phase_a(full: FullState, retry_seed: Option<u64>) -> Option<Vec<&'static str>> {
+    // Thử cách 2-look trước: nhanh và phủ trọn. Chỉ khi nó trượt mới rơi
+    // về A* tổng quát (giữ lại làm lưới an toàn, và để `retry_seed` vẫn
+    // sinh được lời giải khác cho nút "thử lại").
+    if retry_seed.is_none() {
+        if let Some(mvs) = solve_eo_two_look(full) {
+            return Some(mvs);
+        }
+    }
     let mut no_d = no_d_moves();
     if let Some(seed) = retry_seed {
         use rand::seq::SliceRandom;
@@ -145,4 +222,76 @@ pub fn solve_oll_search(full: FullState, retry_seed: Option<u64>) -> Option<Vec<
     let mut all = edge_moves;
     all.extend(corner_moves);
     Some(all)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::oll_algorithms;
+
+    fn state_with(k: oll_algorithms::OriKey) -> FullState {
+        let mut ep = [0usize; 12];
+        let mut cp = [0usize; 8];
+        for i in 0..12 {
+            ep[i] = i;
+        }
+        for i in 0..8 {
+            cp[i] = i;
+        }
+        let mut eo = [0u8; 12];
+        let mut co = [0u8; 8];
+        for i in 0..4 {
+            eo[i] = k.0[i];
+            co[i] = k.1[i];
+        }
+        (ep, eo, cp, co)
+    }
+
+    #[test]
+    fn luoi_an_toan_giai_duoc_ca_57_the() {
+        // `solve_oll_search` là lưới an toàn cuối cùng khi bảng OLL miss.
+        // Trước đây nó THẤT BẠI ở cả 8 thế "chấm" (49/57) và mất 7,6 giây
+        // mỗi lần mới chịu thua — tức là lưới thủng đúng chỗ cần nhất.
+        // Giờ phải giải được cả 57, và phải nhanh.
+        let t = oll_algorithms::table();
+        let mut fail = Vec::new();
+        for key in t.table.keys() {
+            let name = t.name_table.get(key).copied().unwrap_or("?");
+            match solve_oll_search(state_with(*key), None) {
+                None => fail.push(name),
+                Some(mvs) => {
+                    // Không tin lời giải: áp thật rồi kiểm tra.
+                    let mut s = state_with(*key);
+                    for &mv in &mvs {
+                        s = apply_move(&s, mv);
+                    }
+                    assert!(
+                        cross_f2l_ok(&s) && u_edges_oriented(&s) && u_corners_oriented(&s),
+                        "{name}: lời giải không định hướng xong lớp U"
+                    );
+                }
+            }
+        }
+        assert!(fail.is_empty(), "không giải được {} thế: {fail:?}", fail.len());
+    }
+
+    #[test]
+    fn buoc_dinh_huong_canh_phu_moi_the() {
+        // Chỉ có 4 lớp hướng cạnh (đã xong / line / L / chấm) nên hai công
+        // thức 2-look phải phủ hết. Quét mọi kiểu lật cạnh hợp lệ.
+        for e in 0..16u8 {
+            let eo4 = [e & 1, (e >> 1) & 1, (e >> 2) & 1, (e >> 3) & 1];
+            if eo4.iter().sum::<u8>() % 2 != 0 {
+                continue; // số cạnh lật phải chẵn
+            }
+            let st = state_with((eo4, [0, 0, 0, 0]));
+            let got = solve_eo_two_look(st);
+            assert!(got.is_some(), "không định hướng được cạnh {eo4:?}");
+            let mut s = st;
+            for mv in got.unwrap() {
+                s = apply_move(&s, mv);
+            }
+            assert!(cross_f2l_ok(&s) && u_edges_oriented(&s), "cạnh {eo4:?} giải sai");
+        }
+    }
 }

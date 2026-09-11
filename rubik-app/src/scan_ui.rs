@@ -400,14 +400,41 @@ pub fn show(ctx: &egui::Context, s: &mut ScanState) -> Option<CubeState> {
                     }
                 });
             }
+            // ── Chọn cách dò vị trí ──────────────────────────────────
+            //
+            // LƯU Ý: lựa chọn ML KHÔNG phải bản nâng cấp, nó ĐANG KÉM HƠN
+            // mặc định — nên chỗ này phải nói thẳng ra, chứ cái tên "thử
+            // nghiệm" dễ làm người dùng tưởng là bản tốt hơn.
+            //
+            // Lý do, có số liệu: `detect_cube_face` (Hình học) trả về TỨ
+            // GIÁC 4 đỉnh, `sample_for_region` dùng nó để hiệu chỉnh phối
+            // cảnh rồi mới lấy mẫu lưới 3×3. `MlDetector` chỉ trả về hộp
+            // VUÔNG, nên lưới 3×3 song song trục bị đặt vào hộp bao của
+            // một hình thoi — lấy mẫu trúng viền đen hoặc ô bên cạnh, NGAY
+            // CẢ khi hộp vuông chính xác tuyệt đối.
             ui.horizontal(|ui| {
                 ui.label("Dò vị trí bằng:");
-                if ui.selectable_label(s.detect_method == DetectMethod::Heuristic, "Hình học (mặc định)").clicked() {
+                if ui
+                    .selectable_label(s.detect_method == DetectMethod::Heuristic, "Hình học (mặc định)")
+                    .on_hover_text(
+                        "Trả về tứ giác 4 đỉnh nên hiệu chỉnh được phối cảnh. \
+                         Đo đầu-cuối trên bộ ảnh Bielefeld: đọc đúng 97,3% số ô.",
+                    )
+                    .clicked()
+                {
                     s.detect_method = DetectMethod::Heuristic;
                     s.detected_region = None;
                     s.detected_quad = None;
                 }
-                if ui.selectable_label(s.detect_method == DetectMethod::Ml, "ML (thử nghiệm)").clicked() {
+                if ui
+                    .selectable_label(s.detect_method == DetectMethod::Ml, "ML (kém hơn)")
+                    .on_hover_text(
+                        "KÉM HƠN mặc định, chỉ để so sánh. Model chỉ trả hộp vuông, \
+                         không có góc nghiêng nên không hiệu chỉnh được phối cảnh. \
+                         Đo đầu-cuối: 32,9% số ô (so với 97,3% của Hình học).",
+                    )
+                    .clicked()
+                {
                     s.detect_method = DetectMethod::Ml;
                     s.detected_region = None;
                     s.detected_quad = None;
@@ -415,13 +442,31 @@ pub fn show(ctx: &egui::Context, s: &mut ScanState) -> Option<CubeState> {
                         s.ml_detector = ml_bridge::Detector::load();
                     }
                 }
-                if s.detect_method == DetectMethod::Ml && s.ml_detector.is_none() {
+            });
+            if s.detect_method == DetectMethod::Ml {
+                if s.ml_detector.is_none() {
                     ui.colored_label(
                         egui::Color32::from_rgb(230, 170, 40),
                         "⚠ Bản build này chưa bật tính năng ML (cần build với --features ml_detect).",
                     );
+                } else {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(235, 92, 92),
+                        "⚠ Lựa chọn này ĐANG KÉM HƠN mặc định — chỉ nên dùng để so sánh.",
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "Mặt cube nhìn nghiêng là hình thoi. Model chỉ trả hộp vuông, \
+                             nên lưới 3×3 thẳng trục đặt vào hộp bao sẽ lấy mẫu trúng viền \
+                             hoặc ô bên cạnh — ngay cả khi hộp vuông hoàn hảo. Đo đầu-cuối \
+                             trên bộ ảnh Bielefeld (đọc màu 27 ô): Hình học 97,3% · hộp vuông \
+                             hoàn hảo 38,9% · hộp vuông do ML 32,9%.",
+                        )
+                        .size(11.0)
+                        .color(crate::theme::TEXT_DIM),
+                    );
                 }
-            });
+            }
             ui.separator();
 
             if s.resolve_result.is_none() && !s.captured.iter().all(|c| c.is_some()) {

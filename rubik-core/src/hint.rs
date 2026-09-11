@@ -23,6 +23,16 @@ pub struct Hint {
     /// Giai đoạn CFOP hiện tại ("cross"/"f2l"/"oll"/"pll"/"done") -- dùng
     /// bởi should_retry_hint() để so sánh giữa 2 lần bấm gợi ý liên tiếp.
     pub stage: &'static str,
+    /// Tên ca OLL/PLL nếu gợi ý này nhận ra được một ca CỤ THỂ.
+    ///
+    /// `None` cho Cross, F2L, và cho hai bước 2-look ("định hướng 4 cạnh",
+    /// "định hướng 4 góc") — đó là bước lẻ chứ không phải một ca, nên
+    /// không có gì để ghi vào nhật ký.
+    ///
+    /// VÌ SAO LÀ TRƯỜNG RIÊNG: tên vốn đã nằm trong `label` dưới dạng
+    /// "OLL - OLL27 (1-look)", nhưng bóc tên ra từ chuỗi hiển thị là kiểu
+    /// code gãy ngay khi ai đó sửa câu chữ. Để riêng thì không gãy được.
+    pub case_name: Option<String>,
 }
 
 pub fn stage_of(state: &CubeState) -> &'static str {
@@ -50,7 +60,7 @@ pub fn compute_hint(state: &CubeState, retry_seed: Option<u64>) -> Hint {
     match stage {
         "cross" => {
             let mvs = cross_solver::solve_cross(state, 20);
-            Hint { label: "Cross".to_string(), moves: crate::move_simplify::simplify(&mvs), stage }
+            Hint { label: "Cross".to_string(), moves: crate::move_simplify::simplify(&mvs), stage, case_name: None }
         }
         "f2l" => {
             let cm = cross_solver::solve_cross(state, 20);
@@ -62,11 +72,12 @@ pub fn compute_hint(state: &CubeState, retry_seed: Option<u64>) -> Hint {
             let target = F2L_ORDER.iter().find(|&&sl| !done.contains(&sl)).copied().unwrap();
             let res = f2l_solver::solve_f2l_seeded(full, &[8, 10, 12, 14], 400_000, retry_seed);
             match res.per_slot.get(target).cloned().flatten() {
-                Some(mvs) => Hint { label: format!("F2L - cap {target}"), moves: crate::move_simplify::simplify(&mvs), stage },
+                Some(mvs) => Hint { label: format!("F2L - cap {target}"), moves: crate::move_simplify::simplify(&mvs), stage, case_name: None },
                 None => Hint {
                     label: format!("F2L - cap {target} (chua tim duoc, thu lai)"),
                     moves: vec![],
                     stage,
+                    case_name: None,
                 },
             }
         }
@@ -83,16 +94,22 @@ pub fn compute_hint(state: &CubeState, retry_seed: Option<u64>) -> Hint {
                 if let Some((prefix, mvs, name)) = oll_algorithms::solve_oll_with_auf(full) {
                     let mut all = prefix;
                     all.extend(mvs);
-                    return Hint { label: format!("OLL - {name} (1-look)"), moves: crate::move_simplify::simplify(&all), stage };
+                    return Hint {
+                        label: format!("OLL - {name} (1-look)"),
+                        moves: crate::move_simplify::simplify(&all),
+                        stage,
+                        case_name: Some(name.to_string()),
+                    };
                 }
             }
             if !full_state::u_edges_oriented(&full) {
                 match oll_solver::solve_phase_a(full, retry_seed) {
-                    Some(mvs) => Hint { label: "OLL - Dinh huong 4 canh".to_string(), moves: crate::move_simplify::simplify(&mvs), stage },
+                    Some(mvs) => Hint { label: "OLL - Dinh huong 4 canh".to_string(), moves: crate::move_simplify::simplify(&mvs), stage, case_name: None },
                     None => Hint {
                         label: "OLL - Dinh huong 4 canh (chua tim duoc, thu lai)".to_string(),
                         moves: vec![],
                         stage,
+                        case_name: None,
                     },
                 }
             } else {
@@ -102,11 +119,12 @@ pub fn compute_hint(state: &CubeState, retry_seed: Option<u64>) -> Hint {
                     oll_solver::solve_phase_b(full, retry_seed)
                 };
                 match mvs {
-                    Some(mvs) => Hint { label: "OLL - Dinh huong 4 goc".to_string(), moves: crate::move_simplify::simplify(&mvs), stage },
+                    Some(mvs) => Hint { label: "OLL - Dinh huong 4 goc".to_string(), moves: crate::move_simplify::simplify(&mvs), stage, case_name: None },
                     None => Hint {
                         label: "OLL - Dinh huong 4 goc (chua tim duoc, thu lai)".to_string(),
                         moves: vec![],
                         stage,
+                        case_name: None,
                     },
                 }
             }
@@ -128,18 +146,92 @@ pub fn compute_hint(state: &CubeState, retry_seed: Option<u64>) -> Hint {
             if retry_seed.is_none() {
                 let (mvs, name) = pll_algorithms::solve_pll_lookup_named(full);
                 if let Some(m) = mvs {
-                    return Hint { label: format!("PLL - {}", name.unwrap()), moves: crate::move_simplify::simplify(&m), stage };
+                    let cname = name.unwrap();
+                    return Hint {
+                        label: format!("PLL - {cname}"),
+                        moves: crate::move_simplify::simplify(&m),
+                        stage,
+                        case_name: Some(cname.to_string()),
+                    };
                 }
             }
             match macro_solver::solve_pll_macro(full, 4) {
-                Some(m) => Hint { label: "PLL - Hoan vi cuoi cung".to_string(), moves: crate::move_simplify::simplify(&m), stage },
+                Some(m) => Hint { label: "PLL - Hoan vi cuoi cung".to_string(), moves: crate::move_simplify::simplify(&m), stage, case_name: None },
                 None => Hint {
                     label: "PLL (chua tim duoc, thu lai)".to_string(),
                     moves: vec![],
                     stage,
+                    case_name: None,
                 },
             }
         }
-        _ => Hint { label: "Cube da giai xong!".to_string(), moves: vec![], stage },
+        _ => Hint { label: "Cube da giai xong!".to_string(), moves: vec![], stage, case_name: None },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cube::CubeState;
+
+    /// Ap chuoi nuoc len khoi da giai.
+    fn after(seq: &[&str]) -> CubeState {
+        let mut st = CubeState::solved();
+        st.apply_sequence(seq);
+        st
+    }
+
+    #[test]
+    fn goi_y_oll_kem_ten_ca() {
+        // Ap Sune len khoi da giai -> dang o giai doan OLL.
+        let st = after(&["R", "U", "R'", "U", "R", "U2", "R'"]);
+        let h = compute_hint(&st, None);
+        assert_eq!(h.stage, "oll");
+        let name = h.case_name.expect("gợi ý OLL phải kèm tên ca");
+        // Ten phai la mot ca CO THAT trong bang, khong phai chuoi bia.
+        assert!(
+            crate::oll_algorithms::all_algorithms().iter().any(|(n, _)| *n == name),
+            "tên ca {name} không có trong bảng OLL"
+        );
+        // Va phai khop voi ten ma bang tra ra cho chinh trang thai nay.
+        let full = full_state::from_facelets(&st);
+        let (_, _, tra) = crate::oll_algorithms::solve_oll_with_auf(full).unwrap();
+        assert_eq!(name, tra, "tên trong gợi ý lệch với tên bảng tra");
+    }
+
+    #[test]
+    fn goi_y_pll_kem_ten_ca() {
+        // T-perm: lop U da dinh huong xong, chi con hoan vi -> giai doan PLL.
+        let st = after(&[
+            "R", "U", "R'", "U'", "R'", "F", "R2", "U'", "R'", "U'", "R", "U", "R'", "F'",
+        ]);
+        let h = compute_hint(&st, None);
+        assert_eq!(h.stage, "pll");
+        let name = h.case_name.expect("gợi ý PLL phải kèm tên ca");
+        assert!(
+            crate::pll_algorithms::all_algorithms().iter().any(|(n, _)| *n == name),
+            "tên ca {name} không có trong bảng PLL"
+        );
+    }
+
+    #[test]
+    fn goi_y_cross_va_f2l_khong_co_ten_ca() {
+        // Khoi xao lung tung -> dang o Cross hoac F2L, khong phai mot ca
+        // OLL/PLL nao ca, nen khong duoc ghi gi vao nhat ky.
+        let st = after(&["R", "U", "F", "L2", "D", "B'", "R2", "U'", "F2", "L"]);
+        let h = compute_hint(&st, None);
+        assert!(
+            h.stage == "cross" || h.stage == "f2l",
+            "trang thai thu nghiem khong con o Cross/F2L: {}",
+            h.stage
+        );
+        assert!(h.case_name.is_none(), "Cross/F2L không được kèm tên ca");
+    }
+
+    #[test]
+    fn khoi_da_giai_thi_khong_co_ten_ca() {
+        let h = compute_hint(&CubeState::solved(), None);
+        assert_eq!(h.stage, "done");
+        assert!(h.case_name.is_none());
     }
 }

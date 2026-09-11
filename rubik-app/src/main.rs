@@ -11,6 +11,7 @@ mod theme;
 mod camera_capture;
 mod scan_ui;
 mod paint_ui;
+mod history;
 
 use rubik_core::cube::{self, CubeState};
 use std::collections::VecDeque;
@@ -193,7 +194,9 @@ fn queue_move(queue: &mut VecDeque<(char, bool, bool)>, mv_str: &str) {
 enum JobResult {
     Solve(Option<Vec<String>>),
     Hint(rubik_core::hint::Hint),
-    Breakdown(rubik_core::breakdown::Breakdown),
+    /// Kèm theo CHÍNH trạng thái đã dùng để tính, để biết bảng còn khớp
+    /// với khối hiện tại hay không (xem `formula_table`).
+    Breakdown(CubeState, rubik_core::breakdown::Breakdown),
 }
 
 fn main() {
@@ -269,10 +272,32 @@ fn main() {
     let mut needs_redraw = true;
     let mut sel_face: Option<char> = None;
     let mut total_queued: usize = 0;
-    // Bảng công thức (phím T): None = đang đóng.
-    let mut formula_table: Option<rubik_core::breakdown::Breakdown> = None;
+    // Bảng công thức (phím T): None = chưa tính lần nào.
+    //
+    // Nhớ kèm TRẠNG THÁI đã dùng để tính. Trước đây chỉ giữ mỗi bảng, nên
+    // sau lần tính đầu tiên, bấm "Bảng công thức" chỉ bật/tắt cửa sổ và
+    // KHÔNG tính lại — khối đã xoay mà bảng vẫn là bảng cũ. Có trạng thái
+    // đi kèm thì so sánh được: khác thì tính lại, giống thì chỉ mở ra.
+    // Việc này cũng làm cho nhật ký không đếm trùng một ván nhiều lần.
+    let mut formula_table: Option<(CubeState, rubik_core::breakdown::Breakdown)> = None;
     let mut formula_open = false;
-    // Bảng tra công thức chuẩn (55 OLL + 21 PLL) — phím V.
+    // Cửa sổ thống kê OLL/PLL (Ctrl+Y). `stats_counts` được đọc lại từ file
+    // mỗi lần mở, để thấy ngay số vừa ghi.
+    let mut stats_open = false;
+    let mut stats_counts: std::collections::HashMap<(String, String), u32> =
+        std::collections::HashMap::new();
+    let mut stats_tab_pll = false;
+    // Các ca ĐÃ GHI nhật ký cho ván hiện tại, dạng (loại, tên ca).
+    //
+    // Vì sao cần: bấm H nhiều lần ở cùng một thế OLL sẽ trả về cùng một
+    // gợi ý, và bấm Ctrl+T rồi bấm H cũng ra cùng ca đó. Không chặn thì
+    // giữ phím H một lúc là số đếm nhảy vọt, thống kê thành vô nghĩa.
+    //
+    // Mỗi ca chỉ tính MỘT LẦN cho mỗi ván. Trong một ván vẫn ghi được
+    // nhiều ca khác nhau (qua OLL rồi tới PLL là hai ca). Danh sách được
+    // xoá khi bắt đầu ván mới — xáo, hoặc nạp trạng thái mới từ camera.
+    let mut case_log = history::CaseLog::default();
+    // Bảng tra công thức chuẩn (57 OLL + 21 PLL) — phím V.
     let mut library_open = false;
     let mut shortcuts_open = false;
     let mut library_query = String::new();
@@ -336,6 +361,8 @@ fn main() {
             let mut request_scramble = false;
             let mut close_formula = false;
             let mut request_table = false;
+            let mut request_stats = false;
+            let mut close_stats = false;
             let mut close_library = false;
             let mut load_into_bar: Option<String> = None;
             let mut scanned_state: Option<CubeState> = None;
@@ -474,37 +501,29 @@ fn main() {
                                         }
                                     });
                                 });
+                                ui.add_space(6.0);
+                                if ui
+                                    .add_sized(
+                                        [ui.available_width(), 28.0],
+                                        egui::Button::new("📊  Thống kê OLL / PLL"),
+                                    )
+                                    .on_hover_text(
+                                        "Số lần đã gặp từng thế OLL/PLL — Phím tắt: Ctrl+Y",
+                                    )
+                                    .clicked()
+                                {
+                                    request_stats = true;
+                                }
                             });
                             ui.add_space(10.0);
 
-                            // ── Nhập công thức ──────────────────────────
-                            theme::card(ui, |ui| {
-                                theme::section_label(ui, "Công thức Singmaster");
-                                ui.add_space(6.0);
-                                let resp = ui.add_sized(
-                                    [ui.available_width(), 26.0],
-                                    egui::TextEdit::singleline(&mut formula_text)
-                                        .hint_text("VD:  R U R' U'   hoặc   (R U)3"),
-                                );
-                                editing_formula = resp.has_focus() || resp.lost_focus();
-                                if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                                    submit_formula = true;
-                                }
-                                ui.add_space(6.0);
-                                ui.horizontal(|ui| {
-                                    let w = (ui.available_width() - 8.0) / 2.0;
-                                    if ui.add_sized([w, 26.0], egui::Button::new("Áp dụng")).clicked() {
-                                        submit_formula = true;
-                                    }
-                                    if ui.add_sized([w, 26.0], egui::Button::new("Xoá")).clicked() {
-                                        formula_text.clear();
-                                    }
-                                });
-                            });
-
                             // ── Kết quả gợi ý ───────────────────────────
+                            // Đặt TRƯỚC ô nhập công thức: khi vừa bấm H,
+                            // gợi ý là thứ người dùng đang chờ đọc, nên nó
+                            // phải nằm ngay dưới cụm nút thay vì bị đẩy
+                            // xuống dưới ô nhập. Khối này chỉ hiện khi CÓ
+                            // gợi ý, nên lúc không có thì bố cục y như cũ.
                             if let Some(lbl) = &hint_label {
-                                ui.add_space(10.0);
                                 theme::card(ui, |ui| {
                                     ui.horizontal(|ui| {
                                         ui.label(egui::RichText::new("💡").size(13.0));
@@ -531,7 +550,33 @@ fn main() {
                                         });
                                     }
                                 });
+                                ui.add_space(10.0);
                             }
+
+                            // ── Nhập công thức ──────────────────────────
+                            theme::card(ui, |ui| {
+                                theme::section_label(ui, "Công thức Singmaster");
+                                ui.add_space(6.0);
+                                let resp = ui.add_sized(
+                                    [ui.available_width(), 26.0],
+                                    egui::TextEdit::singleline(&mut formula_text)
+                                        .hint_text("VD:  R U R' U'   hoặc   (R U)3"),
+                                );
+                                editing_formula = resp.has_focus() || resp.lost_focus();
+                                if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                    submit_formula = true;
+                                }
+                                ui.add_space(6.0);
+                                ui.horizontal(|ui| {
+                                    let w = (ui.available_width() - 8.0) / 2.0;
+                                    if ui.add_sized([w, 26.0], egui::Button::new("Áp dụng")).clicked() {
+                                        submit_formula = true;
+                                    }
+                                    if ui.add_sized([w, 26.0], egui::Button::new("Xoá")).clicked() {
+                                        formula_text.clear();
+                                    }
+                                });
+                            });
 
                             // ── Trạng thái (luôn ở cuối) ────────────────
                             ui.add_space(10.0);
@@ -591,7 +636,7 @@ fn main() {
                     // Cửa sổ nổi, KHÔNG chặn thao tác khác (giống bản Python:
                     // "không modal") -- vẫn xoay được khối, vẫn gõ được.
                     if formula_open {
-                        if let Some(bd) = &formula_table {
+                        if let Some((_, bd)) = &formula_table {
                             let mut open = true;
                             egui::Window::new("Bảng công thức CFOP")
                                 .open(&mut open)
@@ -639,6 +684,179 @@ fn main() {
                             if !open {
                                 close_formula = true;
                             }
+                        }
+                    }
+
+                    // ── Thống kê OLL/PLL đã gặp (Ctrl+Y) ────────────────
+                    // Liệt kê TOÀN BỘ thế trong bảng chuẩn, kể cả thế chưa
+                    // gặp lần nào (số 0) -- để thấy được mình còn thiếu thế
+                    // nào, chứ không chỉ thấy những thế đã gặp.
+                    if stats_open {
+                        let mut open = true;
+                        egui::Window::new("📊 Thống kê OLL / PLL")
+                            .open(&mut open)
+                            .default_width(330.0)
+                            .default_pos(egui::pos2(left_w + 24.0, 24.0))
+                            .collapsible(false)
+                            .frame(
+                                egui::Frame::none()
+                                    .fill(theme::BG_PANEL)
+                                    .rounding(egui::Rounding::same(10.0))
+                                    .inner_margin(egui::Margin::same(13.0))
+                                    .stroke(egui::Stroke::new(1.0, theme::BG_CARD_HI)),
+                            )
+                            .show(gui_context, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.selectable_value(&mut stats_tab_pll, false, "OLL");
+                                    ui.selectable_value(&mut stats_tab_pll, true, "PLL");
+                                });
+                                ui.add_space(6.0);
+
+                                let kind = if stats_tab_pll { "PLL" } else { "OLL" };
+                                let algs = if stats_tab_pll {
+                                    rubik_core::pll_algorithms::all_algorithms()
+                                } else {
+                                    rubik_core::oll_algorithms::all_algorithms()
+                                };
+                                // Ghép bảng chuẩn với số đếm rồi sắp giảm dần.
+                                // Thế cùng số lần thì xếp theo tên cho ổn định
+                                // (không nhảy lung tung giữa các lần mở).
+                                let mut rows: Vec<(&str, u32)> = algs
+                                    .iter()
+                                    .map(|(name, _)| {
+                                        let n = stats_counts
+                                            .get(&(kind.to_string(), name.to_string()))
+                                            .copied()
+                                            .unwrap_or(0);
+                                        (*name, n)
+                                    })
+                                    .collect();
+                                let n_standard = rows.len();
+                                // Nhật ký có thể chứa tên KHÔNG nằm trong bảng
+                                // chuẩn: khi không tra được thế, breakdown lùi
+                                // về cách giải 2 bước ("2-look") hoặc tìm kiếm
+                                // ("macro"). Phải hiện ra, nếu không thì tổng
+                                // số lần sẽ lớn hơn tổng các dòng mà không hiểu
+                                // vì sao.
+                                let mut extra: Vec<(String, u32)> = stats_counts
+                                    .iter()
+                                    .filter(|((k, name), _)| {
+                                        k == kind && !algs.iter().any(|(a, _)| a == name)
+                                    })
+                                    .map(|((_, name), n)| (name.clone(), *n))
+                                    .collect();
+                                extra.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+                                rows.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+
+                                let total = history::total(&stats_counts, kind);
+                                let seen = rows.iter().filter(|(_, n)| *n > 0).count();
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "Đã gặp {seen}/{n_standard} thế · tổng {total} lần"
+                                    ))
+                                    .size(12.5)
+                                    .color(theme::TEXT_DIM),
+                                );
+                                ui.add_space(8.0);
+
+                                let max = rows
+                                    .first()
+                                    .map(|(_, n)| *n)
+                                    .unwrap_or(0)
+                                    .max(extra.first().map(|(_, n)| *n).unwrap_or(0))
+                                    .max(1);
+                                // Vẽ chung một vòng: bảng chuẩn trước, rồi tới
+                                // các tên ngoài bảng (nếu có).
+                                let all_rows: Vec<(&str, u32, bool)> = rows
+                                    .iter()
+                                    .map(|(n, c)| (*n, *c, false))
+                                    .chain(extra.iter().map(|(n, c)| (n.as_str(), *c, true)))
+                                    .collect();
+                                egui::ScrollArea::vertical()
+                                    .max_height(420.0)
+                                    .auto_shrink([false, true])
+                                    .show(ui, |ui| {
+                                        let mut sep_done = false;
+                                        for (name, n, is_extra) in &all_rows {
+                                            if *is_extra && !sep_done {
+                                                sep_done = true;
+                                                ui.add_space(8.0);
+                                                ui.label(
+                                                    egui::RichText::new(
+                                                        "Ngoài bảng chuẩn (giải bằng cách dự phòng)",
+                                                    )
+                                                    .size(10.5)
+                                                    .color(theme::TEXT_DIM),
+                                                );
+                                            }
+                                            ui.horizontal(|ui| {
+                                                let col = if *n > 0 {
+                                                    theme::TEXT
+                                                } else {
+                                                    theme::TEXT_DIM
+                                                };
+                                                ui.add_sized(
+                                                    [124.0, 16.0],
+                                                    egui::Label::new(
+                                                        egui::RichText::new(*name)
+                                                            .size(11.5)
+                                                            .color(col),
+                                                    )
+                                                    .wrap(false),
+                                                );
+                                                ui.add_sized(
+                                                    [30.0, 16.0],
+                                                    egui::Label::new(
+                                                        egui::RichText::new(n.to_string())
+                                                            .monospace()
+                                                            .size(11.5)
+                                                            .color(if *n > 0 {
+                                                                theme::ACCENT
+                                                            } else {
+                                                                theme::TEXT_DIM
+                                                            }),
+                                                    ),
+                                                );
+                                                // Thanh ngang so sánh tương đối
+                                                // với thế gặp nhiều nhất.
+                                                let (rect, _) = ui.allocate_exact_size(
+                                                    egui::vec2(ui.available_width().max(4.0), 8.0),
+                                                    egui::Sense::hover(),
+                                                );
+                                                if *n > 0 {
+                                                    let w = rect.width() * (*n as f32 / max as f32);
+                                                    ui.painter().rect_filled(
+                                                        egui::Rect::from_min_size(
+                                                            rect.left_center()
+                                                                - egui::vec2(0.0, 3.0),
+                                                            egui::vec2(w.max(2.0), 6.0),
+                                                        ),
+                                                        2.0,
+                                                        theme::ACCENT,
+                                                    );
+                                                }
+                                            });
+                                        }
+                                    });
+                                ui.add_space(8.0);
+                                let where_txt = match history::path() {
+                                    Some(p) => format!("Nhật ký: {}", p.display()),
+                                    None => "Chưa xác định được nơi lưu nhật ký".to_string(),
+                                };
+                                ui.label(
+                                    egui::RichText::new(where_txt).size(10.5).color(theme::TEXT_DIM),
+                                );
+                                ui.label(
+                                    egui::RichText::new(
+                                        "Mỗi lần bấm “Bảng công thức” cho một ván mới sẽ ghi thêm \
+                                         một dòng cho thế OLL và thế PLL của ván đó.",
+                                    )
+                                    .size(10.5)
+                                    .color(theme::TEXT_DIM),
+                                );
+                            });
+                        if !open {
+                            close_stats = true;
                         }
                     }
 
@@ -803,6 +1021,7 @@ fn main() {
                                 row(ui, "H", "gợi ý 1 bước");
                                 row(ui, "Ctrl+T", "bảng công thức cho ván này");
                                 row(ui, "Ctrl+J", "tra toàn bộ công thức chuẩn");
+                                row(ui, "Ctrl+Y", "thống kê OLL/PLL đã gặp");
                                 row(ui, "Ctrl+K", "quét trạng thái từ camera");
                                 row(ui, "Esc", "huỷ khi đang tính");
                                 row(ui, "Ctrl+Z", "hoàn tác");
@@ -853,11 +1072,26 @@ fn main() {
                 queue.clear();
                 state = new_state;
                 move_count = 0;
+                case_log.van_moi();
+                formula_table = None;
                 status = format!("Đã nạp trạng thái từ {state_source_label}");
             }
 
             if close_formula {
                 formula_open = false;
+            }
+            if close_stats {
+                stats_open = false;
+            }
+            if request_stats {
+                if stats_open {
+                    stats_open = false;
+                } else {
+                    // Đọc lại file mỗi lần mở: nhật ký có thể vừa được ghi
+                    // thêm, và người dùng cũng có thể tự sửa file.
+                    stats_counts = history::counts();
+                    stats_open = true;
+                }
             }
             if close_library {
                 library_open = false;
@@ -867,7 +1101,8 @@ fn main() {
                 status = "Đã nạp công thức — bấm Áp dụng để chạy".to_string();
             }
             if request_table && job_rx.is_none() && queue.is_empty() && pending.is_none() {
-                if formula_table.is_some() {
+                let fresh = formula_table.as_ref().map(|(s, _)| *s == state).unwrap_or(false);
+                if fresh {
                     formula_open = !formula_open;
                 } else {
                     rubik_core::cancel::clear();
@@ -875,7 +1110,7 @@ fn main() {
                     let (tx, rx) = std::sync::mpsc::channel();
                     std::thread::spawn(move || {
                         let b = rubik_core::breakdown::full_solve_breakdown(&state_copy);
-                        let _ = tx.send(JobResult::Breakdown(b));
+                        let _ = tx.send(JobResult::Breakdown(state_copy, b));
                     });
                     job_rx = Some(rx);
                     status = "Đang lập bảng công thức…".to_string();
@@ -883,6 +1118,8 @@ fn main() {
             }
             if request_scramble && !is_busy && !is_animating && queue.is_empty() {
                 push_undo!();
+                case_log.van_moi();
+                formula_table = None;
                 let mut rng = rand::thread_rng();
                 let mut tmp = state;
                 let mvs = cube::random_scramble_moves(&mut tmp, 25, &mut rng);
@@ -1059,7 +1296,11 @@ fn main() {
                             push_undo!();
                             queue.push_back(('x', modifiers.shift, false));
                         }
-                        Key::Y => {
+                        // Chốt chặn Ctrl giống hệt `Key::Z` ngay dưới: Ctrl+Y
+                        // đã nhường cho cửa sổ thống kê. Không mất gì, vì
+                        // nhánh này vốn BỎ QUA Ctrl -- Ctrl+Y trước đây chỉ là
+                        // bản trùng lặp của Y, xoay y y hệt.
+                        Key::Y if !(modifiers.ctrl || modifiers.command) => {
                             push_undo!();
                             queue.push_back(('y', modifiers.shift, false));
                         }
@@ -1129,7 +1370,11 @@ fn main() {
                             if formula_open {
                                 formula_open = false;
                             } else if job_rx.is_none() && queue.is_empty() && pending.is_none() {
-                                if formula_table.is_some() {
+                                let fresh = formula_table
+                                    .as_ref()
+                                    .map(|(s, _)| *s == state)
+                                    .unwrap_or(false);
+                                if fresh {
                                     formula_open = true;
                                 } else {
                                     rubik_core::cancel::clear();
@@ -1137,7 +1382,7 @@ fn main() {
                                     let (tx, rx) = std::sync::mpsc::channel();
                                     std::thread::spawn(move || {
                                         let b = rubik_core::breakdown::full_solve_breakdown(&state_copy);
-                                        let _ = tx.send(JobResult::Breakdown(b));
+                                        let _ = tx.send(JobResult::Breakdown(state_copy, b));
                                     });
                                     job_rx = Some(rx);
                                     status = "Đang lập bảng công thức…".to_string();
@@ -1148,6 +1393,25 @@ fn main() {
                         Key::J if modifiers.ctrl || modifiers.command => {
                             library_open = !library_open;
                         }
+                        // Ctrl+Y = mở/đóng thống kê OLL/PLL đã gặp.
+                        //
+                        // KHÔNG dùng Ctrl+L: nhánh 6 phím mặt ở trên nhận
+                        // Ctrl+L làm nước WIDE `l` (xoay 2 lớp), lấy đi thì
+                        // mất hẳn nước đó -- mà chỉ mất riêng mặt L, 5 mặt
+                        // kia vẫn có wide, thành ra chỏng chơ. Ctrl+Y thì
+                        // ngược lại: nhánh xoay khối bỏ qua Ctrl nên Ctrl+Y
+                        // vốn chỉ là bản trùng của Y, lấy đi không mất gì.
+                        //
+                        // Xử lý thẳng tại đây (không qua cờ như nút bấm) vì
+                        // khối bàn phím nằm ngoài lượt dựng giao diện.
+                        Key::Y if modifiers.ctrl || modifiers.command => {
+                            if stats_open {
+                                stats_open = false;
+                            } else {
+                                stats_counts = history::counts();
+                                stats_open = true;
+                            }
+                        }
                         // Ctrl+K = mở cửa sổ quét trạng thái từ camera (không
                         // có nút bấm riêng trong giao diện theo yêu cầu --
                         // chỉ vào được bằng phím tắt này).
@@ -1157,7 +1421,9 @@ fn main() {
                             }
                         }
                         Key::Escape => {
-                            if library_open {
+                            if stats_open {
+                                stats_open = false;
+                            } else if library_open {
                                 library_open = false;
                             } else if formula_open {
                                 formula_open = false;
@@ -1220,12 +1486,67 @@ fn main() {
                                 "Không tìm được lời giải — thử xáo lại".to_string()
                             };
                         }
-                        JobResult::Breakdown(b) => {
+                        JobResult::Breakdown(st, b) => {
                             status = format!("Bảng công thức: {} nước", b.total_moves());
-                            formula_table = Some(b);
+                            // Ghi nhật ký NGAY tại đây, chỗ duy nhất bảng
+                            // được tính xong. Vì `formula_table` chỉ tính lại
+                            // khi trạng thái đổi, mở đi mở lại cùng một ván
+                            // sẽ KHÔNG đếm trùng.
+                            use rubik_core::breakdown::StageStatus;
+                            let mut entries: Vec<(&str, String, usize)> = Vec::new();
+                            for (kind, stage) in [("OLL", &b.oll), ("PLL", &b.pll)] {
+                                if let StageStatus::Moves { moves, case_name } = stage {
+                                    if let Some(name) = case_name {
+                                        // Chỉ ghi nếu ván này chưa ghi ca đó.
+                                        if case_log.nen_ghi(kind, name) {
+                                            entries.push((kind, name.clone(), moves.len()));
+                                        }
+                                    }
+                                }
+                            }
+                            if let Err(e) = history::append(&entries) {
+                                // Không nuốt lỗi: nếu không ghi được (thư mục
+                                // chỉ đọc chẳng hạn) thì phải nói ra, chứ để
+                                // im lặng thì người dùng tưởng đã ghi.
+                                status = format!("Bảng công thức xong, nhưng KHÔNG ghi được nhật ký: {e}");
+                            }
+                            if stats_open {
+                                stats_counts = history::counts();
+                            }
+                            formula_table = Some((st, b));
                             formula_open = true;
                         }
                         JobResult::Hint(h) => {
+                            // Gợi ý nhận ra một ca OLL/PLL cụ thể thì cũng
+                            // tính vào nhật ký, y như bảng công thức. Chỉ
+                            // ghi lần ĐẦU gặp ca đó trong ván này, nên bấm
+                            // H bao nhiêu lần cũng không làm phồng số.
+                            //
+                            // Hai bước 2-look ("định hướng 4 cạnh/4 góc")
+                            // có `case_name` là None vì chúng là bước lẻ
+                            // chứ không phải một ca — không ghi gì cả.
+                            let mut log_err: Option<String> = None;
+                            if let Some(name) = &h.case_name {
+                                let kind = match h.stage {
+                                    "oll" => Some("OLL"),
+                                    "pll" => Some("PLL"),
+                                    _ => None,
+                                };
+                                if let Some(kind) = kind {
+                                    if case_log.nen_ghi(kind, name) {
+                                        let e = [(kind, name.clone(), h.moves.len())];
+                                        if let Err(err) = history::append(&e) {
+                                            // KHÔNG đặt `status` ở đây: đoạn
+                                            // ngay dưới gán đè `status` bằng
+                                            // nhãn gợi ý, nên lỗi sẽ bị nuốt
+                                            // mất. Giữ lại rồi nối vào sau.
+                                            log_err = Some(err);
+                                        } else if stats_open {
+                                            stats_counts = history::counts();
+                                        }
+                                    }
+                                }
+                            }
                             last_hint_stage = Some(h.stage);
                             last_hint_move_count = Some(move_count);
                             last_hint_failed = h.moves.is_empty() && h.stage != "done";
@@ -1240,6 +1561,9 @@ fn main() {
                             } else {
                                 format!("Gợi ý: {}", h.label)
                             };
+                            if let Some(err) = log_err {
+                                status = format!("{status} — KHÔNG ghi được nhật ký: {err}");
+                            }
                             hint_label = Some(h.label);
                             hint_moves = h.moves;
                             if auto_apply_hint {
