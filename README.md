@@ -8,11 +8,14 @@
 ```
 rubik/
 ├── rubik-core/       Thư viện: toàn bộ thuật toán giải (không phụ thuộc giao diện)
-│   ├── src/          18 module lõi
-│   └── tests/        21 test tích hợp (+15 test trong lib, +1 doctest)
-├── rubik-vision/     Đọc màu cube từ ảnh: dò vị trí, lấy mẫu, phân loại màu
+│   ├── src/          17 module lõi
+│   └── tests/        21 test tích hợp (+19 test trong lib, +1 doctest)
+├── rubik-vision/     Đọc màu cube từ ảnh: dò vị trí, lấy mẫu, phân loại màu (23 test)
 ├── rubik-vision-ml/  Bộ dò bằng mô hình ONNX (tuỳ chọn, sau cờ `ml_detect`)
-└── rubik-app/        Ứng dụng: cửa sổ 3D, GUI, quét camera, nhật ký OLL/PLL
+└── rubik-app/        Ứng dụng: cửa sổ 3D, GUI, quét camera, nhật ký OLL/PLL (29 test)
+    └── src/          main.rs (vòng lặp sự kiện) + mesh.rs (dựng hình
+                       học) + solve_flow.rs (điều phối job/kế hoạch giải
+                       tự động) + ui_widgets.rs (vẽ/soi UI) tách riêng
 ```
 
 Trước đây lõi bị **sao chép** giữa 2 project riêng, phải sửa lỗi 2 lần và
@@ -21,19 +24,25 @@ nguồn sự thật duy nhất.
 
 ## Chạy
 
-**Cách nhanh nhất:** bấm đúp vào **`CHAY.bat`** (Windows) hoặc chạy
-`./chay.sh` (Linux/macOS). File này tự kiểm tra Rust đã cài chưa và báo
-lỗi rõ ràng nếu thiếu.
+**Cách nhanh nhất (Windows):** bấm đúp vào **`CHAY.bat`**. File này tự
+kiểm tra Rust đã cài chưa và báo lỗi rõ ràng nếu thiếu, rồi build bản
+release và mở app — không mở cửa sổ dòng lệnh đứng lại phía sau.
 
-Hoặc chạy thủ công:
+Mặc định `CHAY.bat` build thẳng **bản có thêm chế độ ML thử nghiệm**
+(không hỏi gì, menu chọn hiện đang tắt — có ghi chú cách bật lại ngay
+trong file). Muốn vào **bản THƯỜNG** (không có ML, build nhanh hơn):
+bấm đúp **`CHAY_THUONG.bat`**, hoặc chạy `CHAY.bat --1` từ dòng lệnh.
+
+Trên Linux/macOS (chưa có script tương ứng CHAY.bat), chạy thủ công:
 
 ```bash
 cargo run --release -p rubik-app   # mở ứng dụng
-cargo test --release               # chạy 37 test (~7 phút)
+cargo test --release               # chạy toàn bộ test (~7 phút, xem số lượng ở mục Cấu trúc)
 ```
 
-Lần đầu build mất 1-3 phút. Khi cửa sổ mở có ~1 giây khựng nhẹ (đang
-dựng pattern database, chỉ 1 lần).
+Lần đầu build mất 1-3 phút. Pattern database được xây trên 1 thread nền
+ngay từ lúc mở app (không chặn cửa sổ hiện ra) nên không còn cảm giác
+khựng ở lần gợi ý/giải đầu tiên.
 
 **Yêu cầu**: Rust (https://rustup.rs). Trên Windows cần thêm Visual C++
 Build Tools (chọn workload "Desktop development with C++").
@@ -47,8 +56,10 @@ dấu mặt đang chọn), điều khiển, nhập công thức, kết quả g�
 trạng thái kèm tiến trình khi khối đang xoay.
 
 Giao diện **co giãn theo kích thước cửa sổ**: chữ, nút và ô sơ đồ tự
-phóng to/thu nhỏ (mốc chuẩn cửa sổ cao 800px), bề rộng panel bám theo tỉ
-lệ cửa sổ trong khoảng 300–430pt. Panel **cuộn được** khi cửa sổ thấp.
+phóng to/thu nhỏ (mốc chuẩn cửa sổ cao 800px). Panel bên trái **kéo giãn
+được bằng tay** (280–640pt, kéo mép phải panel) và **cuộn được** khi cửa
+sổ thấp. Các cửa sổ nổi (bảng công thức, thư viện, thống kê, phím tắt)
+đều resize được ở 4 cạnh/góc, nội dung tự xuống dòng theo bề rộng.
 
 ## Điều khiển
 
@@ -64,16 +75,18 @@ lệ cửa sổ trong khoảng 300–430pt. Panel **cuộn được** khi cửa 
 | `X` `Y` `Z` | Xoay cả khối |
 | Click sticker → phím mũi tên | Chọn mặt rồi xoay (↑→ thuận, ↓← nghịch) |
 | `Space` | Xáo ngẫu nhiên 25 nước |
-| `Enter` | AI tự giải từ trạng thái hiện tại |
+| `Enter` (hoặc nút "▶ Giải tự động") | Tính nguyên lời giải 1 lần rồi chạy liền mạch, panel gợi ý tự đổi công thức theo từng chặng (Cross → F2L × 4 cặp → OLL → PLL) đúng lúc cube chạy tới đó |
 | `H` | Gợi ý 1 bước tiếp theo (không giải hết) |
+| `Ctrl` (bấm rồi thả, không kèm phím khác) | Thực hiện gợi ý đang hiển thị (thay cho bấm chuột) |
+| `Alt` (bấm rồi thả, không kèm phím khác) | Chạy từng NƯỚC một của gợi ý; hết thì tự tính gợi ý tiếp theo |
 | `Ctrl+T` | Bảng công thức: lời giải ván hiện tại, tách theo từng chặng CFOP |
 | `Ctrl+J` | Tra công thức chuẩn: toàn bộ 57 OLL + 21 PLL, có tìm kiếm |
 | `Ctrl+Y` | Thống kê: số lần đã gặp từng thế OLL/PLL (đọc từ nhật ký) |
 | `Ctrl+K` | Quét trạng thái khối từ camera |
-| `Esc` | Hủy khi đang tính |
-| `Ctrl+Z` | Hoàn tác |
+| `Esc` | Huỷ khi đang tính; hoặc dừng "Giải tự động" giữa chừng |
+| `Ctrl+Z` | Hoàn tác (dừng luôn "Giải tự động" nếu đang chạy) |
 | `F11` | Toàn màn hình |
-| `[` `]` | Giảm/tăng tốc độ animation |
+| `[` `]` | Giảm/tăng tốc độ animation (chậm nhất ~2s/nước, nhanh nhất ~0.05s/nước) |
 | Thanh nhập | Công thức Singmaster, VD `R U R' U'`, hỗ trợ `(...)3` |
 
 ## Nhật ký OLL/PLL
@@ -85,8 +98,8 @@ thực thi**:
 ```
 target/release/lich_su_oll_pll.tsv
 epoch_giay  thoi_gian_utc        loai  ten_the  so_nuoc
-0000000000  yyyy-mm-dd hh:mm:ss  OLL   OLLxx    x
-0000000000  yyyy-mm-dd hh:mm:ss  PLL   x        x
+1789023176  2026-09-10 06:52:56  OLL   OLL27    7
+1789023176  2026-09-10 06:52:56  PLL   T        14
 ```
 
 Định dạng TSV thuần, mở được bằng Notepad lẫn Excel. Cột thời gian là
@@ -118,6 +131,14 @@ Kết quả cuối được rút gọn (`move_simplify`) để bỏ nước th�
 **Tỉ lệ giải trọn vẹn: 100%** (200/200 scramble ngẫu nhiên, đo bằng test
 `batch_200_success_rate`; lời giải trung bình 56 nước). Trước khi sửa hai
 bảng OLL/PLL thì tỉ lệ này là 99% (198/200).
+
+**Hiệu năng:** các "tầng" ngân sách tìm kiếm tăng dần (F2L: node theo độ
+sâu 8/10/12/14; OLL: 3 tầng mỗi pha) chạy **song song bằng rayon**
+(`find_map_first`) thay vì tuần tự — vẫn ra đúng kết quả của tầng nhỏ
+nhất thành công, chỉ nhanh hơn trên máy nhiều lõi. Ngân sách của tầng
+nặng nhất cũng đã được đo lại và giảm bớt phần dư thừa (F2L 400k→250k
+node, OLL 300k→150k node) — xem comment tại hằng số `F2L_NODE_BUDGET`
+(`hint.rs`) để biết cách đo lại nếu cần chỉnh tiếp.
 
 ## Độ tin cậy
 
@@ -167,7 +188,8 @@ một thư mục trống (không có mã nguồn, không có thư mục `assets`
 cần cargo) và nó chạy đầy đủ, kể cả font tiếng Việt (font được nhúng
 thẳng vào file thực thi qua `include_bytes!`).
 
-Pattern database cũng được dựng lúc chạy (~1 giây) chứ không tải về.
+Pattern database cũng được dựng lúc chạy (trên thread nền, không chặn
+cửa sổ) chứ không tải về.
 
 **Lúc biên dịch: cần mạng đúng một lần** để cargo tải các thư viện phụ
 thuộc (three-d, egui, winit…). Sau lần đó, cargo lưu vào bộ đệm máy và

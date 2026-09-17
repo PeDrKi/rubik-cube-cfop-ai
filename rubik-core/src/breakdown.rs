@@ -62,10 +62,6 @@ impl Breakdown {
     }
 }
 
-fn to_strings(v: &[&'static str]) -> Vec<String> {
-    v.iter().map(|s| s.to_string()).collect()
-}
-
 /// Tính lời giải đầy đủ, tách theo chặng. Không thay đổi `state`.
 pub fn full_solve_breakdown(state: &CubeState) -> Breakdown {
     let mut out = Breakdown::all_pending();

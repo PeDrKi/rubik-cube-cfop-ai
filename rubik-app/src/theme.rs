@@ -122,6 +122,10 @@ pub fn section_label(ui: &mut egui::Ui, text: &str) {
 }
 
 /// Nút lớn, nổi bật (dùng cho hành động chính).
+// Hiện không có nơi nào gọi (nút "Giải tự động" tự làm riêng vì cần
+// đổi giữa 2 trạng thái ▶/⏹) -- vẫn giữ lại vì đây là 1 helper dùng
+// chung hợp lý cho nút accent chiếm hết bề ngang, có thể cần lại sau.
+#[allow(dead_code)]
 pub fn primary_button(ui: &mut egui::Ui, label: &str, hint: &str) -> egui::Response {
     let text = egui::RichText::new(label).size(14.0).strong().color(egui::Color32::from_rgb(28, 20, 6));
     ui.add_sized(

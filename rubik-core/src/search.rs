@@ -116,6 +116,16 @@ where
 /// FxHashMap rẻ hơn dict Python nhiều nên A* với ngân sách lớn hơn đã đủ
 /// dùng trong thực tế; nếu 1 case nào đó vẫn miss cả 3 tier, ta trả None
 /// (đã đo: không xảy ra trên các batch test đã chạy).
+///
+/// TỐI ƯU: các tier vốn ĐỘC LẬP với nhau (tier sau không phụ thuộc kết
+/// quả tier trước, chỉ là "thử với ngân sách lớn hơn nếu tier trước
+/// trượt") nên chạy CÙNG LÚC trên nhiều luồng (rayon) thay vì tuần tự.
+/// `find_map_first` vẫn trả về đúng kết quả của tier NHỎ NHẤT thành
+/// công -- giống hệt bản tuần tự về mặt kết quả (tất định, không đổi
+/// chất lượng lời giải) -- chỉ khác là không phải trả giá "thử rồi thất
+/// bại" của các tier nhỏ trước khi được thử tier lớn hơn. Trên máy nhiều
+/// lõi, trường hợp tier đầu hay trượt (phải rơi xuống tier 2/3) sẽ nhanh
+/// hơn rõ rệt.
 pub fn a_star_ladder<G, H>(
     full_start: FullState,
     goal: G,
@@ -124,13 +134,11 @@ pub fn a_star_ladder<G, H>(
     moves: &[(usize, &'static str, char)],
 ) -> Option<Vec<&'static str>>
 where
-    G: Fn(&FullState) -> bool,
-    H: Fn(&FullState) -> u32,
+    G: Fn(&FullState) -> bool + Sync,
+    H: Fn(&FullState) -> u32 + Sync,
 {
-    for &(nodes, depth) in tiers {
-        if let Some(mvs) = a_star(full_start, &goal, &heuristic, nodes, depth, moves) {
-            return Some(mvs);
-        }
-    }
-    None
+    use rayon::prelude::*;
+    tiers
+        .par_iter()
+        .find_map_first(|&(nodes, depth)| a_star(full_start, &goal, &heuristic, nodes, depth, moves))
 }

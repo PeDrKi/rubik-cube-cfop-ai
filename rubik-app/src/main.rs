@@ -5,6 +5,11 @@
 //! lý phím/chuột. TOÀN BỘ thuật toán giải nằm trong crate `rubik-core`.
 //!
 //! Xem README.md ở thư mục gốc workspace để biết cách chạy.
+//!
+//! Bản RELEASE trên Windows không mở cửa sổ console (giống file .pyw) --
+//! chỉ khi build DEBUG (`cargo run` không kèm `--release`, dùng lúc phát
+//! triển) mới giữ console lại để còn thấy println!/panic! khi cần soi lỗi.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 
 mod theme;
@@ -12,192 +17,18 @@ mod camera_capture;
 mod scan_ui;
 mod paint_ui;
 mod history;
+mod mesh;
+mod solve_flow;
+mod ui_widgets;
 
+use mesh::build_cube_mesh;
 use rubik_core::cube::{self, CubeState};
+use solve_flow::{advance_auto_plan, build_auto_plan, build_boundaries, queue_move, JobResult, PendingMove};
 use std::collections::VecDeque;
 use three_d::*;
+use ui_widgets::{draw_six_face_net, pick_face, stage_row};
 
-const CUBIE_H: f32 = 0.96;
-const STICKER_H: f32 = 0.76;
-const PLASTIC: [u8; 3] = [20, 20, 20];
-const FACES: [char; 6] = ['U', 'D', 'F', 'B', 'L', 'R'];
 
-fn face_color(face: char) -> [u8; 3] {
-    match face {
-        'U' => [255, 210, 0],
-        'D' => [255, 255, 255],
-        'F' => [15, 160, 55],
-        'B' => [15, 75, 210],
-        'L' => [210, 30, 45],
-        'R' => [255, 100, 0],
-        _ => unreachable!(),
-    }
-}
-
-fn face_info(face: char) -> (Vec3, Vec3, Vec3) {
-    match face {
-        'U' => (vec3(0., 1., 0.), vec3(1., 0., 0.), vec3(0., 0., -1.)),
-        'D' => (vec3(0., -1., 0.), vec3(1., 0., 0.), vec3(0., 0., 1.)),
-        'F' => (vec3(0., 0., 1.), vec3(1., 0., 0.), vec3(0., 1., 0.)),
-        'B' => (vec3(0., 0., -1.), vec3(-1., 0., 0.), vec3(0., 1., 0.)),
-        'L' => (vec3(-1., 0., 0.), vec3(0., 0., 1.), vec3(0., 1., 0.)),
-        'R' => (vec3(1., 0., 0.), vec3(0., 0., -1.), vec3(0., 1., 0.)),
-        _ => unreachable!(),
-    }
-}
-
-fn move_spec(mv: char) -> Option<(Vec3, usize, Vec<i32>)> {
-    let (u, _, _) = face_info('U');
-    let (d, _, _) = face_info('D');
-    let (f, _, _) = face_info('F');
-    let (b, _, _) = face_info('B');
-    let (l, _, _) = face_info('L');
-    let (r, _, _) = face_info('R');
-    Some(match mv {
-        'U' => (u, 1, vec![1]),
-        'D' => (d, 1, vec![-1]),
-        'F' => (f, 2, vec![1]),
-        'B' => (b, 2, vec![-1]),
-        'L' => (l, 0, vec![-1]),
-        'R' => (r, 0, vec![1]),
-        'M' => (l, 0, vec![0]),
-        'E' => (d, 1, vec![0]),
-        'S' => (f, 2, vec![0]),
-        'u' => (u, 1, vec![0, 1]),
-        'd' => (d, 1, vec![-1, 0]),
-        'f' => (f, 2, vec![0, 1]),
-        'b' => (b, 2, vec![-1, 0]),
-        'l' => (l, 0, vec![-1, 0]),
-        'r' => (r, 0, vec![0, 1]),
-        'x' => (r, 0, vec![-1, 0, 1]),
-        'y' => (u, 1, vec![-1, 0, 1]),
-        'z' => (f, 2, vec![-1, 0, 1]),
-        _ => return None,
-    })
-}
-
-fn quad_corners(center: Vec3, right: Vec3, up: Vec3, half: f32) -> [Vec3; 4] {
-    [
-        center - right * half - up * half,
-        center + right * half - up * half,
-        center + right * half + up * half,
-        center - right * half + up * half,
-    ]
-}
-
-fn cubie_to_rc(ix: i32, iy: i32, iz: i32, rv: Vec3, uv: Vec3) -> (usize, usize) {
-    let pos = vec3(ix as f32, iy as f32, iz as f32);
-    let col = (pos.dot(rv)).round() as i32 + 1;
-    let row = 1 - (pos.dot(uv)).round() as i32;
-    (row.clamp(0, 2) as usize, col.clamp(0, 2) as usize)
-}
-
-fn build_cube_mesh(state: &CubeState, anim: Option<(char, f32)>) -> CpuMesh {
-    let mut positions: Vec<Vec3> = Vec::new();
-    let mut colors: Vec<Srgba> = Vec::new();
-    let mut normals: Vec<Vec3> = Vec::new();
-
-    let spec = anim.and_then(|(mv, ang)| move_spec(mv).map(|(axis, idx, allowed)| (axis, idx, allowed, ang)));
-
-    let mut push_quad = |corners: [Vec3; 4], normal: Vec3, color: [u8; 3], rot: Option<Mat3>| {
-        let c = Srgba::new(color[0], color[1], color[2], 255);
-        for &i in &[0usize, 1, 2, 0, 2, 3] {
-            let p = match rot { Some(m) => m * corners[i], None => corners[i] };
-            let n = match rot { Some(m) => m * normal, None => normal };
-            positions.push(p);
-            colors.push(c);
-            normals.push(n);
-        }
-    };
-
-    for ix in -1..=1i32 {
-        for iy in -1..=1i32 {
-            for iz in -1..=1i32 {
-                if ix == 0 && iy == 0 && iz == 0 {
-                    continue;
-                }
-                let center = vec3(ix as f32, iy as f32, iz as f32);
-                let rot: Option<Mat3> = spec.as_ref().and_then(|(axis, idx, allowed, ang)| {
-                    let v = [ix, iy, iz][*idx];
-                    if allowed.contains(&v) {
-                        Some(Mat3::from_axis_angle(axis.normalize(), Rad(*ang)))
-                    } else {
-                        None
-                    }
-                });
-
-                for &face in &FACES {
-                    let (n, rv, uv) = face_info(face);
-                    let (axis_val, layer_val): (i32, i32) = match face {
-                        'U' => (iy, 1), 'D' => (iy, -1),
-                        'F' => (iz, 1), 'B' => (iz, -1),
-                        'L' => (ix, -1), 'R' => (ix, 1),
-                        _ => unreachable!(),
-                    };
-                    let is_sticker = axis_val == layer_val;
-                    if !is_sticker && rot.is_none() {
-                        continue;
-                    }
-                    let panel_center = center + n * (CUBIE_H / 2. + 0.001);
-                    let panel = quad_corners(panel_center, rv, uv, CUBIE_H / 2.);
-                    push_quad(panel, n, PLASTIC, rot);
-                    if is_sticker {
-                        let (row, col) = cubie_to_rc(ix, iy, iz, rv, uv);
-                        let ck = cube::face_char(state.facelet_at(cube::idx_of(face), row, col) as usize);
-                        let sticker_center = center + n * (CUBIE_H / 2. + 0.015);
-                        let sticker = quad_corners(sticker_center, rv, uv, STICKER_H / 2.);
-                        push_quad(sticker, n, face_color(ck), rot);
-                    }
-                }
-            }
-        }
-    }
-
-    CpuMesh {
-        positions: Positions::F32(positions),
-        colors: Some(colors),
-        normals: Some(normals),
-        ..Default::default()
-    }
-}
-
-/// 1 nước đang animate.
-struct PendingMove {
-    mv: char,
-    prime: bool,
-    /// Nước đúp: xoay liền 180° trong 1 lần, áp 2 lần khi xong.
-    double: bool,
-    target: f32,
-    current: f32,
-    speed: f32,
-}
-
-/// Parse "R", "R'", "R2" thanh 1-2 muc hang doi (mv, prime). R2 tach thanh
-/// 2 vong quay 90 do cung chieu (dung vi R2 = R,R = R',R' ve mat trang thai).
-fn queue_move(queue: &mut VecDeque<(char, bool, bool)>, mv_str: &str) {
-    let base = mv_str.chars().next().unwrap();
-    // Nước đúp (R2) đưa vào hàng đợi thành MỘT mục xoay 180°, không tách
-    // thành 2 lần 90° -- nếu tách, số mục trong hàng đợi sẽ nhiều hơn số
-    // nước của lời giải, khiến thanh tiến trình đếm lệch (VD lời giải 67
-    // nước nhưng hiện "31/78"). Xoay liền 180° cũng đúng cách người chơi
-    // thật thực hiện.
-    if mv_str.ends_with('2') {
-        queue.push_back((base, false, true));
-    } else if mv_str.ends_with('\'') {
-        queue.push_back((base, true, false));
-    } else {
-        queue.push_back((base, false, false));
-    }
-}
-
-/// Kết quả 1 job nền (chạy trên thread riêng, gửi về qua channel).
-enum JobResult {
-    Solve(Option<Vec<String>>),
-    Hint(rubik_core::hint::Hint),
-    /// Kèm theo CHÍNH trạng thái đã dùng để tính, để biết bảng còn khớp
-    /// với khối hiện tại hay không (xem `formula_table`).
-    Breakdown(CubeState, rubik_core::breakdown::Breakdown),
-}
 
 fn main() {
     use winit::event::{Event as WinitEvent, WindowEvent as WinitWindowEvent};
@@ -220,7 +51,16 @@ fn main() {
     // tu giu winit_window de co toan quyen (F11, resize deu tu tay xu ly,
     // giong dung logic ben trong render_loop() cua three-d -- xem
     // winit_window.rs ham render_loop() ma toi doi chieu khi viet lai).
-    let surface_settings = SurfaceSettings::default();
+    let surface_settings = SurfaceSettings {
+        // Mặc định của three-d là 4x MSAA (khử răng cưa cạnh khối) --
+        // giảm xuống 2x: cube toàn mặt phẳng màu đặc, cạnh khối vẫn khá
+        // mượt ở 2x, nhưng chi phí GPU cho mỗi lần vẽ giảm đáng kể so
+        // với 4x -- rõ nhất trên GPU tích hợp/máy cấu hình thấp. vsync
+        // giữ mặc định (true) -- đã tự giới hạn khung hình theo tần số
+        // quét màn hình, không cần Poll liên tục.
+        multisamples: 2,
+        ..SurfaceSettings::default()
+    };
     let gl = WindowedContext::from_winit_window(&winit_window, surface_settings)
         .expect("Khong tao duoc GL context");
     let context: Context = (*gl).clone();
@@ -303,6 +143,53 @@ fn main() {
     let mut library_query = String::new();
     let mut library_tab_pll = false;
     let mut auto_apply_hint = false;
+    // Theo dõi phím Ctrl để dùng làm phím tắt "thực hiện gợi ý" (thay cho
+    // phải bấm chuột vào nút "Thực hiện gợi ý này" sau khi đã bấm H).
+    // Ctrl không phải là một `Key` riêng trong three-d — nó chỉ đổi
+    // Modifiers, báo qua Event::ModifiersChange — nên phải tự bắt biến cố
+    // nhấn/thả và tự loại trừ trường hợp Ctrl đang được giữ để bấm một tổ
+    // hợp KHÁC (Ctrl+T/J/K/Y/Z...). Chỉ tính là "bấm Ctrl để thực hiện gợi
+    // ý" khi THẢ Ctrl ra mà không có phím nào khác đi kèm lúc đang giữ.
+    let mut ctrl_held = false;
+    let mut ctrl_combo_used = false;
+    // Alt: y het co che cua Ctrl o tren, nhung thay vi THUC HIEN CA gop
+    // y dang hien, moi lan bam-tha Alt sach chi THUC HIEN 1 nuoc DAU
+    // TIEN trong danh sach nuoc cua goi y do (VD goi y la "U U' R R2" thi
+    // bam Alt lan 1 -> chay U, lan 2 -> chay U', lan 3 -> chay R,...).
+    // Khi danh sach nuoc cua goi y hien tai da het, lan bam Alt tiep theo
+    // moi tinh mot goi y MOI (giong H) roi tu dong chay nuoc dau cua goi
+    // y moi do. Panel goi y (hint_label/hint_moves) van hien thi binh
+    // thuong nen luon thay duoc phan con lai cua cong thuc sau moi lan
+    // bam.
+    let mut alt_held = false;
+    let mut alt_combo_used = false;
+    let mut alt_step_pending = false;
+    // Enter / nut "Giai tu dong": thay vi tinh nguyen loi giai roi chay 1
+    // lan (khong thay duoc dang giai buoc nao), gio DUA VAO CHINH co che
+    // hint (H): moi lan tinh xong 1 buoc (Cross / 1 cap F2L / OLL / PLL)
+    // thi HIEN THI cong thuc do (giong H) VA chay het buoc do, xong roi
+    // tu dong tinh tiep buoc ke tiep -- lap lai cho toi khi giai xong.
+    // Co flag nay bat = dang trong vong lap do; tat khi giai xong hoac
+    // khi nguoi dung huy (Esc) / hoan tac (Ctrl+Z).
+    let mut auto_solve = false;
+    // "Giải tự động" (Enter) giờ tính NGUYÊN lời giải 1 LẦN DUY NHẤT
+    // trước khi chạy nước nào (dùng lại `breakdown::full_solve_breakdown`
+    // -- đúng hàm build "Bảng công thức"), rồi xếp HẾT các nước vào
+    // `queue` luôn một thể -- thay vì tính từng chặng một xen kẽ lúc
+    // animate như bản trước (dù đã có "tính trước" ở giữa các chặng,
+    // chặng nào tính lâu hơn animate chặng trước vẫn lộ ra khoảng dừng).
+    // Cách này chạy liền mạch tuyệt đối một khi đã bắt đầu di chuyển --
+    // đánh đổi bằng 1 khoảng chờ (có spinner) DUY NHẤT lúc đầu thay vì
+    // nhiều khoảng chờ nhỏ rải rác giữa chừng.
+    //
+    // `auto_plan_boundaries`: các chặng CÒN LẠI (sau chặng đầu, đã hiện
+    // ngay khi vừa xếp xong) kèm mốc "đã chạy xong bao nhiêu nước kể từ
+    // lúc bắt đầu thì tới lượt hiện nhãn chặng này" -- chỉ để ĐỔI NHÃN
+    // hiển thị (hint_label/hint_moves) đúng lúc cube thực sự bắt đầu
+    // chặng đó, không cần tính toán gì thêm.
+    let mut auto_plan_boundaries: std::collections::VecDeque<(usize, String, Vec<String>)> =
+        std::collections::VecDeque::new();
+    let mut auto_plan_start_count: u32 = 0;
 
     // Luu 1 snapshot state HIEN TAI (truoc khi thay doi) vao undo_stack,
     // kem gioi han do sau -- dung dung 1 lan cho MOI "hanh dong" (giong
@@ -317,10 +204,16 @@ fn main() {
         };
     }
 
-    rubik_core::cross_solver::get_pdb();
-    rubik_core::f2l_solver::warm_pair_pdbs();
-    rubik_core::oll_algorithms::table();
-    rubik_core::pll_algorithms::table();
+    // Xây trước (warmup) mọi bảng tra/PDB mà các bước gợi ý cần -- xem
+    // giải thích đầy đủ ở rubik_core::hint::warmup(). QUAN TRỌNG: chạy
+    // trên 1 THREAD NỀN thay vì ngay trên thread chính như trước đây --
+    // gọi trực tiếp ở đây từng làm cửa sổ app đứng im vài giây trước khi
+    // kịp hiện ra (đặc biệt rõ trên máy cấu hình thấp), vì phải xây xong
+    // hết PDB rồi mới tới dòng tạo cửa sổ/vòng lặp vẽ. Giờ cửa sổ hiện ra
+    // ngay lập tức, còn PDB âm thầm xây xong trong lúc người dùng nhìn
+    // khối lập phương ban đầu / thao tác đầu tiên -- không còn thấy "khựng"
+    // ở lần gợi ý/giải đầu tiên nữa.
+    std::thread::spawn(rubik_core::hint::warmup);
 
     let ambient = AmbientLight::new(&context, 0.5, Srgba::WHITE);
     let sun = DirectionalLight::new(&context, 1.2, Srgba::WHITE, &vec3(-0.45, -0.85, -0.65));
@@ -370,15 +263,22 @@ fn main() {
             let is_busy = job_rx.is_some();
             let is_animating = pending.is_some();
             let is_solved_now = state.is_solved();
+            // Bề rộng THỰC TẾ của panel trái sau khi vẽ (có thể khác
+            // `left_w` vì giờ panel kéo giãn được bằng tay) -- dùng lại
+            // bên dưới để: (1) đặt viewport khối 3D đúng mép panel,
+            // (2) định vị mặc định cho các cửa sổ nổi (bảng công thức,
+            // thống kê, thư viện, phím tắt) ngay sát panel hiện tại.
+            let mut actual_left_w = left_w;
             gui.update(
                 &mut frame_input.events,
                 frame_input.accumulated_time,
                 frame_input.viewport,
                 gui_ppp,
                 |gui_context| {
-                    egui::SidePanel::left("faces_panel")
-                        .exact_width(left_w)
-                        .resizable(false)
+                    let panel_resp = egui::SidePanel::left("faces_panel")
+                        .default_width(left_w)
+                        .width_range(280.0..=640.0)
+                        .resizable(true)
                         .frame(
                             egui::Frame::none()
                                 .fill(theme::BG_PANEL)
@@ -459,23 +359,51 @@ fn main() {
                                             request_scramble = true;
                                         }
                                     });
-                                    ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
-                                        let text = egui::RichText::new("▶  Giải tự động")
+                                    if auto_solve {
+                                        // Nút này LUÔN bấm được (không bị
+                                        // is_busy/is_animating khoá) để dừng
+                                        // được auto-solve bất kỳ lúc nào --
+                                        // kể cả đang tính hay đang xoay dở.
+                                        let text = egui::RichText::new("⏹  Dừng giải tự động")
                                             .strong()
-                                            .color(egui::Color32::from_rgb(28, 20, 6));
+                                            .color(theme::TEXT);
                                         if ui
                                             .add_sized(
                                                 [w, 32.0],
                                                 egui::Button::new(text)
-                                                    .fill(theme::ACCENT)
+                                                    .fill(theme::DANGER)
                                                     .rounding(egui::Rounding::same(8.0)),
                                             )
-                                            .on_hover_text("Phím tắt: Enter")
+                                            .on_hover_text("Phím tắt: Esc")
                                             .clicked()
                                         {
-                                            request_solve = true;
+                                            auto_solve = false;
+                                            auto_plan_boundaries.clear();
+                                            queue.clear();
+                                            if job_rx.is_some() {
+                                                rubik_core::cancel::request();
+                                            }
+                                            status = "Đã dừng giải tự động".to_string();
                                         }
-                                    });
+                                    } else {
+                                        ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
+                                            let text = egui::RichText::new("▶  Giải tự động")
+                                                .strong()
+                                                .color(egui::Color32::from_rgb(28, 20, 6));
+                                            if ui
+                                                .add_sized(
+                                                    [w, 32.0],
+                                                    egui::Button::new(text)
+                                                        .fill(theme::ACCENT)
+                                                        .rounding(egui::Rounding::same(8.0)),
+                                                )
+                                                .on_hover_text("Phím tắt: Enter")
+                                                .clicked()
+                                            {
+                                                request_solve = true;
+                                            }
+                                        });
+                                    }
                                 });
                                 ui.add_space(6.0);
                                 ui.horizontal(|ui| {
@@ -544,7 +472,13 @@ fn main() {
                                         );
                                         ui.add_space(6.0);
                                         ui.add_enabled_ui(!is_busy && !is_animating, |ui| {
-                                            if theme::wide_button(ui, "Thực hiện gợi ý này", "").clicked() {
+                                            if theme::wide_button(
+                                                ui,
+                                                "Thực hiện gợi ý này",
+                                                "Phím tắt: bấm rồi thả Ctrl",
+                                            )
+                                            .clicked()
+                                            {
                                                 apply_hint = true;
                                             }
                                         });
@@ -631,6 +565,7 @@ fn main() {
                             // dưới, gần "Bảng công thức").
                             }); // het ScrollArea
                         });
+                    actual_left_w = panel_resp.response.rect.width();
 
                     // ── Bảng công thức (phím T) ─────────────────────────
                     // Cửa sổ nổi, KHÔNG chặn thao tác khác (giống bản Python:
@@ -641,7 +576,7 @@ fn main() {
                             egui::Window::new("Bảng công thức CFOP")
                                 .open(&mut open)
                                 .default_width(390.0)
-                                .default_pos(egui::pos2(left_w + 24.0, 24.0))
+                                .default_pos(egui::pos2(actual_left_w + 24.0, 24.0))
                                 .collapsible(false)
                                 .frame(
                                     egui::Frame::none()
@@ -696,7 +631,7 @@ fn main() {
                         egui::Window::new("📊 Thống kê OLL / PLL")
                             .open(&mut open)
                             .default_width(330.0)
-                            .default_pos(egui::pos2(left_w + 24.0, 24.0))
+                            .default_pos(egui::pos2(actual_left_w + 24.0, 24.0))
                             .collapsible(false)
                             .frame(
                                 egui::Frame::none()
@@ -795,14 +730,22 @@ fn main() {
                                                 } else {
                                                     theme::TEXT_DIM
                                                 };
+                                                // Cột tên co giãn theo bề rộng
+                                                // cửa sổ (thay vì cắt cứng ở
+                                                // 124px) và cho phép xuống
+                                                // dòng khi tên dài + cửa sổ
+                                                // hẹp -- chừa sẵn chiều cao
+                                                // đủ cho 2 dòng để không đè
+                                                // lên hàng dưới.
+                                                let name_col_w =
+                                                    (ui.available_width() * 0.42).clamp(90.0, 260.0);
                                                 ui.add_sized(
-                                                    [124.0, 16.0],
+                                                    [name_col_w, 28.0],
                                                     egui::Label::new(
                                                         egui::RichText::new(*name)
                                                             .size(11.5)
                                                             .color(col),
-                                                    )
-                                                    .wrap(false),
+                                                    ),
                                                 );
                                                 ui.add_sized(
                                                     [30.0, 16.0],
@@ -866,7 +809,7 @@ fn main() {
                         egui::Window::new("Tra công thức chuẩn")
                             .open(&mut open)
                             .default_width(420.0)
-                            .default_pos(egui::pos2(left_w + 40.0, 60.0))
+                            .default_pos(egui::pos2(actual_left_w + 40.0, 60.0))
                             .collapsible(false)
                             .frame(
                                 egui::Frame::none()
@@ -991,7 +934,7 @@ fn main() {
                         egui::Window::new("⚙ Phím tắt & hướng dẫn")
                             .open(&mut open)
                             .default_width(340.0)
-                            .default_pos(egui::pos2(left_w + 40.0, 60.0))
+                            .default_pos(egui::pos2(actual_left_w + 40.0, 60.0))
                             .collapsible(false)
                             .frame(
                                 egui::Frame::none()
@@ -1002,7 +945,7 @@ fn main() {
                             )
                             .show(gui_context, |ui| {
                                 let row = |ui: &mut egui::Ui, k: &str, d: &str| {
-                                    ui.horizontal(|ui| {
+                                    ui.horizontal_wrapped(|ui| {
                                         ui.label(
                                             egui::RichText::new(k)
                                                 .monospace()
@@ -1017,16 +960,29 @@ fn main() {
                                 row(ui, "U D F B L R", "xoay lớp tương ứng");
                                 row(ui, "Shift + phím", "xoay ngược lại (U', R'…)");
                                 row(ui, "Space", "xáo ngẫu nhiên 25 nước");
-                                row(ui, "Enter", "AI tự giải");
+                                row(ui, "Enter", "AI tự giải, hiện công thức từng bước (Cross → F2L → OLL → PLL)");
                                 row(ui, "H", "gợi ý 1 bước");
+                                row(ui, "Ctrl (bấm rồi thả)", "thực hiện gợi ý đang hiển thị");
+                                row(
+                                    ui,
+                                    "Alt (bấm rồi thả)",
+                                    "chạy từng NƯỚC một của gợi ý (H); hết thì tự tính gợi ý tiếp theo",
+                                );
                                 row(ui, "Ctrl+T", "bảng công thức cho ván này");
                                 row(ui, "Ctrl+J", "tra toàn bộ công thức chuẩn");
                                 row(ui, "Ctrl+Y", "thống kê OLL/PLL đã gặp");
                                 row(ui, "Ctrl+K", "quét trạng thái từ camera");
-                                row(ui, "Esc", "huỷ khi đang tính");
+                                row(ui, "Esc", "huỷ khi đang tính · dừng giải tự động giữa chừng");
                                 row(ui, "Ctrl+Z", "hoàn tác");
                                 row(ui, "F11", "toàn màn hình");
-                                row(ui, "[  ]", &format!("tốc độ quay (hiện tại {:.0})", anim_speed));
+                                row(
+                                    ui,
+                                    "[  ]",
+                                    &format!(
+                                        "tốc độ quay (hiện tại {:.2}s / bước 90°)",
+                                        std::f32::consts::FRAC_PI_2 / anim_speed
+                                    ),
+                                );
                                 ui.add_space(4.0);
                                 ui.label(
                                     egui::RichText::new(
@@ -1131,15 +1087,34 @@ fn main() {
                 status = "Đang xáo…".to_string();
             }
             if request_solve && !is_busy && !is_animating && queue.is_empty() {
-                rubik_core::cancel::clear();
-                let state_copy = state;
-                let (tx, rx) = std::sync::mpsc::channel();
-                std::thread::spawn(move || {
-                    let res = rubik_core::solve::solve_full_cube(&state_copy, 2);
-                    let _ = tx.send(JobResult::Solve(res));
-                });
-                job_rx = Some(rx);
-                status = "Đang tính lời giải…".to_string();
+                if state.is_solved() {
+                    status = "Khối đã ở trạng thái hoàn thành".to_string();
+                } else {
+                    rubik_core::cancel::clear();
+                    let state_copy = state;
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    std::thread::spawn(move || {
+                        let b = rubik_core::breakdown::full_solve_breakdown(&state_copy);
+                        let _ = tx.send(JobResult::AutoPlan(state_copy, b));
+                    });
+                    job_rx = Some(rx);
+                    auto_solve = true;
+                    status = "Đang tính lời giải…".to_string();
+                }
+            }
+            // Toàn bộ nước của "Giải tự động" đã được xếp hết vào `queue`
+            // ngay từ lúc nhận JobResult::AutoPlan (xem bên dưới) -- nên
+            // phát hiện XONG chỉ đơn giản là: đang ở chế độ auto_solve,
+            // không còn job nào chạy, hàng đợi rỗng, không còn mốc chặng
+            // nào chờ đổi nhãn nữa.
+            if auto_solve
+                && job_rx.is_none()
+                && queue.is_empty()
+                && pending.is_none()
+                && auto_plan_boundaries.is_empty()
+            {
+                auto_solve = false;
+                status = "Đã giải xong!".to_string();
             }
 
             if request_hint && job_rx.is_none() && queue.is_empty() && pending.is_none() {
@@ -1201,7 +1176,7 @@ fn main() {
             // Panel được vẽ ở tỉ lệ gui_ppp, nên quy đổi bề rộng của nó
             // sang pixel vật lý PHẢI dùng cùng tỉ lệ đó -- nếu dùng dpr
             // thô, vùng 3D sẽ lệch khỏi mép panel.
-            let left_px = (left_w * gui_ppp) as i32;
+            let left_px = (actual_left_w * gui_ppp) as i32;
             let cam_viewport = Viewport {
                 x: full.x + left_px,
                 y: full.y,
@@ -1256,6 +1231,17 @@ fn main() {
                 if let Event::KeyPress { kind, modifiers, handled, .. } = event {
                     if *handled {
                         continue;
+                    }
+                    if modifiers.ctrl || modifiers.command {
+                        // Đang giữ Ctrl mà có phím khác đi kèm => đây là một
+                        // tổ hợp phím (Ctrl+T/J/K/Y/Z...), KHÔNG phải cú bấm
+                        // Ctrl đơn để thực hiện gợi ý.
+                        ctrl_combo_used = true;
+                    }
+                    if modifiers.alt {
+                        // Tương tự: Alt đang giữ mà có phím khác đi kèm =>
+                        // không tính là cú bấm Alt đơn để chạy 1 nước gợi ý.
+                        alt_combo_used = true;
                     }
                     match kind {
                         // 6 mặt cơ bản. Kèm phím bổ trợ:
@@ -1321,15 +1307,26 @@ fn main() {
                         }
                         Key::Enter => {
                             if job_rx.is_none() && queue.is_empty() && pending.is_none() {
-                                rubik_core::cancel::clear();
-                                let state_copy = state;
-                                let (tx, rx) = std::sync::mpsc::channel();
-                                std::thread::spawn(move || {
-                                    let res = rubik_core::solve::solve_full_cube(&state_copy, 2);
-                                    let _ = tx.send(JobResult::Solve(res));
-                                });
-                                job_rx = Some(rx);
-                                status = "Đang tính lời giải…".to_string();
+                                if state.is_solved() {
+                                    status = "Khối đã ở trạng thái hoàn thành".to_string();
+                                } else {
+                                    // Y hệt khối request_solve bên trên,
+                                    // nhưng phải làm TRỰC TIẾP ở đây (không
+                                    // chỉ đặt cờ request_solve) vì vòng lặp
+                                    // phím này chạy SAU khối đó trong cùng
+                                    // 1 khung hình -- đặt cờ rồi sẽ không
+                                    // còn ai đọc lại ở khung này.
+                                    rubik_core::cancel::clear();
+                                    let state_copy = state;
+                                    let (tx, rx) = std::sync::mpsc::channel();
+                                    std::thread::spawn(move || {
+                                        let b = rubik_core::breakdown::full_solve_breakdown(&state_copy);
+                                        let _ = tx.send(JobResult::AutoPlan(state_copy, b));
+                                    });
+                                    job_rx = Some(rx);
+                                    auto_solve = true;
+                                    status = "Đang tính lời giải…".to_string();
+                                }
                             } else if job_rx.is_none() {
                                 status = "Đợi khối xoay xong đã".to_string();
                             }
@@ -1429,13 +1426,29 @@ fn main() {
                                 formula_open = false;
                             } else if job_rx.is_some() {
                                 rubik_core::cancel::request();
+                                auto_solve = false;
+                                auto_plan_boundaries.clear();
                                 status = "Đang huỷ…".to_string();
+                            } else if auto_solve {
+                                // Đang giải tự động nhưng KHÔNG phải lúc
+                                // đang tính (job_rx rỗng) -- tức là đang ở
+                                // giữa lúc chạy nước (queue/pending). Dừng
+                                // ngay tại đây: nước đang xoay dở vẫn xoay
+                                // nốt cho mượt, nhưng các nước còn lại
+                                // trong hàng đợi bị huỷ và không tính tiếp
+                                // bước kế.
+                                auto_solve = false;
+                                auto_plan_boundaries.clear();
+                                queue.clear();
+                                status = "Đã dừng giải tự động".to_string();
                             }
                         }
                         Key::Z if modifiers.command || modifiers.ctrl => {
                             if let Some(prev) = undo_stack.pop() {
                                 pending = None;
                                 queue.clear();
+                                auto_solve = false;
+                                auto_plan_boundaries.clear();
                                 state = prev;
                                 move_count = move_count.saturating_sub(1);
                                 status = "Đã hoàn tác".to_string();
@@ -1461,6 +1474,90 @@ fn main() {
                         }
                         _ => {}
                     }
+                } else if let Event::ModifiersChange { modifiers } = event {
+                    let ctrl_now = modifiers.ctrl || modifiers.command;
+                    if ctrl_now && !ctrl_held {
+                        // Ctrl vừa được nhấn xuống -- bắt đầu theo dõi xem
+                        // có phím nào khác đi kèm trong lúc giữ hay không.
+                        ctrl_held = true;
+                        ctrl_combo_used = false;
+                    } else if !ctrl_now && ctrl_held {
+                        // Ctrl vừa được thả ra.
+                        ctrl_held = false;
+                        if !ctrl_combo_used
+                            && !hint_moves.is_empty()
+                            && !is_busy
+                            && !is_animating
+                        {
+                            // Bấm Ctrl đơn (không kèm phím khác) trong khi
+                            // đang có gợi ý hiển thị => THỰC HIỆN gợi ý đó,
+                            // giống hệt hành vi của nút "Thực hiện gợi ý
+                            // này" (mục đích: đỡ phải với chuột sau khi vừa
+                            // bấm H bằng bàn phím).
+                            push_undo!();
+                            queue.clear();
+                            for m in &hint_moves {
+                                queue_move(&mut queue, m);
+                            }
+                            status = "Đang thực hiện gợi ý…".to_string();
+                        }
+                    }
+
+                    let alt_now = modifiers.alt;
+                    if alt_now && !alt_held {
+                        // Alt vừa được nhấn xuống -- bắt đầu theo dõi.
+                        alt_held = true;
+                        alt_combo_used = false;
+                    } else if !alt_now && alt_held {
+                        // Alt vừa được thả ra.
+                        alt_held = false;
+                        if !alt_combo_used
+                            && !is_busy
+                            && !is_animating
+                            && queue.is_empty()
+                            && !state.is_solved()
+                        {
+                            if !hint_moves.is_empty() {
+                                // Đang có sẵn gợi ý (còn nước chưa chạy) =>
+                                // chạy đúng 1 nước ĐẦU TIÊN của nó, để dành
+                                // phần còn lại cho lần bấm Alt kế tiếp.
+                                push_undo!();
+                                let first = hint_moves.remove(0);
+                                queue_move(&mut queue, &first);
+                                status = format!("Gợi ý (từng bước): {first}");
+                            } else if job_rx.is_none() && pending.is_none() {
+                                // Hết nước của gợi ý cũ (hoặc chưa bấm gợi ý
+                                // lần nào) => tính một gợi ý MỚI y hệt phím
+                                // H, chỉ khác là khi có kết quả sẽ tự chạy
+                                // luôn nước đầu tiên của nó (xem
+                                // `alt_step_pending` ở chỗ nhận JobResult::Hint).
+                                rubik_core::cancel::clear();
+                                let cur_stage = rubik_core::hint::stage_of(&state);
+                                let retry = last_hint_failed
+                                    && last_hint_stage == Some(cur_stage)
+                                    && last_hint_move_count == Some(move_count);
+                                let retry_seed = if retry {
+                                    retry_counter += 1;
+                                    Some(retry_counter)
+                                } else {
+                                    None
+                                };
+                                let state_copy = state;
+                                let (tx, rx) = std::sync::mpsc::channel();
+                                std::thread::spawn(move || {
+                                    let h = rubik_core::hint::compute_hint(&state_copy, retry_seed);
+                                    let _ = tx.send(JobResult::Hint(h));
+                                });
+                                job_rx = Some(rx);
+                                alt_step_pending = true;
+                                status = if retry {
+                                    "Đang tính gợi ý (thử hướng khác)…".to_string()
+                                } else {
+                                    "Đang tính gợi ý…".to_string()
+                                };
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1468,24 +1565,6 @@ fn main() {
             if let Some(rx) = &job_rx {
                 if let Ok(result) = rx.try_recv() {
                     match result {
-                        JobResult::Solve(Some(mvs)) if !mvs.is_empty() => {
-                            push_undo!();
-                            queue.clear();
-                            for m in &mvs {
-                                queue_move(&mut queue, m);
-                            }
-                            status = format!("Lời giải: {} nước", mvs.len());
-                        }
-                        JobResult::Solve(Some(_)) => {
-                            status = "Khối đã ở trạng thái hoàn thành".to_string();
-                        }
-                        JobResult::Solve(None) => {
-                            status = if rubik_core::cancel::is_cancelled() {
-                                "Đã huỷ".to_string()
-                            } else {
-                                "Không tìm được lời giải — thử xáo lại".to_string()
-                            };
-                        }
                         JobResult::Breakdown(st, b) => {
                             status = format!("Bảng công thức: {} nước", b.total_moves());
                             // Ghi nhật ký NGAY tại đây, chỗ duy nhất bảng
@@ -1515,6 +1594,75 @@ fn main() {
                             }
                             formula_table = Some((st, b));
                             formula_open = true;
+                        }
+                        JobResult::AutoPlan(_st, b) => {
+                            use rubik_core::breakdown::StageStatus;
+                            // Ghi nhật ký case OLL/PLL y hệt Breakdown ở
+                            // trên (dùng chung `full_solve_breakdown` nên
+                            // dữ liệu cùng dạng) -- không đụng tới
+                            // formula_table/formula_open, bảng công thức
+                            // (Ctrl+T) là tính năng riêng.
+                            let mut entries: Vec<(&str, String, usize)> = Vec::new();
+                            for (kind, stage) in [("OLL", &b.oll), ("PLL", &b.pll)] {
+                                if let StageStatus::Moves { moves, case_name } = stage {
+                                    if let Some(name) = case_name {
+                                        if case_log.nen_ghi(kind, name) {
+                                            entries.push((kind, name.clone(), moves.len()));
+                                        }
+                                    }
+                                }
+                            }
+                            let mut log_err: Option<String> = None;
+                            if !entries.is_empty() {
+                                if let Err(e) = history::append(&entries) {
+                                    log_err = Some(e.to_string());
+                                }
+                                if stats_open {
+                                    stats_counts = history::counts();
+                                }
+                            }
+
+                            // Gom các chặng thành 1 kế hoạch phẳng theo
+                            // đúng thứ tự CFOP (hàm thuần, có test riêng --
+                            // xem build_auto_plan ở đầu file).
+                            let (plan, failed_at) = build_auto_plan(&b);
+
+                            if plan.is_empty() {
+                                auto_solve = false;
+                                status = match failed_at {
+                                    Some(name) => format!("Không tìm được lời giải ở bước {name} — thử bấm lại"),
+                                    None => "Khối đã ở trạng thái hoàn thành".to_string(),
+                                };
+                            } else {
+                                push_undo!();
+                                queue.clear();
+                                for (_, moves) in &plan {
+                                    for m in moves {
+                                        queue_move(&mut queue, m);
+                                    }
+                                }
+                                total_queued = queue.len();
+                                // Hiện nhãn của chặng ĐẦU TIÊN ngay bây giờ
+                                // (không đợi nước nào chạy xong) -- phần còn
+                                // lại nằm trong `auto_plan_boundaries`, tự
+                                // đổi nhãn đúng lúc (xem chỗ `move_count += 1`).
+                                let mut boundaries = build_boundaries(&plan);
+                                let (_, first_label, first_moves) = boundaries.pop_front().unwrap();
+                                hint_label = Some(first_label);
+                                hint_moves = first_moves;
+                                auto_plan_boundaries = boundaries;
+                                auto_plan_start_count = move_count;
+                                auto_solve = true;
+                                status = match failed_at {
+                                    Some(name) => {
+                                        format!("Đang giải tự động ({} bước — riêng {name} chưa tìm được)…", plan.len())
+                                    }
+                                    None => "Đang giải tự động…".to_string(),
+                                };
+                            }
+                            if let Some(e) = log_err {
+                                status = format!("{status} (KHÔNG ghi được nhật ký: {e})");
+                            }
                         }
                         JobResult::Hint(h) => {
                             // Gợi ý nhận ra một ca OLL/PLL cụ thể thì cũng
@@ -1576,6 +1724,19 @@ fn main() {
                                     }
                                     total_queued = queue.len();
                                 }
+                            } else if alt_step_pending {
+                                // Alt vừa yêu cầu gợi ý mới (không có sẵn
+                                // nước nào để chạy tiếp) -- giờ kết quả đã
+                                // về, chạy luôn nước ĐẦU TIÊN của gợi ý mới
+                                // này, giữ lại phần còn lại cho lần Alt kế.
+                                alt_step_pending = false;
+                                if !hint_moves.is_empty() {
+                                    push_undo!();
+                                    let first = hint_moves.remove(0);
+                                    queue_move(&mut queue, &first);
+                                    total_queued = queue.len();
+                                    status = format!("Gợi ý (từng bước): {first}");
+                                }
                             }
                         }
                     }
@@ -1624,6 +1785,17 @@ fn main() {
                     state.do_move(&mv_str);
                     move_count += 1;
                     pending = None;
+                    // "Giải tự động" (auto_solve): đổi nhãn/công thức hiển
+                    // thị (hint_label/hint_moves) đúng lúc chặng kế tiếp
+                    // trong kế hoạch (đã tính sẵn 1 lần từ JobResult::AutoPlan)
+                    // bắt đầu -- KHÔNG tính toán gì thêm ở đây, chỉ so mốc.
+                    if auto_solve {
+                        let progress = (move_count - auto_plan_start_count) as usize;
+                        if let Some((label, moves)) = advance_auto_plan(&mut auto_plan_boundaries, progress) {
+                            hint_label = Some(label);
+                            hint_moves = moves;
+                        }
+                    }
                     // QUAN TRONG: phai XOA anim o day. `state` vua duoc cap
                     // nhat da BAO GOM nuoc di nay roi, nen neu van giu anim
                     // (dang o goc 90 do day du) thi build_cube_mesh se xoay
@@ -1701,12 +1873,14 @@ fn main() {
                                     None
                                 });
                             }
-                            // Toc do animation: [ giam, ] tang. Ba muc gioi
-                            // han 2.0-30.0 rad/s (~1.6s -- ~0.1s cho 1 phan
-                            // tu 90 do) de tranh qua cham/qua nhanh khong
-                            // xem duoc.
+                            // Toc do animation: [ giam (cham hon), ] tang
+                            // (nhanh hon). Gioi han duoi cho phep mot phan tu
+                            // (90 do) cham toi da 2 giay -- gioi han tren van
+                            // giu nhu cu (~0.05s cho 1 phan tu, du nhanh de
+                            // xem muot).
                             Some(winit::event::VirtualKeyCode::LBracket) => {
-                                anim_speed = (anim_speed - 2.0).max(2.0);
+                                anim_speed = (anim_speed - 2.0)
+                                    .max(std::f32::consts::FRAC_PI_2 / 2.0);
                             }
                             Some(winit::event::VirtualKeyCode::RBracket) => {
                                 anim_speed = (anim_speed + 2.0).min(30.0);
@@ -1722,173 +1896,3 @@ fn main() {
     });
 }
 
-/// Ve khung 6 mat (bo cuc chu thap: U tren, L F R B mot hang, D duoi) --
-/// dung egui::Painter ve hinh vuong mau truc tiep, khong can 3D. Doc
-/// facelet TRUC TIEP tu CubeState that (cube.rs) qua facelet_at()/idx_of().
-/// Bắn tia từ vị trí chuột (pixel vật lý) qua camera, tìm điểm chạm gần
-/// nhất trên `model` (dùng three_d::pick() -- raycasting GPU có sẵn,
-/// không cần tự viết ray-plane), rồi suy ra mặt nào trong 6 mặt lớn (U D
-/// F B L R) chứa điểm đó: mặt có dot(diem_cham, normal_mat) LỚN NHẤT
-/// (điểm luôn nằm trên đúng 1 trong 6 mặt ngoài vì mesh tĩnh dùng để
-/// pick chỉ vẽ panel/sticker mặt ngoài, xem build_cube_mesh).
-fn pick_face(
-    context: &Context,
-    camera: &Camera,
-    model: &Gm<Mesh, ColorMaterial>,
-    pixel: PhysicalPoint,
-) -> Option<char> {
-    let hit = three_d::pick(context, camera, pixel, std::iter::once(model))?;
-    let mut best_face = 'U';
-    let mut best_dot = f32::NEG_INFINITY;
-    for &face in &FACES {
-        let (n, _, _) = face_info(face);
-        let d = hit.dot(n);
-        if d > best_dot {
-            best_dot = d;
-            best_face = face;
-        }
-    }
-    Some(best_face)
-}
-
-fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: Option<char>) {
-    // Ô co giãn theo bề rộng thực tế còn lại: sơ đồ gồm 4 cột mặt, mỗi
-    // cột = 3 ô + 2 khe + lề. Giải ngược ra cỡ ô để sơ đồ luôn vừa khít
-    // panel dù cửa sổ to nhỏ thế nào (trước đây cố định 21px nên panel
-    // rộng thì thừa chỗ, panel hẹp thì tràn).
-    let avail = ui.available_width();
-    let gap = 2.5;
-    let pad = 7.0;
-    let cell = (((avail / 4.0) - pad - 2.0 * gap) / 3.0).clamp(13.0, 30.0);
-    let panel = cell * 3.0 + gap * 2.0;
-    let grid_pos: [(char, i32, i32); 6] = [
-        ('U', 1, 0),
-        ('L', 0, 1), ('F', 1, 1), ('R', 2, 1), ('B', 3, 1),
-        ('D', 1, 2),
-    ];
-    let origin = ui.cursor().min;
-    let (rect, _resp) = ui.allocate_exact_size(
-        egui::vec2(4.0 * (panel + pad), 3.0 * (panel + pad)),
-        egui::Sense::hover(),
-    );
-    let painter = ui.painter_at(rect);
-    for (face, gc, gr) in grid_pos {
-        let fx = origin.x + gc as f32 * (panel + pad);
-        let fy = origin.y + gr as f32 * (panel + pad);
-        let selected = Some(face) == sel_face;
-
-        // Nền mờ phía sau mỗi mặt cho tách bạch khỏi nền panel
-        let panel_rect = egui::Rect::from_min_size(
-            egui::pos2(fx - 3.0, fy - 3.0),
-            egui::vec2(panel + 6.0, panel + 6.0),
-        );
-        painter.rect_filled(
-            panel_rect,
-            egui::Rounding::same(5.0),
-            egui::Color32::from_rgb(16, 17, 25),
-        );
-
-        for r in 0..3usize {
-            for c in 0..3usize {
-                let ck = cube::face_char(state.facelet_at(cube::idx_of(face), r, c) as usize);
-                let [cr, cg, cb] = face_color(ck);
-                let x = fx + c as f32 * (cell + gap);
-                let y = fy + r as f32 * (cell + gap);
-                let cell_rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cell, cell));
-                painter.rect_filled(
-                    cell_rect,
-                    egui::Rounding::same((cell * 0.17).clamp(2.0, 6.0)),
-                    egui::Color32::from_rgb(cr, cg, cb),
-                );
-            }
-        }
-
-        // Chữ tên mặt ở ô giữa (ô tâm luôn giữ nguyên màu mặt đó)
-        let center = egui::pos2(fx + panel / 2.0, fy + panel / 2.0);
-        painter.text(
-            center,
-            egui::Align2::CENTER_CENTER,
-            face,
-            egui::FontId::proportional((cell * 0.52).clamp(8.0, 15.0)),
-            egui::Color32::from_black_alpha(150),
-        );
-
-        if selected {
-            painter.rect_stroke(
-                panel_rect,
-                egui::Rounding::same(5.0),
-                egui::Stroke::new(2.0, theme::ACCENT),
-            );
-        }
-    }
-}
-
-/// Vẽ 1 dòng chặng trong bảng công thức. `header` để trống nếu không cần
-/// tiêu đề nhóm riêng (VD các cặp F2L nằm chung dưới 1 tiêu đề).
-fn stage_row(
-    ui: &mut egui::Ui,
-    header: &str,
-    label: &str,
-    st: &rubik_core::breakdown::StageStatus,
-) {
-    use rubik_core::breakdown::StageStatus as S;
-    if !header.is_empty() {
-        ui.label(
-            egui::RichText::new(header)
-                .size(11.5)
-                .strong()
-                .color(theme::ACCENT),
-        );
-    }
-    ui.horizontal_wrapped(|ui| {
-        ui.label(
-            egui::RichText::new(format!("{label}"))
-                .size(12.5)
-                .strong()
-                .color(theme::TEXT),
-        );
-        match st {
-            S::Done => {
-                ui.label(
-                    egui::RichText::new("✔ đã xong sẵn")
-                        .size(12.0)
-                        .color(theme::SUCCESS),
-                );
-            }
-            S::Moves { moves, case_name } => {
-                if let Some(n) = case_name {
-                    ui.label(
-                        egui::RichText::new(format!("[{n}]"))
-                            .size(11.0)
-                            .color(theme::INFO),
-                    );
-                }
-                ui.label(
-                    egui::RichText::new(moves.join(" "))
-                        .monospace()
-                        .size(12.5)
-                        .color(theme::ACCENT),
-                );
-                ui.label(
-                    egui::RichText::new(format!("({} nước)", moves.len()))
-                        .size(11.0)
-                        .color(theme::TEXT_DIM),
-                );
-            }
-            S::Failed => {
-                ui.label(
-                    egui::RichText::new("chưa tìm được — thử mở lại bảng (T)")
-                        .size(12.0)
-                        .color(theme::DANGER),
-                );
-            }
-            S::Pending => {
-                ui.label(
-                    egui::RichText::new("chưa tới lượt — cần xong bước trước")
-                        .size(12.0)
-                        .color(theme::TEXT_DIM),
-                );
-            }
-        }
-    });
-}

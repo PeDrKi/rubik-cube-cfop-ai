@@ -58,13 +58,20 @@ impl CameraHandle {
             // phân giải cao qua MJPEG, mà giải mã MJPEG cần crate
             // `mozjpeg` (C/C++, hay lỗi build trên Windows vì thiếu
             // NASM). YUYV được nokhwa giải mã bằng Rust thuần, không
-            // 640x480 dư sức để lấy màu trung bình 9 ô sticker (không
-            // cần độ phân giải cao ở bước này). FPS hạ xuống 15 (đủ
+            // cần build thêm gì.
+            //
+            // Độ phân giải hạ xuống 320x240 (trước là 640x480) -- việc
+            // dò vị trí mặt cube (detect.rs) vốn đã tự resize ảnh xuống
+            // chỉ còn ~220px cạnh dài trước khi xử lý, và việc lấy màu
+            // trung bình mỗi ô sticker cũng không cần chi tiết cao, nên
+            // 320x240 vẫn dư sức chính xác. Đổi lại: giải mã YUYV->RGB
+            // (chạy liên tục trên thread nền) và upload ảnh preview lên
+            // GPU mỗi khi có frame mới đều nhẹ đi ~4 lần số pixel --
+            // khác biệt rõ rệt trên máy cấu hình thấp. FPS giữ ở 15 (đủ
             // mượt cho việc canh khung bằng mắt) để giảm tải CPU giải
-            // mã YUYV->RGB liên tục trên máy cấu hình thấp — trước đây
-            // xin 30fps trong khi việc canh cube hoàn toàn không cần
-            // nhanh vậy.
-            let wanted = CameraFormat::new(Resolution::new(640, 480), FrameFormat::YUYV, 15);
+            // mã liên tục trên máy cấu hình thấp — trước đây xin 30fps
+            // trong khi việc canh cube hoàn toàn không cần nhanh vậy.
+            let wanted = CameraFormat::new(Resolution::new(320, 240), FrameFormat::YUYV, 15);
             let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::Closest(wanted));
             let mut camera = match Camera::new(CameraIndex::Index(index), requested) {
                 Ok(c) => c,

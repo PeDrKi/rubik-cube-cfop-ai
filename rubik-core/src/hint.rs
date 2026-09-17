@@ -17,6 +17,43 @@ use crate::oll_algorithms;
 use crate::oll_solver;
 use crate::pll_algorithms;
 
+/// Ngân sách node cho tầng tìm kiếm F2L sâu nhất (đi kèm `[8, 10, 12, 14]`
+/// trong mọi lệnh gọi `solve_f2l_seeded` bên dưới).
+///
+/// Lịch sử: từng là 200_000, phải tăng lên 400_000 để sửa 1 lần tỉ lệ
+/// giải tụt thấp (xem ghi chú ở `batch_200_success_rate` trong
+/// solver_tests.rs). Giờ hạ về 250_000 -- vẫn CAO HƠN mốc 200_000 từng
+/// biết là không đủ -- sau khi đo lại bằng đúng 2 bài test đó
+/// (`batch_200_success_rate`, `full_cube_solve_with_retry_reaches_near_100_percent`)
+/// cho kết quả 100%/100% (200/200 và 60/60) ở mức 250_000, tức là còn
+/// khá nhiều dư địa an toàn so với 400_000. Lý do hạ: từ ngày các tầng
+/// (depth) chạy SONG SONG qua rayon (`solve_pair_ladder`), thời gian
+/// thực tế cho MỖI lượt gợi ý tỉ lệ thuận với ngân sách của tầng LỚN
+/// NHẤT khi các tầng nhỏ hơn đều trượt -- trên máy ít lõi (yếu), hạ số
+/// này giúp giảm rõ khoảng "khựng" ở các bước chuyển giai đoạn
+/// (Cross->F2L, F2L->OLL, OLL->PLL) mà prefetch (main.rs) không kịp che
+/// hết. Nếu sau này lại thấy tỉ lệ giải tụt (đặc biệt trên seed/scramble
+/// lạ), tăng lại số này trước tiên.
+const F2L_NODE_BUDGET: u32 = 250_000;
+
+/// Ép xây dựng TRƯỚC (ngay bây giờ, trên luồng gọi hàm này) mọi bảng
+/// tra/PDB mà các bước gợi ý cần tới -- vốn được xây LƯỜI (chỉ khi lần
+/// đầu thật sự cần) nên nếu không gọi hàm này, chi phí xây bảng sẽ dồn
+/// hết vào NGAY LẦN GỢI Ý ĐẦU TIÊN người dùng bấm, khiến lần đó cảm giác
+/// "khựng" nặng hơn hẳn các lần sau -- đặc biệt rõ trên máy cấu hình
+/// thấp. Gọi hàm này 1 lần trên 1 thread nền ngay lúc app vừa mở (xem
+/// main.rs) để chi phí này diễn ra ÂM THẦM trong lúc người dùng còn đang
+/// nhìn màn hình/thao tác đầu tiên, thay vì lộ ra khi họ bấm gợi ý.
+pub fn warmup() {
+    cross_solver::get_pdb();
+    crate::corner_model::tables();
+    crate::edge_model::tables();
+    oll_algorithms::table();
+    pll_algorithms::table();
+    oll_solver::warmup();
+    f2l_solver::warm_pair_pdbs();
+}
+
 pub struct Hint {
     pub label: String,
     pub moves: Vec<String>,
@@ -70,7 +107,7 @@ pub fn compute_hint(state: &CubeState, retry_seed: Option<u64>) -> Hint {
             let done: Vec<&'static str> =
                 F2L_ORDER.iter().copied().filter(|&sl| full_state::pair_ok(&full, sl)).collect();
             let target = F2L_ORDER.iter().find(|&&sl| !done.contains(&sl)).copied().unwrap();
-            let res = f2l_solver::solve_f2l_seeded(full, &[8, 10, 12, 14], 400_000, retry_seed);
+            let res = f2l_solver::solve_f2l_seeded(full, &[8, 10, 12, 14], F2L_NODE_BUDGET, retry_seed);
             match res.per_slot.get(target).cloned().flatten() {
                 Some(mvs) => Hint { label: format!("F2L - cap {target}"), moves: crate::move_simplify::simplify(&mvs), stage, case_name: None },
                 None => Hint {
@@ -86,7 +123,7 @@ pub fn compute_hint(state: &CubeState, retry_seed: Option<u64>) -> Hint {
             let mut s = *state;
             s.apply_sequence(&cm);
             let full_f2l = full_state::from_facelets(&s);
-            let f2l_res = f2l_solver::solve_f2l_seeded(full_f2l, &[8, 10, 12, 14], 400_000, None);
+            let f2l_res = f2l_solver::solve_f2l_seeded(full_f2l, &[8, 10, 12, 14], F2L_NODE_BUDGET, None);
             s.apply_sequence(&f2l_res.moves);
 
             let full = full_state::from_facelets(&s);
@@ -134,7 +171,7 @@ pub fn compute_hint(state: &CubeState, retry_seed: Option<u64>) -> Hint {
             let mut s = *state;
             s.apply_sequence(&cm);
             let full_f2l = full_state::from_facelets(&s);
-            let f2l_res = f2l_solver::solve_f2l_seeded(full_f2l, &[8, 10, 12, 14], 400_000, None);
+            let f2l_res = f2l_solver::solve_f2l_seeded(full_f2l, &[8, 10, 12, 14], F2L_NODE_BUDGET, None);
             s.apply_sequence(&f2l_res.moves);
             let full_oll = full_state::from_facelets(&s);
             if let Some((prefix, mvs, _)) = oll_algorithms::solve_oll_with_auf(full_oll) {

@@ -186,6 +186,7 @@ impl CaseLog {
     }
 
     /// Số ca đã ghi trong ván hiện tại.
+    #[allow(dead_code)]
     pub fn so_ca(&self) -> usize {
         self.da_ghi.len()
     }
@@ -282,7 +283,7 @@ mod tests {
     // được. Bốn test dưới là bốn tình huống thật khi dùng app.
 
     #[test]
-    fn bam_H_nhieu_lan_chi_dem_mot() {
+    fn bam_h_nhieu_lan_chi_dem_mot() {
         let mut l = CaseLog::default();
         assert!(l.nen_ghi("OLL", "OLL27"), "lần đầu gặp thì phải ghi");
         assert!(!l.nen_ghi("OLL", "OLL27"), "lần hai không được ghi nữa");
@@ -291,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_t_roi_bam_H_khong_dem_hai_lan() {
+    fn ctrl_t_roi_bam_h_khong_dem_hai_lan() {
         // Ctrl+T ghi cả OLL lẫn PLL của ván. Sau đó bấm H ở thế OLL thì
         // ra đúng ca đó -- không được tính thêm.
         let mut l = CaseLog::default();

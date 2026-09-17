@@ -27,6 +27,13 @@ fn corner_pdb() -> &'static CornerGroupPdb {
     CORNER_PDB.get_or_init(build_group_pdb_corners_anyperm)
 }
 
+/// Ép xây 2 PDB ở trên ngay bây giờ (nếu chưa có) -- dùng để "làm nóng"
+/// (warmup) từ lúc app vừa mở, xem `hint::warmup`.
+pub(crate) fn warmup() {
+    edge_pdb();
+    corner_pdb();
+}
+
 const F2L_ORDER: [&str; 4] = ["DFR", "DFL", "DBR", "DBL"];
 fn f2l_edge_of(slot: &str) -> &'static str {
     match slot {
@@ -178,7 +185,10 @@ pub fn solve_phase_a(full: FullState, retry_seed: Option<u64>) -> Option<Vec<&'s
     }
     let move_table: Vec<(usize, &'static str, char)> =
         no_d.iter().map(|&m| (move_index(m), m, m.chars().next().unwrap())).collect();
-    a_star_ladder(full, goal_a, heuristic_a, &[(80_000, 8), (200_000, 10), (300_000, 12)], &move_table)
+    // Tầng cuối hạ 300_000 -> 150_000 (xem lý do đầy đủ ở hằng số
+    // F2L_NODE_BUDGET trong hint.rs -- cùng lý do, cùng cách đo bằng
+    // đúng 2 bài test success-rate, đều ra 100%/100% ở mức đã hạ).
+    a_star_ladder(full, goal_a, heuristic_a, &[(80_000, 8), (150_000, 10), (150_000, 12)], &move_table)
 }
 
 /// Ban debug: cho phep chi dinh tiers tuy y (dung de do xem can do sau bao
@@ -206,7 +216,9 @@ pub fn solve_phase_b(full: FullState, retry_seed: Option<u64>) -> Option<Vec<&'s
     }
     let move_table: Vec<(usize, &'static str, char)> =
         no_d.iter().map(|&m| (move_index(m), m, m.chars().next().unwrap())).collect();
-    a_star_ladder(full, goal_b, heuristic_b, &[(80_000, 9), (150_000, 11), (300_000, 13)], &move_table)
+    // Tầng cuối hạ 300_000 -> 150_000, tầng giữa 150_000 -> 120_000 --
+    // cùng lý do/cách đo như solve_phase_a ở trên.
+    a_star_ladder(full, goal_b, heuristic_b, &[(80_000, 9), (120_000, 11), (150_000, 13)], &move_table)
 }
 
 /// Giải OLL bằng kiến trúc 2-look đầy đủ (pha A rồi pha B) -- dùng làm lưới

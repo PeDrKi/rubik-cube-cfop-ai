@@ -201,6 +201,11 @@ fn solve_pair(
     None
 }
 
+/// Y HET a_star_ladder trong search.rs: các độ sâu trong `depths` không
+/// phụ thuộc lẫn nhau (chỉ là "thử ngân sách lớn hơn nếu độ sâu trước
+/// trượt"), nên chạy CÙNG LÚC trên nhiều luồng (rayon) thay vì tuần tự.
+/// `find_map_first` vẫn trả về đúng kết quả của độ sâu NHỎ NHẤT thành
+/// công -- kết quả y hệt bản tuần tự, chỉ nhanh hơn trên máy nhiều lõi.
 fn solve_pair_ladder(
     full: FullState,
     slot: &'static str,
@@ -209,12 +214,10 @@ fn solve_pair_ladder(
     nodes_per_depth: u32,
     move_table: &[(usize, &'static str, char)],
 ) -> Option<Vec<&'static str>> {
-    for &depth in depths {
-        if let Some(mvs) = solve_pair(full, slot, done, nodes_per_depth, depth, move_table) {
-            return Some(mvs);
-        }
-    }
-    None
+    use rayon::prelude::*;
+    depths
+        .par_iter()
+        .find_map_first(|&depth| solve_pair(full, slot, done, nodes_per_depth, depth, move_table))
 }
 
 pub struct F2lResult {
@@ -223,7 +226,7 @@ pub struct F2lResult {
     pub solved_slots: Vec<&'static str>,
 }
 
-pub fn solve_f2l(mut full: FullState, depths: &[u32], nodes_per_depth: u32) -> F2lResult {
+pub fn solve_f2l(full: FullState, depths: &[u32], nodes_per_depth: u32) -> F2lResult {
     solve_f2l_seeded(full, depths, nodes_per_depth, None)
 }
 

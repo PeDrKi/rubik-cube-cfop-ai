@@ -5,3 +5,11 @@ members = ["rubik-core", "rubik-app", "rubik-vision", "rubik-vision-ml"]
 [profile.release]
 opt-level = 3
 lto = true
+# codegen-units = 1: cho LLVM tối ưu xuyên suốt cả crate thay vì chia nhỏ
+# song song -- build release lâu hơn 1 chút nhưng code máy chạy nhanh hơn,
+# quan trọng cho các vòng search (F2L/OLL/PLL) vốn là phần tốn CPU nhất.
+codegen-units = 1
+# strip = true: cắt debug symbol khỏi bản release -- file .exe nhỏ hơn,
+# không ảnh hưởng tốc độ chạy. Muốn xem backtrace lúc debug thì tạm bỏ
+# dòng này rồi build lại.
+strip = true
