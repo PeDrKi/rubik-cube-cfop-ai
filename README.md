@@ -1,7 +1,6 @@
 # Rubik's Cube — Rust
 
-Ứng dụng Rubik's Cube 3D tương tác kèm bộ giải CFOP tự động, port từ dự
-án Python gốc sang Rust.
+Ứng dụng Rubik's Cube 3D tương tác kèm bộ giải CFOP tự động
 
 ## Cấu trúc
 
@@ -17,10 +16,6 @@ rubik/
                        học) + solve_flow.rs (điều phối job/kế hoạch giải
                        tự động) + ui_widgets.rs (vẽ/soi UI) tách riêng
 ```
-
-Trước đây lõi bị **sao chép** giữa 2 project riêng, phải sửa lỗi 2 lần và
-code đã bắt đầu lệch nhau. Nay gộp thành Cargo workspace — chỉ còn 1
-nguồn sự thật duy nhất.
 
 ## Chạy
 
@@ -98,8 +93,8 @@ thực thi**:
 ```
 target/release/lich_su_oll_pll.tsv
 epoch_giay  thoi_gian_utc        loai  ten_the  so_nuoc
-1789023176  2026-09-10 06:52:56  OLL   OLL27    7
-1789023176  2026-09-10 06:52:56  PLL   T        14
+0000000000  yyyy-mm-dd hh:mm:ss  OLL   OLLxx    xx
+0000000000  yyyy-mm-dd hh:mm:ss  PLL   x        xx
 ```
 
 Định dạng TSV thuần, mở được bằng Notepad lẫn Excel. Cột thời gian là
@@ -125,8 +120,6 @@ Pipeline CFOP đầy đủ:
 | **OLL** | Bảng tra đủ 57 thế → macro OCLL → search 2-look (dự phòng) |
 | **PLL** | Bảng tra 287 mục (21 ca × AUF trước/sau) → macro (dự phòng) |
 
-Nếu một giai đoạn bí, hệ thống tự thử lại với thứ tự tìm kiếm xáo trộn.
-Kết quả cuối được rút gọn (`move_simplify`) để bỏ nước thừa.
 
 **Tỉ lệ giải trọn vẹn: 100%** (200/200 scramble ngẫu nhiên, đo bằng test
 `batch_200_success_rate`; lời giải trung bình 56 nước). Trước khi sửa hai
@@ -141,27 +134,20 @@ node, OLL 300k→150k node) — xem comment tại hằng số `F2L_NODE_BUDGET`
 (`hint.rs`) để biết cách đo lại nếu cần chỉnh tiếp.
 
 ## Độ tin cậy
-
-Toàn bộ lõi được kiểm chứng bằng cách **đối chiếu số liệu chính xác với
-bản Python gốc**, không chỉ "chạy không lỗi":
-
+ 
 - Bảng hoán vị cạnh/góc cho từng nước đi — khớp từng phần tử
 - Kích thước pattern database: 190.080 / 136.080 / 576 trạng thái, và
   giá trị khoảng cách tối đa của mỗi bảng
 - Trạng thái facelet sau các chuỗi nước đi cụ thể — khớp từng ô
 
-Riêng hai bảng OLL/PLL thì **không** đối chiếu với bản Python nữa, vì bản
-Python sai: nó thiếu 2 thế OLL, và chuỗi `E` của nó thực ra là một A-perm
-chép nhầm. Thay vào đó chúng được kiểm bằng cách liệt kê TOÀN BỘ trạng
-thái có thể xảy ra rồi dựng lại từng trạng thái và áp thật công thức đã
-lưu:
+Chúng được kiểm bằng cách liệt kê TOÀN BỘ trạng thái có thể xảy ra rồi 
+dựng lại từng trạng thái và áp thật công thức đã lưu:
 
 - OLL: phủ đủ 57/57 thế, 57 tên ứng 1-1 với 57 thế, mọi công thức áp vào
   đều định hướng xong lớp U mà không phá Cross/F2L, không công thức nào
   dài quá 14 nước
 - PLL: phủ 287/288 trạng thái hoán vị lớp cuối (cái còn lại là khối đã
   giải), mọi lời giải áp vào đều giải xong, không hai tên nào trùng ca
-- Lưới an toàn `solve_oll_search` giải được cả 57 thế
 
 Các bảng hoán vị **không được chép tay** mà suy ra thực nghiệm lúc chạy
 (áp từng nước lên cube đã giải rồi đọc kết quả), nên nếu cube engine
@@ -174,11 +160,6 @@ Các bảng hoán vị **không được chép tay** mà suy ra thực nghiệm 
 - `full_state::apply_move` chỉ hiểu 18 nước cơ bản, không hiểu `M`/`r`/`x`.
   Giao diện và thanh nhập thì hiểu đủ; giới hạn này chỉ nằm ở đường giải,
   và các bảng công thức đã được viết lại cho phù hợp.
-- Lựa chọn "ML (kém hơn)" trong màn hình quét đúng như tên: bộ dò đó chỉ
-  trả hộp vuông nên không hiệu chỉnh được phối cảnh. Đo trên bộ ảnh
-  Bielefeld: Hình học 97,3% so với 32,9%. Chỉ để so sánh, đừng dùng thật.
-- Chưa từng đo được độ chính xác khi đưa TỪNG MẶT vuông góc vào webcam —
-  bộ ảnh dùng để đo không có kiểu ảnh đó.
 
 ## Chạy offline & độc lập
 
@@ -205,4 +186,3 @@ Muốn build hoàn toàn offline ngay từ đầu (máy chưa từng tải), ch�
 **Thư viện hệ thống cần có** (đều là thứ sẵn có trên máy thường):
 - Windows: `opengl32.dll` — có sẵn trong Windows
 - Linux: OpenGL (mesa) + X11 hoặc Wayland
-- Không cần cài thêm gì cho người dùng cuối
