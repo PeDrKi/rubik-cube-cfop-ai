@@ -54,6 +54,24 @@ impl PaintState {
     fn count_of(&self, color: u8) -> usize {
         self.faces.iter().flatten().filter(|&&c| c == Some(color)).count()
     }
+
+    /// Nếu chỉ còn ĐÚNG 1 màu chưa đủ 9 ô (5 màu kia đã 9/9), toàn bộ ô
+    /// còn trống chắc chắn phải là màu đó (mỗi màu luôn có đúng 9 sticker
+    /// trên cube thật, tổng 6*9=54=đúng số ô) -- tự động điền nốt, đỡ
+    /// phải bấm từng ô một khi phần còn lại đã không còn gì để chọn.
+    fn auto_fill_last_color(&mut self) {
+        let mut under_cap: Vec<u8> = (0u8..6).filter(|&c| self.count_of(c) < 9).collect();
+        if let [only] = under_cap.as_mut_slice() {
+            let only = *only;
+            for face in self.faces.iter_mut() {
+                for cell in face.iter_mut() {
+                    if cell.is_none() {
+                        *cell = Some(only);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Đọc màu tại 1 toạ độ (mặt, hàng, cột) trong bảng đang điền dở.
@@ -129,6 +147,12 @@ pub fn show(ctx: &egui::Context, s: &mut PaintState) -> Option<CubeState> {
 
     egui::Window::new("🎨 Điền màu thủ công").open(&mut window_open).default_width(440.0).show(ctx, |ui| {
         ui.label("Chọn 1 màu bên dưới rồi bấm vào từng ô để tô. Bấm lại đúng màu đang có trên 1 ô để xoá ô đó.");
+        ui.label(
+            egui::RichText::new("Khi chỉ còn 1 màu chưa đủ 9 ô, các ô trống còn lại sẽ tự động điền nốt bằng màu đó.")
+                .size(11.5)
+                .italics()
+                .color(egui::Color32::from_gray(160)),
+        );
         ui.add_space(4.0);
 
         // ── Bảng chọn màu + đếm số ô đã dùng / tối đa 9 ─────────────
@@ -189,6 +213,7 @@ pub fn show(ctx: &egui::Context, s: &mut PaintState) -> Option<CubeState> {
                                 } else if s.count_of(s.current_color) < 9 {
                                     s.faces[f][cell] = Some(s.current_color);
                                 }
+                                s.auto_fill_last_color();
                             }
                         }
                     });
@@ -281,5 +306,44 @@ mod tests {
         // Chỉ có 6 tâm, chưa điền gì thêm -> không thể có xung đột.
         let msgs = find_conflicts(&faces);
         assert!(msgs.is_empty(), "6 tâm mặc định không được báo lỗi, msgs={msgs:?}");
+    }
+
+    #[test]
+    fn auto_fill_khong_lam_gi_khi_con_tu_2_mau_chua_day_tro_len() {
+        let mut s = PaintState::default();
+        // 6 tâm đã chiếm 1 ô/màu -- còn thiếu ít nhất 2 màu chưa đầy (mọi
+        // màu đều mới có 1/9) nên chưa được tự điền gì cả.
+        s.auto_fill_last_color();
+        let filled = s.faces.iter().flatten().filter(|c| c.is_some()).count();
+        assert_eq!(filled, 6, "chỉ có 6 tâm, chưa được tự điền thêm ô nào");
+    }
+
+    #[test]
+    fn auto_fill_dien_not_khi_chi_con_dung_1_mau_chua_du_9() {
+        let mut s = PaintState::default();
+        // Cho 5 màu (0..=4) đủ 9/9: mỗi màu đã có sẵn 1 ô tâm, tô thêm 8
+        // ô bất kỳ còn trống cho đủ 9. Màu 5 (tâm mặt R) cứ để nguyên 1/9.
+        let mut cells: Vec<(usize, usize)> =
+            (0..6).flat_map(|f| (0..9).filter(move |&c| c != 4).map(move |c| (f, c))).collect();
+        cells.retain(|&(f, _)| f != 5); // chừa hẳn mặt 5 (màu cam) ra, không đụng vào
+        for color in 0u8..5 {
+            let mut given = 0;
+            while given < 8 {
+                let (f, c) = cells.pop().unwrap();
+                if s.faces[f][c].is_none() {
+                    s.faces[f][c] = Some(color);
+                    given += 1;
+                }
+            }
+        }
+        assert_eq!(s.count_of(5), 1, "màu 5 (cam) phải vẫn còn đúng 1/9 (chỉ có tâm)");
+        let empty_before = s.faces.iter().flatten().filter(|c| c.is_none()).count();
+        assert_eq!(empty_before, 8, "phải còn đúng 8 ô trống (9 - 1 tâm) dành cho màu 5");
+
+        s.auto_fill_last_color();
+
+        assert_eq!(s.count_of(5), 9, "màu cuối cùng phải được tự điền đủ 9/9");
+        let filled = s.faces.iter().flatten().filter(|c| c.is_some()).count();
+        assert_eq!(filled, 54, "phải điền kín hết 54 ô sau khi tự điền màu cuối");
     }
 }

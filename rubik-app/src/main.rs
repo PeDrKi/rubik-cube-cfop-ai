@@ -90,6 +90,9 @@ fn main() {
     let mut status = "Sẵn sàng".to_string();
     let mut formula_text = String::new();
     let mut hint_label: Option<String> = None;
+    // Công thức của lần xáo GẦN NHẤT (giữ nguyên cho tới lần xáo kế tiếp,
+    // không bị hint/giải tự động ghi đè vì đây là biến riêng).
+    let mut scramble_formula: Option<Vec<String>> = None;
     let mut hint_moves: Vec<String> = Vec::new();
     let mut undo_stack: Vec<CubeState> = Vec::new();
     const UNDO_MAX: usize = 120;
@@ -444,6 +447,29 @@ fn main() {
                                 }
                             });
                             ui.add_space(10.0);
+
+                            // ── Công thức xáo (nếu đã xáo ít nhất 1 lần) ─
+                            if let Some(mvs) = &scramble_formula {
+                                theme::card(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("🔀").size(13.0));
+                                        ui.label(
+                                            egui::RichText::new("Công thức xáo")
+                                                .size(13.0)
+                                                .strong()
+                                                .color(theme::INFO),
+                                        );
+                                    });
+                                    ui.add_space(5.0);
+                                    ui.label(
+                                        egui::RichText::new(mvs.join("  "))
+                                            .monospace()
+                                            .size(13.5)
+                                            .color(theme::ACCENT),
+                                    );
+                                });
+                                ui.add_space(10.0);
+                            }
 
                             // ── Kết quả gợi ý ───────────────────────────
                             // Đặt TRƯỚC ô nhập công thức: khi vừa bấm H,
@@ -959,7 +985,7 @@ fn main() {
                                 };
                                 row(ui, "U D F B L R", "xoay lớp tương ứng");
                                 row(ui, "Shift + phím", "xoay ngược lại (U', R'…)");
-                                row(ui, "Space", "xáo ngẫu nhiên 25 nước");
+                                row(ui, "Space", "xáo ngẫu nhiên 25 nước, hiện công thức xáo ở panel bên trái");
                                 row(ui, "Enter", "AI tự giải, hiện công thức từng bước (Cross → F2L → OLL → PLL)");
                                 row(ui, "H", "gợi ý 1 bước");
                                 row(ui, "Ctrl (bấm rồi thả)", "thực hiện gợi ý đang hiển thị");
@@ -1079,6 +1105,7 @@ fn main() {
                 let mut rng = rand::thread_rng();
                 let mut tmp = state;
                 let mvs = cube::random_scramble_moves(&mut tmp, 25, &mut rng);
+                scramble_formula = Some(mvs.iter().map(|s| s.to_string()).collect());
                 queue.clear();
                 for m in mvs {
                     queue_move(&mut queue, m);
@@ -1295,15 +1322,31 @@ fn main() {
                             queue.push_back(('z', modifiers.shift, false));
                         }
                         Key::Space => {
-                            push_undo!();
-                            let mut rng = rand::thread_rng();
-                            let mut tmp = state;
-                            let mvs = cube::random_scramble_moves(&mut tmp, 25, &mut rng);
-                            queue.clear();
-                            for m in mvs {
-                                queue_move(&mut queue, m);
+                            // Y hệt nút "🔀 Xáo" (kể cả điều kiện chặn khi
+                            // đang bận/đang xoay) -- trước đây phím Space
+                            // xáo được BẤT KỲ LÚC NÀO kể cả giữa lúc đang
+                            // "Giải tự động", cắt ngang mà không cảnh báo.
+                            // Cũng thiếu `case_log.van_moi()` (làm lệch số
+                            // liệu thống kê OLL/PLL nếu ca vừa gặp ở ván
+                            // trước lặp lại) và `formula_table = None`
+                            // (bảng công thức cũ có thể còn treo đó).
+                            if job_rx.is_none() && queue.is_empty() && pending.is_none() {
+                                push_undo!();
+                                case_log.van_moi();
+                                formula_table = None;
+                                let mut rng = rand::thread_rng();
+                                let mut tmp = state;
+                                let mvs = cube::random_scramble_moves(&mut tmp, 25, &mut rng);
+                                scramble_formula = Some(mvs.iter().map(|s| s.to_string()).collect());
+                                queue.clear();
+                                for m in mvs {
+                                    queue_move(&mut queue, m);
+                                }
+                                total_queued = queue.len();
+                                status = "Đang xáo…".to_string();
+                            } else if job_rx.is_none() {
+                                status = "Đợi khối xoay xong đã".to_string();
                             }
-                            status = "Đang xáo…".to_string();
                         }
                         Key::Enter => {
                             if job_rx.is_none() && queue.is_empty() && pending.is_none() {

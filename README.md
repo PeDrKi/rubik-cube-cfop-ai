@@ -74,7 +74,7 @@ sổ thấp. Các cửa sổ nổi (bảng công thức, thư viện, thống k�
 | `M` `E` `S` | Xoay lớp giữa |
 | `X` `Y` `Z` | Xoay cả khối |
 | Click sticker → phím mũi tên | Chọn mặt rồi xoay (↑→ thuận, ↓← nghịch) |
-| `Space` | Xáo ngẫu nhiên 25 nước |
+| `Space` | Xáo ngẫu nhiên 25 nước, hiện công thức xáo ở panel bên trái |
 | `Enter` (hoặc nút "▶ Giải tự động") | Tính nguyên lời giải 1 lần rồi chạy liền mạch, panel gợi ý tự đổi công thức theo từng chặng (Cross → F2L × 4 cặp → OLL → PLL) đúng lúc cube chạy tới đó |
 | `H` | Gợi ý 1 bước tiếp theo (không giải hết) |
 | `Ctrl` (bấm rồi thả, không kèm phím khác) | Thực hiện gợi ý đang hiển thị (thay cho bấm chuột) |
