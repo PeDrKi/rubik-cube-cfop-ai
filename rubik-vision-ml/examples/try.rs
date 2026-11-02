@@ -17,17 +17,27 @@ fn draw_rect(img: &mut RgbImage, x: u32, y: u32, size: u32, color: Rgb<u8>) {
     let x1 = (x + size).min(w.saturating_sub(1));
     let y1 = (y + size).min(h.saturating_sub(1));
     for px in x..=x1 {
-        if y < h { img.put_pixel(px, y, color); }
-        if y1 < h { img.put_pixel(px, y1, color); }
+        if y < h {
+            img.put_pixel(px, y, color);
+        }
+        if y1 < h {
+            img.put_pixel(px, y1, color);
+        }
     }
     for py in y..=y1 {
-        if x < w { img.put_pixel(x, py, color); }
-        if x1 < w { img.put_pixel(x1, py, color); }
+        if x < w {
+            img.put_pixel(x, py, color);
+        }
+        if x1 < w {
+            img.put_pixel(x1, py, color);
+        }
     }
 }
 
 fn main() {
-    let path = std::env::args().nth(1).expect("Dùng: cargo run --example try -- duong/dan/anh.png");
+    let path = std::env::args()
+        .nth(1)
+        .expect("Dùng: cargo run --example try -- duong/dan/anh.png");
 
     println!("Đang nạp model...");
     let mut detector = MlDetector::load().expect("Không nạp được model ONNX");

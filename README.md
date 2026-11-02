@@ -11,11 +11,51 @@ rubik/
 │   └── tests/        21 test tích hợp (+19 test trong lib, +1 doctest)
 ├── rubik-vision/     Đọc màu cube từ ảnh: dò vị trí, lấy mẫu, phân loại màu (23 test)
 ├── rubik-vision-ml/  Bộ dò bằng mô hình ONNX (tuỳ chọn, sau cờ `ml_detect`)
-└── rubik-app/        Ứng dụng: cửa sổ 3D, GUI, quét camera, nhật ký OLL/PLL (29 test)
-    └── src/          main.rs (vòng lặp sự kiện) + mesh.rs (dựng hình
-                       học) + solve_flow.rs (điều phối job/kế hoạch giải
-                       tự động) + ui_widgets.rs (vẽ/soi UI) tách riêng
+├── rubik-app/        Ứng dụng desktop: cửa sổ 3D, GUI, quét camera, nhật ký OLL/PLL
+│   └── src/          main.rs (khởi động) + app.rs (trạng thái) + ui_*.rs (các bảng giao diện) +
+│                      input.rs (phím tắt) + jobs.rs / solve_flow.rs (job giải) + scene.rs, mesh.rs (3D) +
+│                      scan_ui/ (quét camera: window, webcam, file, net)
+├── rubik-api/        Toàn bộ "route" của bộ giải + quét ảnh, dùng chung cho bản web
+├── rubik-wasm/       Bản WebAssembly chạy trong trình duyệt (www/ = trang web đăng GitHub Pages)
+├── rubik-web/        Server axum (tuỳ chọn) kèm tài khoản/xếp hạng SQLite
+│   ├── src/          lib.rs (router, header, giới hạn tốc độ, việc nền) + accounts.rs + main.rs
+│   └── tests/        http.rs (test HTTP của cả máy chủ) + test giao diện bằng jsdom
+│                      (cd rubik-web/tests && npm install && npm test)
+├── web/              NGUỒN GIAO DIỆN CHUNG của 2 bản web (xem bên dưới)
+├── render.yaml       Cấu hình deploy server lên Render (xem HUONG_DAN_DEPLOY.md)
+└── supabase/         schema.sql + hướng dẫn cho bản GitHub Pages
 ```
+
+### Sửa giao diện web
+Hai file `rubik-web/static/index.html` và `rubik-wasm/www/index.html` được **sinh ra** từ
+`web/src/` (`index.html` khung, `style.css`, `app.js`). Phần khác nhau giữa hai bản (cách gọi backend, tài khoản)
+nằm ở `web/backend.server.txt` và `web/backend.wasm.txt`. Font, biểu tượng, manifest PWA và `sw.js` (chỉ bản wasm)
+trong `web/` được chép nguyên xi. Sau khi sửa, chạy `node web/build.js`; CI sẽ báo lỗi nếu quên
+(`node web/build.js --check`). Định dạng mã: `npx prettier --write web/src` (cấu hình `web/.prettierrc.json`).
+
+**Nước xoay tính ngay trong trình duyệt:** `web/move_table.json` là bảng hoán vị 54 ô của mọi nước, sinh từ engine Rust
+(`cargo run -p rubik-core --example gen_move_table > web/move_table.json`, rồi `node web/build.js`). Test Rust
+`rubik-core/tests/move_table.rs` báo lỗi nếu file cũ so với engine. Nhờ đó giải tự động 60 nước không gọi server lần nào;
+server chỉ được hỏi khi tính lời giải/gợi ý, kiểm tra công thức nhập tay và nộp ván xếp hạng.
+
+### Biến môi trường của server (rubik-web)
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `RUBIK_ADDR` | `127.0.0.1:8080` | Địa chỉ lắng nghe (nếu không đặt mà có biến `PORT` thì nghe `0.0.0.0:PORT`, hợp với Render/Heroku) |
+| `RUBIK_STATIC` | tự dò | Thư mục giao diện. Mặc định tìm `static/` cạnh file chạy, rồi tới `rubik-web/static` lúc build |
+| `RUBIK_DB` | `rubik.db` | File SQLite |
+| `RUBIK_SECURE_COOKIE` | tắt | `1` khi chạy sau HTTPS |
+| `RUBIK_TRUST_PROXY` | tắt | `1` khi đứng sau reverse proxy: lấy IP người dùng từ `X-Forwarded-For` (dùng cho giới hạn tốc độ và khoá đăng nhập) |
+| `RUBIK_MAX_JOBS` | `2` | Số phép giải nặng chạy cùng lúc; quá tải trả 503 |
+| `RUBIK_BACKUP_DIR` | tắt | Nếu đặt: tự sao lưu database vào thư mục này (`rubik-<ngày>-<giờ>.db`) |
+| `RUBIK_BACKUP_HOURS` / `RUBIK_BACKUP_KEEP` | `24` / `7` | Chu kỳ sao lưu (giờ) và số bản giữ lại |
+
+Server còn có: `/api/health` cho health check, header bảo mật (CSP, chống nhúng iframe, nosniff), nén gzip,
+giới hạn theo IP cho mọi route (rộng tay với route nhẹ và khung hình camera), tắt êm khi nhận SIGTERM/Ctrl+C.
+Công thức nhập vào bị giới hạn 5000 nước sau khi bung nhóm lặp `(...)n` để chống làm treo máy.
+
+Xếp hạng: ván nộp nhanh hơn 5 giây hoặc nhanh hơn 100 ms/nước không được tính. Bảng xếp hạng
+chỉ mang tính vui, không chống được việc dùng bộ giải để giải hộ.
 
 ## Chạy
 
@@ -28,7 +68,7 @@ Mặc định `CHAY.bat` build thẳng **bản có thêm chế độ ML thử ng
 trong file). Muốn vào **bản THƯỜNG** (không có ML, build nhanh hơn):
 bấm đúp **`CHAY_THUONG.bat`**, hoặc chạy `CHAY.bat --1` từ dòng lệnh.
 
-Trên Linux/macOS (chưa có script tương ứng CHAY.bat), chạy thủ công:
+Trên Linux/macOS (bản web có `./chay_web.sh`; app desktop chưa có script tương ứng CHAY.bat), chạy thủ công:
 
 ```bash
 cargo run --release -p rubik-app   # mở ứng dụng
@@ -186,3 +226,17 @@ Muốn build hoàn toàn offline ngay từ đầu (máy chưa từng tải), ch�
 **Thư viện hệ thống cần có** (đều là thứ sẵn có trên máy thường):
 - Windows: `opengl32.dll` — có sẵn trong Windows
 - Linux: OpenGL (mesa) + X11 hoặc Wayland
+
+---
+
+## Bản web (thêm sau)
+
+Ngoài app desktop, dự án có thêm bản web dùng chung thuật toán của `rubik-core`:
+
+- **Demo local:** Windows bấm đúp `CHAY_WEB.bat`, Linux/macOS chạy `./chay_web.sh`, rồi mở http://127.0.0.1:8080.
+- **Deploy miễn phí (GitHub Pages, chạy hoàn toàn trong trình duyệt bằng WebAssembly):** xem `HUONG_DAN_DEPLOY.md` (mục "Ghi chú kỹ thuật").
+- Cấu trúc: `rubik-api` (logic dùng chung), `rubik-wasm` (bản trình duyệt), `rubik-web` (server axum + giao diện).
+- `rubik-core` có thêm feature `parallel` (mặc định bật, app desktop không đổi); bản wasm tắt nó vì trình duyệt không có rayon.
+- **Tài khoản và bảng xếp hạng:** đăng ký/đăng nhập, ván xếp hạng được bấm giờ và kiểm tra lời giải phía server.
+  - Bản GitHub Pages dùng **Supabase**: xem `supabase/HUONG_DAN.md` (chạy `supabase/schema.sql`, điền `rubik-wasm/www/config.js`).
+  - Bản server `rubik-web` dùng SQLite `rubik.db`: xem `rubik-web/README.md`.

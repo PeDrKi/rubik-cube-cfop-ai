@@ -1,0 +1,1954 @@
+const $ = id => document.getElementById(id),
+  ORD = 'UDFBLR';
+//@@SLOT2@@
+const say = t => ($('status').textContent = t);
+/* Mọi chuỗi chèn vào innerHTML đều đi qua esc (tên thế, công thức, tên người chơi, dữ liệu nhập từ file TSV). */
+const esc = t =>
+  String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const warnBusy = () => say('Đang thực hiện, đợi xong hoặc bấm Dừng (Esc) để huỷ.');
+let state = '',
+  hist = [],
+  computing = false,
+  selFace = null,
+  logged = new Set(),
+  fast = false;
+const COLN = { U: '--U', D: '--D', F: '--F', B: '--B', L: '--L', R: '--R' };
+/* ============ khối Rubik: tự dựng 3D bằng canvas ============
+   Không dùng CSS 3D: tự chiếu phối cảnh và vẽ các mặt từ xa đến gần, nên hiệu ứng xoay giống nhau ở mọi trình duyệt.
+   Toạ độ và quy ước xoay lấy đúng từ mesh.rs: trục y hướng lên, z hướng về người xem, xoay tay phải quanh pháp tuyến mặt. */
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+function rod(v, a, deg) {
+  const t = (deg * Math.PI) / 180,
+    c = Math.cos(t),
+    s = Math.sin(t),
+    k = dot(a, v) * (1 - c);
+  return [
+    v[0] * c + (a[1] * v[2] - a[2] * v[1]) * s + a[0] * k,
+    v[1] * c + (a[2] * v[0] - a[0] * v[2]) * s + a[1] * k,
+    v[2] * c + (a[0] * v[1] - a[1] * v[0]) * s + a[2] * k,
+  ];
+}
+const HEX = { U: '#ffd200', D: '#ffffff', F: '#0fa037', B: '#0f4bd2', L: '#d21e2d', R: '#ff6400' },
+  PANEL = '#121419';
+const FD = {
+  U: { n: [0, 1, 0], r: [1, 0, 0], u: [0, 0, -1] },
+  D: { n: [0, -1, 0], r: [1, 0, 0], u: [0, 0, 1] },
+  F: { n: [0, 0, 1], r: [1, 0, 0], u: [0, 1, 0] },
+  B: { n: [0, 0, -1], r: [-1, 0, 0], u: [0, 1, 0] },
+  L: { n: [-1, 0, 0], r: [0, 0, 1], u: [0, 1, 0] },
+  R: { n: [1, 0, 0], r: [0, 0, -1], u: [0, 1, 0] },
+};
+const cv = $('cv'),
+  g = cv.getContext ? cv.getContext('2d') : null;
+const cubies = [],
+  stickers = new Array(54);
+for (let ix = -1; ix <= 1; ix++)
+  for (let iy = -1; iy <= 1; iy++)
+    for (let iz = -1; iz <= 1; iz++) {
+      if (!ix && !iy && !iz) continue;
+      const cb = { p: [ix, iy, iz], stk: {} };
+      ORD.split('').forEach((f, fi) => {
+        const d = FD[f],
+          av = { U: iy, D: iy, F: iz, B: iz, L: ix, R: ix }[f],
+          lv = { U: 1, D: -1, F: 1, B: -1, L: -1, R: 1 }[f];
+        if (av === lv) {
+          const idx = fi * 9 + (1 - dot(cb.p, d.u)) * 3 + (dot(cb.p, d.r) + 1);
+          cb.stk[f] = idx;
+          stickers[idx] = { cb, f, fi };
+        }
+      });
+      cubies.push(cb);
+    }
+let yaw = -38,
+  pitch = 28,
+  zoom = 1,
+  anim = null,
+  hits = [];
+const CAMD = 9;
+function viewRot(v) {
+  const ya = (yaw * Math.PI) / 180,
+    pa = (pitch * Math.PI) / 180,
+    cy = Math.cos(ya),
+    sy = Math.sin(ya),
+    cp = Math.cos(pa),
+    sp = Math.sin(pa),
+    x = v[0] * cy + v[2] * sy,
+    z = -v[0] * sy + v[2] * cy;
+  return [x, v[1] * cp - z * sp, v[1] * sp + z * cp];
+}
+const worldRot = (cb, v) => (anim && anim.layer(cb.p) ? rod(v, anim.ax, anim.deg) : v);
+function poly(pts) {
+  g.beginPath();
+  pts.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])));
+  g.closePath();
+}
+function render() {
+  if (!g || !state) return;
+  const dpr = window.devicePixelRatio || 1,
+    W = cv.clientWidth || 640,
+    H = cv.clientHeight || 440;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+  }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  const SZ = Math.min(W * 0.66, H * 0.8),
+    F = SZ * 0.19 * CAMD * zoom,
+    proj = p => {
+      const z = CAMD - p[2];
+      return [W / 2 + (F * p[0]) / z, H / 2 - (F * p[1]) / z];
+    },
+    items = [],
+    B = 0.48,
+    S = 0.41;
+  for (const cb of cubies)
+    for (let fi = 0; fi < 6; fi++) {
+      const f = ORD[fi],
+        d = FD[f],
+        T = v => viewRot(worldRot(cb, v));
+      const n = T(d.n),
+        c = T(add(cb.p, mul(d.n, B))),
+        tc = [-c[0], -c[1], CAMD - c[2]];
+      if (dot(n, tc) <= 0) continue; // mặt quay lưng lại camera
+      const quad = (off, h) =>
+        [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ].map(([a, b]) => proj(T(add(add(add(cb.p, mul(d.n, off)), mul(d.r, a * h)), mul(d.u, b * h)))));
+      const has = cb.stk[f] !== undefined;
+      items.push({ dist: dot(tc, tc), panel: quad(B, B), idx: cb.stk[f], st: has ? quad(B + 0.012, S) : null });
+    }
+  items.sort((a, b) => b.dist - a.dist);
+  hits = [];
+  g.lineJoin = 'round';
+  for (const it of items) {
+    poly(it.panel);
+    g.fillStyle = g.strokeStyle = PANEL;
+    g.lineWidth = 1;
+    g.fill();
+    g.stroke();
+    if (it.st) {
+      const on = selFace && ORD[Math.floor(it.idx / 9)] === selFace;
+      poly(it.st);
+      g.fillStyle = g.strokeStyle = HEX[state[it.idx]];
+      g.lineWidth = (F / CAMD) * 0.08;
+      g.fill();
+      g.stroke();
+      if (on) {
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 2.5;
+        g.stroke();
+      }
+      hits.push({ idx: it.idx, pts: it.st });
+    }
+  }
+}
+function pick(x, y) {
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const q = hits[i].pts;
+    let ins = false;
+    for (let a = 0, b = q.length - 1; a < q.length; b = a++)
+      if (q[a][1] > y !== q[b][1] > y && x < ((q[b][0] - q[a][0]) * (y - q[a][1])) / (q[b][1] - q[a][1]) + q[a][0])
+        ins = !ins;
+    if (ins) return hits[i].idx;
+  }
+  return -1;
+}
+/* ============ sơ đồ 6 mặt (net) ============ */
+const NPOS = { U: [3, 0], L: [0, 3], F: [3, 3], R: [6, 3], B: [9, 3], D: [3, 6] };
+function buildNet(box, onClick) {
+  box.innerHTML = '';
+  ORD.split('').forEach((f, fi) => {
+    for (let i = 0; i < 9; i++) {
+      const c = document.createElement('i');
+      c.style.gridColumn = NPOS[f][0] + (i % 3) + 1;
+      c.style.gridRow = NPOS[f][1] + Math.floor(i / 3) + 1;
+      c.dataset.k = fi * 9 + i;
+      c.onclick = () => onClick(fi * 9 + i);
+      box.appendChild(c);
+    }
+  });
+  return [...box.children];
+}
+const net = buildNet($('net'), k => selectFace(ORD[Math.floor(k / 9)]));
+function selectFace(f) {
+  selFace = selFace === f ? null : f;
+  paint();
+}
+/* Trợ năng: khối vẽ bằng canvas nên trình đọc màn hình không thấy gì. Mô tả bằng lời trạng thái 54 ô (đặt vào aria-label của canvas)
+   và thông báo kết quả sau mỗi lượt xoay (vùng aria-live #a11y). */
+const A11Y_COLOR = { U: 'vàng', D: 'trắng', F: 'xanh lá', B: 'xanh dương', L: 'đỏ', R: 'cam' };
+const A11Y_FACE = { U: 'trên', D: 'dưới', F: 'trước', B: 'sau', L: 'trái', R: 'phải' };
+function describeState(s) {
+  if (s.length !== 54) return 'Khối Rubik 3D';
+  if (SOLVED_FACES(s)) return 'Khối Rubik đã giải xong.';
+  const faces = [...ORD].map((f, fi) => {
+    const rows = [0, 1, 2].map(r => [0, 1, 2].map(c => A11Y_COLOR[s[fi * 9 + r * 3 + c]]).join(', '));
+    return `Mặt ${A11Y_FACE[f]} (${f}): hàng 1 ${rows[0]}; hàng 2 ${rows[1]}; hàng 3 ${rows[2]}.`;
+  });
+  return 'Khối Rubik chưa giải. ' + faces.join(' ');
+}
+let annQ = [];
+function flushAnnounce() {
+  if (!annQ.length) return;
+  const n = annQ.length;
+  $('a11y').textContent =
+    (n <= 8 ? 'Đã xoay: ' + annQ.join(' ') : `Đã xoay ${n} nước`) +
+    (SOLVED_FACES(state) ? '. Khối đã giải xong.' : '.');
+  annQ = [];
+}
+function paint() {
+  const s = state;
+  cv.setAttribute('aria-label', describeState(s));
+  for (let i = 0; i < 54; i++) {
+    net[i].style.background = `var(${COLN[s[i]]})`;
+    net[i].classList.toggle('sel', !!(selFace && ORD[Math.floor(i / 9)] === selFace));
+  }
+  $('selhint').textContent = selFace
+    ? `Mặt ${selFace} đang chọn · ↑ → xoay thuận · ↓ ← xoay nghịch · bấm lại để bỏ chọn`
+    : '';
+  render();
+}
+/* ============ xoay góc nhìn + chọn mặt ============ */
+let dr = false,
+  lx,
+  ly,
+  mv0 = 0;
+const sc = $('scene');
+sc.onpointerdown = e => {
+  dr = true;
+  mv0 = 0;
+  lx = e.clientX;
+  ly = e.clientY;
+  sc.setPointerCapture(e.pointerId);
+};
+sc.onpointermove = e => {
+  if (dr) {
+    mv0 += Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly);
+    yaw += (e.clientX - lx) * 0.6;
+    pitch = Math.max(-89, Math.min(89, pitch + (e.clientY - ly) * 0.6));
+    lx = e.clientX;
+    ly = e.clientY;
+    render();
+  }
+};
+sc.onpointerup = e => {
+  dr = false;
+  if (mv0 < 5) {
+    const r = cv.getBoundingClientRect(),
+      i = pick(e.clientX - r.left, e.clientY - r.top);
+    if (i >= 0) selectFace(ORD[Math.floor(i / 9)]);
+  }
+};
+sc.onwheel = e => {
+  e.preventDefault();
+  zoom = Math.min(1.8, Math.max(0.6, zoom * (e.deltaY < 0 ? 1.08 : 0.92)));
+  render();
+};
+addEventListener('resize', render);
+if (window.ResizeObserver) new ResizeObserver(() => render()).observe(sc);
+sc.ondblclick = () => {
+  yaw = -38;
+  pitch = 28;
+  zoom = 1;
+  render();
+};
+sc.addEventListener('pointerdown', () => $('viewhint').classList.add('gone'), { once: true });
+/* ============ nước đi + animation xoay lớp ============ */
+const AX = { U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], L: [-1, 0, 0], R: [1, 0, 0] };
+const SPEC = {
+  U: ['U', 1, [1]],
+  D: ['D', 1, [-1]],
+  F: ['F', 2, [1]],
+  B: ['B', 2, [-1]],
+  L: ['L', 0, [-1]],
+  R: ['R', 0, [1]],
+  M: ['L', 0, [0]],
+  E: ['D', 1, [0]],
+  S: ['F', 2, [0]],
+  u: ['U', 1, [0, 1]],
+  d: ['D', 1, [-1, 0]],
+  f: ['F', 2, [0, 1]],
+  b: ['B', 2, [-1, 0]],
+  l: ['L', 0, [-1, 0]],
+  r: ['R', 0, [0, 1]],
+  x: ['R', 0, [-1, 0, 1]],
+  y: ['U', 1, [-1, 0, 1]],
+  z: ['F', 2, [-1, 0, 1]],
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* Bảng hoán vị 54 ô cho từng nước (mới[i] = cũ[perm[i]]), sinh từ rubik-core bằng `cargo run -p rubik-core --example gen_move_table`
+   và được test Rust đối chiếu; nguồn gốc ở web/move_table.json, build.js chèn vào đây. */
+const MT = /*@@MOVE_TABLE@@*/ {};
+const SOLVED_FACES = st => {
+  for (let f = 0; f < 6; f++) for (let i = 1; i < 9; i++) if (st[f * 9 + i] !== st[f * 9]) return false;
+  return true;
+};
+function localMove(st, tok) {
+  const p = MT[tok.endsWith("2'") ? tok.slice(0, -1) : tok];
+  if (!p || st.length !== 54) return null;
+  let o = '';
+  for (let i = 0; i < 54; i++) o += st[p[i]];
+  return { state: o, moves: [tok], solved: SOLVED_FACES(o) };
+}
+const played = []; // các nước đã chạy xong (cho kiểm thử tự động)
+/* Xoay lớp: mỗi khung hình đặt góc xoay (tay phải quanh pháp tuyến mặt, giống mesh.rs: nước thuận là -90°, nghịch là +90°) rồi vẽ lại. */
+const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+function setPose(tok, k) {
+  const [fc, idx, al] = SPEC[tok[0]],
+    pr = tok.endsWith("'"),
+    mag = 90 * (tok.includes('2') ? 2 : 1);
+  anim = { ax: AX[fc], deg: (pr ? mag : -mag) * easeIO(k), layer: p => al.includes(p[idx]) };
+  render();
+}
+function spin(tok, ms) {
+  const tk = { stop: false };
+  tk.p = new Promise(res => {
+    const t0 = performance.now();
+    const step = now => {
+      if (tk.stop) return res();
+      const k = Math.min(1, Math.max(0, (now - t0) / ms));
+      setPose(tok, k);
+      if (k < 1) requestAnimationFrame(step);
+      else res();
+    };
+    requestAnimationFrame(step);
+  });
+  return tk;
+}
+async function animateMove(tok) {
+  // Kết quả nước đi tính ngay trong trình duyệt (bảng hoán vị MT, sinh từ engine Rust): không chờ server, giải 60 nước = 0 lần gọi API.
+  // Chỉ khi gặp ký hiệu lạ (không có trong bảng) mới hỏi server.
+  let r = localMove(state, tok),
+    next = null;
+  if (!r) {
+    next = api('apply', { state, moves: tok });
+    next.catch(() => {});
+  }
+  const ms = (fast ? 70 : +$('spd').value) * (tok.includes('2') ? 1.6 : 1);
+  const sp = spin(tok, ms);
+  await Promise.race([sp.p, sleep(ms + 400)]);
+  sp.stop = true; // dự phòng khi tab bị ẩn (requestAnimationFrame dừng)
+  if (!r)
+    try {
+      r = await next;
+    } catch (e) {
+      say(e.message);
+    }
+  anim = null;
+  if (r) {
+    state = r.state;
+    played.push(tok);
+    annQ.push(tok);
+  } else if (ranked) hist.pop();
+  paint();
+  if (r && ranked) rankedMove(r);
+}
+/* Cửa sau cho kiểm thử tự động */
+window.__cube = {
+  played,
+  localMove,
+  cubies,
+  stickers,
+  render,
+  setPose,
+  setState: s => {
+    state = s;
+    paint();
+  },
+  clearPose: () => {
+    anim = null;
+    render();
+  },
+  get anim() {
+    return anim;
+  },
+  get hits() {
+    return hits;
+  },
+  layerSize: t => {
+    const [, i, al] = SPEC[t[0]];
+    return cubies.filter(c => al.includes(c.p[i])).length;
+  },
+  restCenters: () => stickers.map(x => add(x.cb.p, mul(FD[x.f].n, 0.5))),
+  stickerCenters: () => stickers.map(x => worldRot(x.cb, add(x.cb.p, mul(FD[x.f].n, 0.5)))),
+  centers: () => cubies.map(c => worldRot(c, c.p)),
+};
+let chain = Promise.resolve(),
+  epoch = 0,
+  inflight = 0;
+const busy = () => inflight > 0 || computing;
+function enqueue(list) {
+  for (const tok of [].concat(list)) {
+    const e = epoch;
+    inflight++;
+    chain = chain.then(async () => {
+      try {
+        if (e === epoch) {
+          hist.push(state);
+          if (hist.length > 800) hist.shift();
+          await animateMove(tok);
+        }
+      } finally {
+        inflight--;
+        if (!inflight) flushAnnounce();
+      }
+    });
+  }
+}
+function mark(fn) {
+  const e = epoch;
+  inflight++;
+  chain = chain.then(() => {
+    try {
+      if (e === epoch) fn();
+    } finally {
+      inflight--;
+      if (!inflight) flushAnnounce();
+    }
+  });
+}
+function stop() {
+  epoch++;
+  if (computing) {
+    computing = false;
+    cancelCompute();
+  }
+}
+async function undo() {
+  epoch++;
+  hintMoves = [];
+  await chain;
+  if (hist.length) {
+    state = hist.pop();
+    if (ranked) ranked.moves.pop();
+    paint();
+  }
+}
+let mod = { p: false, d: false, w: false };
+function tokFor(base, { p, d, w }) {
+  let b = base;
+  if (w && 'UDFBLR'.includes(b)) b = b.toLowerCase();
+  return b + (d ? '2' : '') + (p ? "'" : '');
+}
+const mvBox = $('mv');
+['U', 'D', 'F', 'B', 'L', 'R', 'M', 'E', 'S', 'x', 'y', 'z'].forEach(m => {
+  const b = document.createElement('button');
+  b.textContent = m;
+  b.onclick = () => userMove(tokFor(m, mod));
+  mvBox.appendChild(b);
+});
+[
+  ['mP', 'p'],
+  ['mD', 'd'],
+  ['mW', 'w'],
+].forEach(
+  ([id, k]) =>
+    ($(id).onclick = () => {
+      mod[k] = !mod[k];
+      $(id).classList.toggle('on', mod[k]);
+    })
+);
+$('run').onclick = async () => {
+  if (busy()) return warnBusy();
+  try {
+    const r = await api('apply', { state, moves: $('fx').value });
+    userMove(r.moves);
+  } catch (e) {
+    say(e.message);
+  }
+};
+$('undo').onclick = undo;
+$('stop').onclick = stop;
+$('spd').oninput = () => ($('spv').textContent = $('spd').value + ' ms');
+$('spv').textContent = $('spd').value + ' ms';
+const emptyPlan = () => {
+  $('plan').innerHTML =
+    '<div class="empty"><div class="big">🧩</div><b>Chưa có lời giải</b><p>Bấm <kbd>Giải tự động</kbd> để máy giải cả khối, hoặc <kbd>H</kbd> để xin một gợi ý. Bảng công thức cho thấy từng chặng Cross → F2L → OLL → PLL.</p><button id="tbl2">Xem bảng công thức</button></div>';
+  $('tbl2').onclick = () => $('tbl').click();
+};
+const gameReset = () => {
+  abortRanked('khối được đặt lại');
+  logged.clear();
+  hist.length = 0;
+  selFace = null;
+  hintMoves = [];
+};
+async function shuffle() {
+  if (busy()) return warnBusy();
+  try {
+    const r = await api('scramble', { n: 25, seed: Math.floor(Math.random() * 4294967296) });
+    gameReset();
+    state = (await api('solved')).state;
+    paint();
+    fast = true;
+    enqueue(r.moves);
+    mark(() => {
+      fast = false;
+      hist.length = 0;
+      say('Công thức xáo: ' + r.moves.join(' '));
+    });
+    emptyPlan();
+  } catch (e) {
+    say(e.message);
+  }
+}
+$('shuf').onclick = shuffle;
+/* ============ giải, gợi ý, bảng công thức ============ */
+function stageList(p) {
+  const o = [['Cross', p.cross]];
+  p.f2l.forEach(s => o.push(['F2L - cặp ' + s.slot, s]));
+  o.push(['OLL', p.oll], ['PLL', p.pll]);
+  return o;
+}
+const hl = i => document.querySelectorAll('.stage').forEach((e, k) => e.classList.toggle('on', k === i));
+/* ============ cửa sổ nổi (popover): kéo tiêu đề để di chuyển, kéo cạnh/góc để đổi kích thước ============ */
+const WIN_LS = 'rubik_windows_v1',
+  WINS = {},
+  MINW = 280,
+  MINH = 150;
+let zTop = 40;
+const isMobile = () => !!(window.matchMedia && matchMedia('(max-width:860px)').matches);
+const readG = () => {
+  try {
+    return JSON.parse(localStorage.getItem(WIN_LS) || '{}');
+  } catch (e) {
+    return {};
+  }
+};
+function saveG() {
+  try {
+    const o = {};
+    for (const k in WINS) if (WINS[k].geo) o[k] = WINS[k].geo;
+    localStorage.setItem(WIN_LS, JSON.stringify(o));
+  } catch (e) {}
+}
+function clampG(g) {
+  const vw = innerWidth,
+    vh = innerHeight;
+  g.w = Math.max(MINW, Math.min(g.w, vw - 16));
+  g.h = Math.max(MINH, Math.min(g.h, vh - 16));
+  g.x = Math.max(120 - g.w, Math.min(g.x, vw - 120));
+  g.y = Math.max(0, Math.min(g.y, vh - 44));
+  return g;
+}
+function applyG(w) {
+  const g = clampG(w.geo),
+    st = w.el.style;
+  st.left = g.x + 'px';
+  st.top = g.y + 'px';
+  st.width = g.w + 'px';
+  st.height = g.h + 'px';
+  w.el.classList.toggle('min', !!g.min);
+}
+function defGeo(id) {
+  const vw = innerWidth,
+    vh = innerHeight,
+    w = Math.min(id === 'plan' ? 380 : 400, vw - 32),
+    h = Math.min(id === 'plan' ? 560 : 520, vh - 110);
+  return { x: vw - w - (id === 'plan' ? 16 : 44), y: id === 'plan' ? 72 : 104, w, h, min: false };
+}
+function startDrag(e, w, mode) {
+  if (e.button > 0) return;
+  e.preventDefault();
+  const g0 = { ...w.geo },
+    x0 = e.clientX,
+    y0 = e.clientY;
+  const move = ev => {
+    const dx = ev.clientX - x0,
+      dy = ev.clientY - y0,
+      g = { ...g0 };
+    if (mode === 'move') {
+      g.x = g0.x + dx;
+      g.y = g0.y + dy;
+    } else {
+      if (mode.includes('e')) g.w = g0.w + dx;
+      if (mode.includes('s')) g.h = g0.h + dy;
+      if (mode.includes('w')) {
+        g.w = Math.max(MINW, g0.w - dx);
+        g.x = g0.x + (g0.w - g.w);
+      }
+      if (mode.includes('n')) {
+        g.h = Math.max(MINH, g0.h - dy);
+        g.y = g0.y + (g0.h - g.h);
+      }
+    }
+    w.geo = clampG(g);
+    applyG(w);
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    saveG();
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+}
+function raiseWin(id) {
+  WINS[id].el.style.zIndex = ++zTop;
+  for (const k in WINS) WINS[k].el.classList.toggle('focus', k === id);
+}
+function syncWinBtns() {
+  $('winPlanBtn').classList.toggle('on', !WINS.plan.el.hidden);
+  $('winLibBtn').classList.toggle('on', !WINS.lib.el.hidden);
+}
+/* Bàn phím: mở cửa sổ do người dùng chủ động (nút, menu, Ctrl+J) thì đưa con trỏ vào cửa sổ và nhớ nơi đã mở; đóng thì trả con trỏ về chỗ cũ.
+   Cửa sổ tự mở khi có gợi ý (H) KHÔNG cướp con trỏ, để người chơi bằng phím không bị gián đoạn. */
+const FOCUSABLE =
+  'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+const winFocusables = el =>
+  [...el.querySelectorAll(FOCUSABLE)].filter(n => {
+    if (n.closest('[hidden]')) return false;
+    const c = getComputedStyle(n);
+    return c.display !== 'none' && c.visibility !== 'hidden';
+  });
+function openWin(id, focus) {
+  const w = WINS[id],
+    was = !w.el.hidden;
+  if (!w.geo) w.geo = Object.assign(defGeo(id), readG()[id] || {});
+  applyG(w);
+  w.el.hidden = false;
+  raiseWin(id);
+  syncWinBtns();
+  if (focus) {
+    if (!was && !w.el.contains(document.activeElement)) w.opener = document.activeElement;
+    w.el.tabIndex = -1;
+    w.el.focus({ preventScroll: true });
+  }
+}
+function closeWin(id) {
+  const w = WINS[id],
+    had = w.el.contains(document.activeElement);
+  w.el.hidden = true;
+  syncWinBtns();
+  saveG();
+  const o = w.opener;
+  w.opener = null;
+  if (had && o && o.isConnected && o !== document.body && !o.closest('[hidden]')) o.focus({ preventScroll: true });
+}
+function toggleWin(id) {
+  WINS[id].el.hidden ? openWin(id, true) : closeWin(id);
+}
+function toggleMin(id) {
+  const w = WINS[id];
+  w.geo.min = !w.geo.min;
+  applyG(w);
+  saveG();
+}
+function initWin(id) {
+  const el = $('win-' + id),
+    w = { el, id, geo: null };
+  WINS[id] = w;
+  ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].forEach(d => {
+    const i = document.createElement('i');
+    i.className = 'rz';
+    i.dataset.dir = d;
+    i.addEventListener('pointerdown', e => {
+      if (!isMobile()) startDrag(e, w, d);
+    });
+    el.appendChild(i);
+  });
+  el.addEventListener('pointerdown', () => raiseWin(id), true);
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      closeWin(id);
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const f = winFocusables(el);
+    if (!f.length) {
+      e.preventDefault();
+      el.focus();
+      return;
+    } // giữ con trỏ bàn phím trong cửa sổ
+    const a = document.activeElement,
+      first = f[0],
+      last = f[f.length - 1];
+    if (e.shiftKey && (a === first || a === el)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && a === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+  const head = el.querySelector('.wh');
+  head.addEventListener('pointerdown', e => {
+    if (e.target.closest('button') || isMobile()) return;
+    startDrag(e, w, 'move');
+  });
+  head.addEventListener('dblclick', e => {
+    if (!e.target.closest('button')) toggleMin(id);
+  });
+  el.querySelector('[data-wact=min]').onclick = () => toggleMin(id);
+  el.querySelector('[data-wact=close]').onclick = () => closeWin(id);
+}
+initWin('plan');
+initWin('lib');
+addEventListener('resize', () => {
+  for (const k in WINS) if (WINS[k].geo) applyG(WINS[k]);
+});
+/* gọi mỗi khi có kết quả mới: chỉ mở nếu đang đóng, và bung ra nếu đang thu gọn (không giành lại vị trí/độ nổi) */
+function showPane(id) {
+  const w = WINS[id];
+  if (w.el.hidden) openWin(id);
+  else if (w.geo.min) {
+    w.geo.min = false;
+    applyG(w);
+  }
+}
+$('winPlanBtn').onclick = () => toggleWin('plan');
+$('winPlanM').onclick = () => toggleWin('plan');
+$('winLibBtn').onclick = () => toggleWin('lib');
+$('libm').onclick = () => {
+  openWin('lib', true);
+  if (!isMobile()) $('q').focus();
+};
+function showPlan(p) {
+  showPane('plan');
+  const st = stageList(p);
+  $('plan').innerHTML =
+    st
+      .map(
+        ([n, s], i) =>
+          `<div class="stage" id="st${i}"><b>${esc(n)}${s.case_name ? ' – ' + esc(s.case_name) : ''} <small>(${s.moves.length} nước)</small></b><code>${
+            s.status === 'failed'
+              ? 'Không tìm được trong ngân sách'
+              : s.status === 'pending'
+                ? 'Chưa tính được (chặng trước chưa xong)'
+                : !s.moves.length
+                  ? 'Đã xong sẵn'
+                  : esc(s.moves.join(' '))
+          }</code></div>`
+      )
+      .join('') + `<p>Tổng cộng ${p.total} nước.</p>`;
+  return st;
+}
+/* nhật ký OLL/PLL, mỗi thế ghi 1 lần mỗi ván (CaseLog) */
+const LS = 'rubik_oll_pll_history',
+  readH = () => {
+    try {
+      return JSON.parse(localStorage.getItem(LS) || '[]');
+    } catch (e) {
+      return [];
+    }
+  };
+function logCases(p) {
+  const rows = [];
+  for (const [k, s] of [
+    ['OLL', p.oll],
+    ['PLL', p.pll],
+  ])
+    if (s.status === 'moves' && s.case_name) {
+      const key = k + '|' + s.case_name;
+      if (!logged.has(key)) {
+        logged.add(key);
+        rows.push([Math.floor(Date.now() / 1000), k, s.case_name, s.moves.length]);
+      }
+    }
+  if (rows.length)
+    try {
+      localStorage.setItem(LS, JSON.stringify(readH().concat(rows)));
+    } catch (e) {
+      say('Bảng công thức xong, nhưng KHÔNG ghi được nhật ký: ' + e.message);
+    }
+}
+async function compute(route, body, label) {
+  computing = true;
+  const t0 = Date.now(),
+    iv = label ? setInterval(() => say(`${label} ${Math.floor((Date.now() - t0) / 1000)}s, bấm Esc để huỷ`), 500) : 0;
+  try {
+    return await api(route, body);
+  } finally {
+    computing = false;
+    clearInterval(iv);
+  }
+}
+async function showBreakdown() {
+  if (busy()) return warnBusy();
+  abortRanked('mở bảng công thức');
+  say('Đang tính bảng công thức…');
+  try {
+    const p = await compute('solve', { state }, 'Đang tính bảng công thức…');
+    showPlan(p);
+    logCases(p);
+    say(`Bảng công thức: ${p.total} nước`);
+  } catch (e) {
+    say(e.message);
+  }
+}
+async function autoSolve() {
+  if (busy()) return warnBusy();
+  abortRanked('dùng giải tự động');
+  say('Đang tính lời giải…');
+  try {
+    const p = await compute('solve', { state }, 'Đang tính lời giải…'),
+      st = showPlan(p);
+    logCases(p);
+    const bad = st.find(([n, s]) => s.status === 'failed');
+    if (bad) say(`Không giải được chặng ${bad[0]} trong ngân sách hiện tại.`);
+    else say('Đang chạy lời giải…');
+    st.forEach(([n, s], i) => {
+      if (s.moves.length) {
+        mark(() => hl(i));
+        enqueue(s.moves);
+      }
+    });
+    mark(() => {
+      hl(-1);
+      if (!bad) say(p.total ? 'Xong.' : 'Khối đã được giải.');
+    });
+  } catch (e) {
+    if (e.message !== 'Đã huỷ') say(e.message);
+  }
+}
+let lastHint = { failed: false, state: '' },
+  retryN = 0,
+  hintMoves = [];
+const userMove = t => {
+  hintMoves = [];
+  enqueue(t);
+};
+function runHint() {
+  if (busy() || !hintMoves.length) return;
+  const m = hintMoves;
+  hintMoves = [];
+  say('Đang thực hiện gợi ý…');
+  enqueue(m);
+}
+async function computeHint() {
+  const retry = lastHint.failed && lastHint.state === state;
+  say(retry ? 'Đang tính gợi ý (thử hướng khác)…' : 'Đang tính gợi ý…');
+  const st = state,
+    h = await compute(
+      'hint',
+      { state, seed: retry ? ++retryN : null },
+      retry ? 'Đang tính gợi ý (thử hướng khác)…' : 'Đang tính gợi ý…'
+    );
+  lastHint = { failed: !h.moves.length && h.stage !== 'done', state: st };
+  hintMoves = h.moves.slice();
+  showPane('plan');
+  $('plan').innerHTML =
+    `<div class="stage on"><b>${esc(h.label)}${h.case_name ? ' – ' + esc(h.case_name) : ''}</b><code>${esc(h.moves.join(' ')) || (h.stage === 'done' ? 'Đã giải xong' : 'Chưa tìm được, bấm H để thử hướng khác')}</code></div>` +
+    (h.moves.length ? '<button class="p" id="hrun">Chạy gợi ý</button>' : '');
+  if ($('hrun')) $('hrun').onclick = runHint;
+  return h;
+}
+async function doHint() {
+  if (busy()) return warnBusy();
+  abortRanked('dùng gợi ý');
+  try {
+    const h = await computeHint();
+    say(h.moves.length ? 'Gợi ý sẵn sàng: bấm “Chạy gợi ý” hoặc nhấn Alt để chạy từng bước.' : 'Không có nước gợi ý.');
+  } catch (e) {
+    if (e.message !== 'Đã huỷ') say(e.message);
+  }
+}
+async function altStep() {
+  if (busy()) return warnBusy();
+  abortRanked('dùng gợi ý');
+  try {
+    if (!hintMoves.length) await computeHint();
+    if (hintMoves.length) {
+      const m = hintMoves.shift();
+      enqueue(m);
+      say('Gợi ý (từng bước): ' + m);
+      if (!hintMoves.length)
+        mark(() => {
+          computeHint().catch(() => {});
+        });
+    }
+  } catch (e) {
+    if (e.message !== 'Đã huỷ') say(e.message);
+  }
+}
+$('auto').onclick = autoSolve;
+$('hint').onclick = doHint;
+$('tbl').onclick = showBreakdown;
+/* ============ thư viện ============ */
+let algos = { oll: [], pll: [] },
+  tab = 'oll';
+const lib = () => {
+  const q = $('q').value.toLowerCase();
+  $('lib').innerHTML =
+    algos[tab]
+      .filter(a => (a.name + a.alg).toLowerCase().includes(q))
+      .map(
+        a =>
+          `<div data-alg="${esc(a.alg)}" title="Bấm để nạp vào ô công thức"><b>${esc(a.name)}</b><span>${esc(a.alg)}</span><button title="Chạy công thức này">▶</button></div>`
+      )
+      .join('') || '<p style="color:var(--mut)">Không có công thức khớp.</p>';
+};
+$('lib').onclick = e => {
+  const row = e.target.closest('[data-alg]');
+  if (!row) return;
+  $('fx').value = row.dataset.alg;
+  if (e.target.closest('button')) $('run').click();
+  else say('Đã nạp công thức vào ô nhập, bấm Chạy để thực hiện.');
+};
+document.querySelectorAll('.tabs [data-t]').forEach(
+  b =>
+    (b.onclick = () => {
+      tab = b.dataset.t;
+      document.querySelectorAll('.tabs [data-t]').forEach(x => x.classList.toggle('on', x === b));
+      lib();
+    })
+);
+$('q').oninput = lib;
+/* ============ thống kê (Ctrl+Y) ============ */
+let stab = 'OLL';
+function openStats() {
+  const dlg = $('sdlg');
+  if (dlg.open) {
+    dlg.close();
+    return;
+  }
+  renderStats();
+  dlg.showModal();
+}
+function renderStats() {
+  const h = readH(),
+    cnt = {};
+  h.forEach(([, k, n]) => {
+    cnt[k + '|' + n] = (cnt[k + '|' + n] || 0) + 1;
+  });
+  const std = algos[stab.toLowerCase()].map(a => a.name),
+    rows = std.map(n => [n, cnt[stab + '|' + n] || 0]);
+  const extra = Object.keys(cnt)
+    .filter(k => k.startsWith(stab + '|') && !std.includes(k.slice(4)))
+    .map(k => [k.slice(4), cnt[k]]);
+  const cmp = (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]);
+  rows.sort(cmp);
+  extra.sort(cmp);
+  const total = h.filter(r => r[1] === stab).length,
+    seen = rows.filter(r => r[1] > 0).length,
+    max = Math.max(1, ...rows.map(r => r[1]), ...extra.map(r => r[1]));
+  $('sinfo').textContent = `Đã gặp ${seen}/${rows.length} thế · tổng ${total} lần`;
+  const line = ([n, c]) =>
+    `<div class="bar${c ? '' : ' z'}"><b>${esc(n)}</b><span style="width:${(c / max) * 100}%"></span><em>${c}</em></div>`;
+  $('srows').innerHTML =
+    rows.map(line).join('') +
+    (extra.length
+      ? '<p style="color:var(--mut)">Thế ngoài bảng chuẩn (2-look hoặc macro):</p>' + extra.map(line).join('')
+      : '');
+}
+document.querySelectorAll('[data-s]').forEach(
+  b =>
+    (b.onclick = () => {
+      stab = b.dataset.s;
+      document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b));
+      renderStats();
+    })
+);
+$('stb').onclick = openStats;
+$('sclose').onclick = () => $('sdlg').close();
+$('simp').onclick = () => $('simpf').click();
+$('simpf').onchange = async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  const txt = await f.text(),
+    cur = readH(),
+    seen = new Set(cur.map(r => r.slice(0, 3).join('|'))),
+    add = [];
+  let bad = 0;
+  txt.split(/\r?\n/).forEach((ln, i) => {
+    if (!ln.trim() || (i === 0 && ln.startsWith('epoch'))) return;
+    const c = ln.split('\t');
+    const ep = parseInt(c[0], 10),
+      kind = c[2],
+      name = c[3],
+      mv = parseInt(c[4], 10);
+    if (!(ep > 0) || !['OLL', 'PLL'].includes(kind) || !name) {
+      bad++;
+      return;
+    }
+    const key = [ep, kind, name].join('|');
+    if (seen.has(key)) return;
+    seen.add(key);
+    add.push([ep, kind, name, Number.isNaN(mv) ? 0 : mv]);
+  });
+  try {
+    localStorage.setItem(LS, JSON.stringify(cur.concat(add)));
+  } catch (err) {
+    say('Không ghi được nhật ký: ' + err.message);
+    return;
+  }
+  renderStats();
+  say(`Đã nhập ${add.length} dòng${bad ? `, bỏ qua ${bad} dòng sai định dạng` : ''}.`);
+};
+$('sclr').onclick = () => {
+  if (confirm('Xoá toàn bộ nhật ký OLL/PLL?')) {
+    try {
+      localStorage.removeItem(LS);
+    } catch (e) {}
+    renderStats();
+  }
+};
+$('sexp').onclick = () => {
+  const t =
+    'epoch_giay\tthoi_gian_utc\tloai\tten_the\tso_nuoc\n' +
+    readH()
+      .map(([e, k, n, m]) => [e, new Date(e * 1000).toISOString().slice(0, 19).replace('T', ' '), k, n, m].join('\t'))
+      .join('\n') +
+    '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([t], { type: 'text/tab-separated-values' }));
+  a.download = 'lich_su_oll_pll.tsv';
+  a.click();
+};
+/* ============ điền màu thủ công ============ */
+const COLNAME = ['Vàng', 'Trắng', 'Xanh lá', 'Xanh dương', 'Đỏ', 'Cam'];
+let pf = Array(54).fill(null),
+  pcur = 0;
+const pnet = buildNet($('pnet'), k => {
+  const fi = Math.floor(k / 9);
+  if (k % 9 === 4) return;
+  if (pf[k] !== pcur && pf.filter(v => v === pcur).length >= 9) {
+    $('perr').textContent = `Màu ${COLNAME[pcur]} đã đủ 9 ô.`;
+    return;
+  }
+  $('perr').textContent = '';
+  pf[k] = pf[k] === pcur ? null : pcur;
+  pdraw();
+});
+function pdraw() {
+  pnet.forEach((c, k) => {
+    c.style.background = pf[k] === null ? '#333' : `var(${COLN[ORD[pf[k]]]})`;
+    c.classList.toggle('fix', k % 9 === 4);
+  });
+  $('pal').innerHTML = '';
+  ORD.split('').forEach((f, i) => {
+    const b = document.createElement('button');
+    b.style.background = `var(${COLN[f]})`;
+    b.style.borderColor = i === pcur ? '#fff' : 'transparent';
+    b.textContent = pf.filter(v => v === i).length + '/9';
+    b.title = COLNAME[i];
+    b.onclick = () => {
+      pcur = i;
+      pdraw();
+    };
+    $('pal').appendChild(b);
+  });
+}
+function pload(cur) {
+  pf = Array(54).fill(null);
+  for (let f = 0; f < 6; f++) pf[f * 9 + 4] = f;
+  if (cur) for (let i = 0; i < 54; i++) pf[i] = ORD.indexOf(cur[i]);
+  pdraw();
+}
+function openPaint(fromCur) {
+  if (busy()) return warnBusy();
+  pload(fromCur ? state : null);
+  $('perr').textContent = '';
+  $('pdlg').showModal();
+}
+$('paintb').onclick = () => openPaint(false);
+$('pcur').onclick = () => pload(state);
+$('pclose').onclick = () => $('pdlg').close();
+$('papply').onclick = async () => {
+  if (pf.some(v => v === null)) {
+    $('perr').textContent = 'Còn ô chưa tô màu.';
+    return;
+  }
+  try {
+    const r = await api('validate', { state: pf.map(i => ORD[i]).join('') });
+    gameReset();
+    state = r.state;
+    paint();
+    $('pdlg').close();
+    say('Đã áp dụng màu điền tay.');
+  } catch (e) {
+    $('perr').textContent = e.message;
+  }
+};
+/* ============ quét camera (khớp scan_ui.rs) ============ */
+const HINTS = [
+  'Cầm khối ở tư thế thoải mái bất kỳ và GHI NHỚ tư thế này. Mặt đang hướng LÊN TRỜI bây giờ là U.',
+  'Từ đúng tư thế ban đầu, LẬT NGƯỢC khối ra sau (như lật quyển sách). Mặt giờ hướng lên trời là D.',
+  'Quay lại ĐÚNG tư thế ban đầu. Mặt đang hướng VỀ PHÍA BẠN là F.',
+  'Từ tư thế ban đầu, XOAY khối 180° quanh trục thẳng đứng (như vặn nắp chai). Mặt giờ hướng về phía bạn là B.',
+  'Từ tư thế ban đầu, mặt bên TRÁI của khối là L.',
+  'Từ tư thế ban đầu, mặt bên PHẢI của khối (đối diện L) là R.',
+];
+const FACENAME = ['TRÊN (U)', 'DƯỚI (D)', 'TRƯỚC (F)', 'SAU (B)', 'TRÁI (L)', 'PHẢI (R)'];
+const SC = {
+  mode: 'cam',
+  cap: 'manual',
+  face: 0,
+  captured: Array(6).fill(null),
+  hist: [],
+  ref: null,
+  cool: 0,
+  result: null,
+  fix: null,
+  pick: 0,
+  scale: 0.7,
+  last: null,
+  running: false,
+  stream: null,
+  capturing: false,
+  timer: 0,
+  img: null,
+};
+const dlg = $('dlg'),
+  vid = document.createElement('video'),
+  pv = $('pv'),
+  pctx = pv.getContext('2d', { willReadFrequently: true });
+vid.playsInline = true;
+vid.muted = true;
+const allCaptured = () => SC.captured.every(Boolean),
+  rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+const close16 = (a, b) => a.every((c, i) => c.every((v, k) => Math.abs(v - b[i][k]) <= 16));
+function resetScan() {
+  SC.face = 0;
+  SC.captured = Array(6).fill(null);
+  SC.hist = [];
+  SC.ref = null;
+  SC.cool = 0;
+  SC.result = null;
+  SC.fix = null;
+  SC.pick = 0;
+  SC.capturing = false;
+  panels();
+}
+function drawGuide() {
+  const g = $('guide');
+  g.innerHTML = '';
+  const P = { U: [1, 0], L: [0, 1], F: [1, 1], R: [2, 1], B: [3, 1], D: [1, 2] };
+  'UDFBLR'.split('').forEach((f, i) => {
+    const c = document.createElement('i');
+    c.style.gridColumn = P[f][0] + 1;
+    c.style.gridRow = P[f][1] + 1;
+    c.textContent = f;
+    Object.assign(c.style, {
+      display: 'grid',
+      placeItems: 'center',
+      fontSize: '12px',
+      background: i === SC.face ? '#3cc85a' : '#323232',
+      color: i === SC.face ? '#000' : '#d2d2d2',
+    });
+    g.appendChild(c);
+  });
+  $('hintTxt').innerHTML = `<b>Mặt ${FACENAME[SC.face]}.</b> ${HINTS[SC.face]}`;
+}
+function renderChips() {
+  const c = $('chips');
+  c.innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    const b = document.createElement('button');
+    b.textContent = (SC.captured[i] ? '✅' : i === SC.face ? '▶' : '○') + ORD[i];
+    b.classList.toggle('on', i === SC.face);
+    b.onclick = () => {
+      if (SC.result) return;
+      SC.face = i;
+      SC.hist = [];
+      SC.ref = null;
+      SC.cool = 0;
+      panels();
+    };
+    c.appendChild(b);
+  }
+}
+function panels() {
+  const showCap = !SC.result && !allCaptured();
+  $('capture').hidden = !showCap;
+  $('capRow').hidden = SC.mode !== 'cam';
+  document.querySelectorAll('[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === SC.mode));
+  document.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === SC.cap));
+  $('file').hidden = SC.mode !== 'file';
+  if (SC.mode === 'file' && showCap && !$('fbtn')) {
+    const b = document.createElement('button');
+    b.id = 'fbtn';
+    b.textContent = 'Chọn ảnh cho mặt này';
+    b.onclick = () => $('file').click();
+    $('file').before(b);
+  }
+  if ($('fbtn')) $('fbtn').hidden = SC.mode !== 'file';
+  drawGuide();
+  renderChips();
+  renderResult();
+}
+function scanNet(box, list, cls, onClick) {
+  const cells = buildNet(box, k => onClick && onClick(Math.floor(k / 9), k % 9));
+  cells.forEach((c, k) => {
+    const f = SC.captured[Math.floor(k / 9)];
+    c.style.background = f ? rgb(f.samples[k % 9]) : '#333';
+    if (list.some(([a, b]) => a * 9 + b === k)) c.classList.add(cls);
+  });
+  return cells;
+}
+function renderResult() {
+  const box = $('res');
+  box.innerHTML = '';
+  const r = SC.result;
+  if (allCaptured() && !r) {
+    box.innerHTML = '<button class="p" id="rs">Nhận diện trạng thái</button>';
+    $('rs').onclick = resolveScan;
+    return;
+  }
+  if (!r) return;
+  const row = h => {
+    const d = document.createElement('div');
+    d.innerHTML = h;
+    box.appendChild(d);
+    return d;
+  };
+  const again = '<button id="again">Quét lại từ đầu</button>';
+  if (r.kind === 'ok') {
+    const rot = r.rotations.map((v, i) => (v ? `Mặt ${FACENAME[i]} (đã tự xoay ${v * 90}°)` : null)).filter(Boolean);
+    row(
+      '<p class="ok">Nhận diện thành công, trạng thái hợp lệ và giải được.</p>' +
+        (rot.length ? `<p>Đã tự sửa hướng ảnh cho: ${rot.join(', ')}</p>` : '')
+    );
+    if (r.auto_fixed.length) {
+      row(
+        `<p class="warn">${r.auto_fixed.length} ô màu mơ hồ đã được tự đoán lại để ghép ra trạng thái hợp lệ (viền vàng). Kiểm tra lại nếu nghi ngờ.</p>`
+      );
+      const n = document.createElement('div');
+      n.className = 'net';
+      n.style.cssText = '--cs:20px;margin:6px 0';
+      box.appendChild(n);
+      scanNet(n, r.auto_fixed, 'fixd');
+    }
+    row('<div class="row"><button class="p" id="apply">Áp dụng vào khối</button>' + again + '</div>');
+    $('apply').onclick = () => applyScan(r.state);
+  } else if (r.kind === 'none') {
+    row(
+      '<p class="err">Không tìm được cách ghép hợp lệ, có thể do phân loại màu sai ở vài ô.</p><p>Chụp lại dưới ánh sáng đều hơn, tránh bóng đổ và phản chiếu. Viền đỏ là ô đáng ngờ. Bấm vào bất kỳ ô nào (kể cả ô không viền đỏ nếu bạn thấy sai) để sửa màu ngay, không cần quét lại.</p>'
+    );
+    const n = document.createElement('div');
+    n.className = 'net';
+    n.style.cssText = '--cs:22px;margin:6px 0';
+    box.appendChild(n);
+    scanNet(n, r.suspicious, 'sus', (f, i) => {
+      SC.fix = [f, i];
+      renderResult();
+    });
+    if (SC.fix) {
+      const [f, i] = SC.fix,
+        d = row(`<div class="row">Đang sửa mặt ${ORD[f]} ô #${i + 1}, chọn đúng màu: </div>`).firstChild;
+      SC.captured.forEach((cf, g) => {
+        const b = document.createElement('button');
+        b.style.cssText = `width:30px;height:30px;padding:0;background:${rgb(cf.samples[4])}`;
+        b.title = FACENAME[g];
+        b.onclick = async () => {
+          SC.captured[f] = {
+            samples: SC.captured[f].samples.map((c, k) => (k === i ? cf.samples[4] : c)),
+            conf: SC.captured[f].conf.map((c, k) => (k === i ? 1 : c)),
+          };
+          SC.fix = null;
+          await resolveScan();
+        };
+        d.appendChild(b);
+      });
+    }
+    row(again);
+  } else {
+    row(`<p class="warn">Có ${r.candidates.length} cách ghép cùng hợp lệ, chọn cách đúng với khối thật của bạn:</p><div class="row"><input type="range" id="cp" min="0" max="${r.candidates.length - 1}" value="${SC.pick}"><span id="cpv">Phương án ${SC.pick + 1}</span></div>
+  <div class="row" style="margin-top:6px"><button class="p" id="use">Dùng phương án này</button>${again}</div>`);
+    $('cp').oninput = () => {
+      SC.pick = +$('cp').value;
+      $('cpv').textContent = 'Phương án ' + (SC.pick + 1);
+    };
+    $('use').onclick = () => applyScan(r.candidates[SC.pick]);
+  }
+  if ($('again')) $('again').onclick = resetScan;
+}
+async function resolveScan() {
+  say('Đang nhận diện màu…');
+  try {
+    SC.result = await compute('scan_resolve', { faces: SC.captured.map(f => ({ samples: f.samples, conf: f.conf })) });
+    say('');
+    renderResult();
+  } catch (e) {
+    say(e.message);
+  }
+}
+function applyScan(st) {
+  gameReset();
+  state = st;
+  paint();
+  closeScan();
+  say('Đã áp dụng trạng thái quét từ camera.');
+}
+function stopScan() {
+  SC.running = false;
+  clearTimeout(SC.timer);
+  if (SC.stream) {
+    SC.stream.getTracks().forEach(t => t.stop());
+    SC.stream = null;
+  }
+}
+function closeScan() {
+  stopScan();
+  if (dlg.open) dlg.close();
+}
+async function startCam() {
+  try {
+    SC.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    vid.srcObject = SC.stream;
+    await vid.play();
+    SC.running = true;
+    scanLoop();
+  } catch (e) {
+    $('scmsg').className = 'msg err';
+    $('scmsg').textContent = 'Không mở được camera: ' + e.message + '. Bạn có thể dùng “Nạp file ảnh”.';
+  }
+}
+async function openScan() {
+  if (busy()) return warnBusy();
+  resetScan();
+  SC.mode = 'cam';
+  panels();
+  dlg.showModal();
+  startCam();
+}
+async function scanLoop() {
+  if (!SC.running) return;
+  try {
+    if (vid.videoWidth) {
+      const k = Math.min(1, 640 / vid.videoWidth);
+      pv.width = Math.round(vid.videoWidth * k);
+      pv.height = Math.round(vid.videoHeight * k);
+      pctx.drawImage(vid, 0, 0, pv.width, pv.height);
+      const id = pctx.getImageData(0, 0, pv.width, pv.height);
+      const r = await frameApi(id.width, id.height, id.data.buffer, SC.scale);
+      if (!SC.running) return;
+      pctx.putImageData(id, 0, 0);
+      await onFrame(r, true);
+    }
+  } catch (e) {
+    $('scmsg').className = 'msg err';
+    $('scmsg').textContent = e.message;
+  }
+  if (SC.running) SC.timer = setTimeout(scanLoop, 90);
+}
+function overlay(r) {
+  pctx.lineWidth = Math.max(2, pv.width / 200);
+  pctx.strokeStyle = r.auto ? '#3cc85a' : '#ffd200';
+  pctx.beginPath();
+  if (r.quad) {
+    r.quad.forEach(([x, y], i) => (i ? pctx.lineTo(x, y) : pctx.moveTo(x, y)));
+    pctx.closePath();
+  } else pctx.rect(r.region.x, r.region.y, r.region.size, r.region.size);
+  pctx.stroke();
+  if (!r.quad) {
+    pctx.strokeStyle = '#ffffff90';
+    pctx.lineWidth = 1;
+    for (let i = 1; i < 3; i++) {
+      const t = (r.region.size / 3) * i;
+      pctx.beginPath();
+      pctx.moveTo(r.region.x + t, r.region.y);
+      pctx.lineTo(r.region.x + t, r.region.y + r.region.size);
+      pctx.moveTo(r.region.x, r.region.y + t);
+      pctx.lineTo(r.region.x + r.region.size, r.region.y + t);
+      pctx.stroke();
+    }
+  }
+}
+async function onFrame(r, fresh) {
+  SC.last = r;
+  overlay(r);
+  $('sclRow').hidden = r.auto;
+  $('sw').innerHTML = r.samples.map(c => `<i style="background:${rgb(c)}"></i>`).join('');
+  const m = $('scmsg'),
+    setM = (c, t) => {
+      m.className = 'msg ' + c;
+      m.textContent = t;
+    },
+    valid = r.valid;
+  if (SC.mode === 'cam' && fresh) {
+    if (!valid) {
+      SC.hist = [];
+      SC.ref = null;
+    } else {
+      if (!(SC.ref && close16(r.samples, SC.ref))) SC.hist = [];
+      SC.hist.push({ samples: r.samples, conf: r.conf });
+      if (SC.hist.length > 10) SC.hist.shift();
+      SC.ref = r.samples;
+    }
+  }
+  const n = SC.hist.length;
+  $('prog').hidden = !(SC.cap === 'auto' && valid && SC.cool === 0);
+  $('prog').firstChild.style.width = Math.min(100, (n / 5) * 100) + '%';
+  if (SC.cool > 0) SC.cool--;
+  if (!valid) setM('warn', 'Chưa đủ sáng hoặc chưa rõ để đọc màu, hãy chỉnh ánh sáng hoặc khoảng cách.');
+  else if (SC.cap === 'manual')
+    setM(
+      r.auto ? 'ok' : '',
+      (r.auto
+        ? 'Đã thấy khối rubik, bấm Space hoặc nút để chụp.'
+        : 'Canh khung vàng cho khít mặt khối rồi bấm Space hoặc nút để chụp.') +
+        (n > 1 ? ` Đang gộp ${n} khung hình gần nhất.` : '')
+    );
+  else if (SC.cool > 0) setM('ok', 'Vừa chụp, chuẩn bị mặt tiếp theo…');
+  else if (n >= 5) await doCapture();
+  else setM('ok', r.auto ? 'Đã thấy khối rubik, giữ yên…' : 'Giữ yên…');
+}
+async function doCapture() {
+  if (SC.capturing || !SC.last || allCaptured()) return;
+  SC.capturing = true;
+  try {
+    const face = SC.hist.length
+      ? await api('scan_aggregate', { frames: SC.hist })
+      : { samples: SC.last.samples, conf: SC.last.conf };
+    SC.captured[SC.face] = face;
+    if (SC.face < 5) SC.face++;
+    SC.hist = [];
+    SC.ref = null;
+    SC.cool = 5;
+    panels();
+    if (allCaptured()) stopScan();
+  } catch (e) {
+    $('scmsg').textContent = e.message;
+  }
+  SC.capturing = false;
+}
+$('snap').onclick = doCapture;
+document.querySelectorAll('[data-m]').forEach(
+  b =>
+    (b.onclick = () => {
+      if (SC.mode === b.dataset.m) return;
+      SC.mode = b.dataset.m;
+      stopScan();
+      SC.hist = [];
+      SC.ref = null;
+      panels();
+      if (SC.mode === 'cam') startCam();
+      else {
+        pctx.clearRect(0, 0, pv.width, pv.height);
+        $('scmsg').textContent = 'Chọn một ảnh chụp mặt khối.';
+      }
+    })
+);
+document.querySelectorAll('[data-c]').forEach(
+  b =>
+    (b.onclick = () => {
+      SC.cap = b.dataset.c;
+      SC.hist = [];
+      SC.ref = null;
+      panels();
+    })
+);
+$('scl').oninput = async () => {
+  SC.scale = +$('scl').value;
+  if (SC.mode === 'file' && SC.img) {
+    await fileFrame();
+  }
+};
+async function fileFrame() {
+  const id = SC.img,
+    copy = new ImageData(new Uint8ClampedArray(id.data), id.width, id.height);
+  pv.width = id.width;
+  pv.height = id.height;
+  pctx.putImageData(id, 0, 0);
+  try {
+    const r = await frameApi(copy.width, copy.height, copy.data.buffer, SC.scale);
+    pctx.putImageData(id, 0, 0);
+    await onFrame(r, false);
+  } catch (e) {
+    $('scmsg').textContent = e.message;
+  }
+}
+$('file').onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const img = new Image();
+  img.onload = async () => {
+    const k = Math.min(1, 640 / img.width);
+    pv.width = Math.round(img.width * k);
+    pv.height = Math.round(img.height * k);
+    pctx.drawImage(img, 0, 0, pv.width, pv.height);
+    SC.img = pctx.getImageData(0, 0, pv.width, pv.height);
+    URL.revokeObjectURL(img.src);
+    await fileFrame();
+  };
+  img.src = URL.createObjectURL(f);
+  e.target.value = '';
+};
+$('scanb').onclick = openScan;
+$('cancel').onclick = closeScan;
+dlg.addEventListener('close', stopScan);
+/* ============ cửa sổ phím tắt (khớp ⚙ Phím tắt & hướng dẫn) ============ */
+const HELP = [
+  ['U D F B L R', 'xoay lớp tương ứng'],
+  ['Shift + phím', 'xoay ngược lại (U’, R’…)'],
+  ['Ctrl + phím mặt', 'xoay 2 lớp (wide: u, r…)'],
+  ['Alt + phím mặt', 'xoay đúp (U2, R2…)'],
+  ['M E S', 'xoay lớp giữa'],
+  ['X Y Z', 'xoay cả khối'],
+  ['Space', 'xáo ngẫu nhiên 25 nước, hiện công thức xáo ở thanh trạng thái'],
+  ['Enter', 'AI tự giải, hiện công thức từng bước (Cross → F2L → OLL → PLL)'],
+  ['H', 'gợi ý 1 bước (bấm lại nếu chưa ra thì thử hướng khác)'],
+  ['Ctrl (bấm rồi thả)', 'thực hiện gợi ý đang hiển thị'],
+  ['Alt (bấm rồi thả)', 'chạy từng NƯỚC một của gợi ý (H); hết thì tự tính gợi ý tiếp theo'],
+  ['Ctrl+T', 'bảng công thức cho ván này'],
+  ['Ctrl+J', 'tra toàn bộ công thức chuẩn'],
+  ['Ctrl+Y', 'thống kê OLL/PLL đã gặp'],
+  ['Ctrl+K', 'quét trạng thái từ camera'],
+  ['Esc', 'huỷ khi đang tính · dừng giải tự động giữa chừng'],
+  ['Ctrl+Z', 'hoàn tác'],
+  ['F11', 'toàn màn hình'],
+  ['[  ]', 'giảm / tăng tốc độ quay'],
+  ['Chuột', 'kéo để xoay góc nhìn · cuộn để thu phóng · bấm ô để chọn mặt, rồi dùng phím mũi tên'],
+];
+function openHelp() {
+  $('htab').innerHTML = HELP.map(
+    ([k, v]) =>
+      `<tr><td style="padding:4px 10px 4px 0;white-space:nowrap"><kbd>${k}</kbd></td><td style="color:var(--mut)">${v}</td></tr>`
+  ).join('');
+  $('hspd').textContent = `Tốc độ quay hiện tại: ${$('spd').value} ms mỗi bước 90°.`;
+  $('hdlg').showModal();
+}
+$('helpb').onclick = openHelp;
+$('hclose').onclick = () => $('hdlg').close();
+/* ============ phím tắt (khớp main.rs) ============ */
+const toggleFs = () =>
+  document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {});
+$('fsb').onclick = toggleFs;
+const menu = $('menu'),
+  menub = $('menub');
+/* Menu "Thêm" theo mẫu WAI-ARIA: mũi tên ↑↓ di chuyển, Home/End nhảy đầu/cuối, Esc đóng và trả con trỏ về nút, Tab đóng menu. */
+const menuItems = () => [...menu.querySelectorAll('[role=menuitem]')].filter(b => !b.hidden);
+function closeMenu(refocus) {
+  const had = menu.contains(document.activeElement);
+  menu.classList.remove('open');
+  menub.setAttribute('aria-expanded', 'false');
+  if (refocus && had) menub.focus();
+}
+function openMenu(at) {
+  menu.classList.add('open');
+  menub.setAttribute('aria-expanded', 'true');
+  const it = menuItems();
+  it.forEach(b => (b.tabIndex = -1));
+  if (at != null && it.length) it[at < 0 ? it.length - 1 : at].focus();
+}
+menub.onclick = e => {
+  e.stopPropagation();
+  if (menu.classList.contains('open')) closeMenu(true);
+  else openMenu(e.detail === 0 ? 0 : null);
+}; // detail 0 = bấm bằng bàn phím (Enter/Space)
+menub.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    openMenu(e.key === 'ArrowDown' ? 0 : -1);
+  }
+});
+menu.addEventListener('keydown', e => {
+  const it = menuItems(),
+    i = it.indexOf(document.activeElement);
+  let to = null;
+  if (e.key === 'ArrowDown') to = (i + 1) % it.length;
+  else if (e.key === 'ArrowUp') to = (i - 1 + it.length) % it.length;
+  else if (e.key === 'Home') to = 0;
+  else if (e.key === 'End') to = it.length - 1;
+  else if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    closeMenu(true);
+    return;
+  } else if (e.key === 'Tab') {
+    closeMenu(false);
+    return;
+  }
+  if (to !== null) {
+    e.preventDefault();
+    e.stopPropagation();
+    it[to].focus();
+  }
+});
+// Chọn một mục: đóng menu; nếu mục không chuyển con trỏ đi nơi khác (hộp thoại, cửa sổ) thì trả về nút Thêm để không mất vị trí.
+menu.addEventListener('click', () => {
+  closeMenu(false);
+  setTimeout(() => {
+    if (!document.activeElement || document.activeElement === document.body || menu.contains(document.activeElement))
+      menub.focus();
+  }, 0);
+});
+document.addEventListener('click', e => {
+  if (!menu.contains(e.target)) closeMenu(false);
+});
+setInterval(() => document.body.classList.toggle('busy', busy()), 120);
+let altHeld = false,
+  altCombo = false,
+  ctrlHeld = false,
+  ctrlCombo = false;
+addEventListener('keydown', e => {
+  if (e.key === 'Alt') {
+    if (!altHeld) {
+      altHeld = true;
+      altCombo = false;
+    }
+    e.preventDefault();
+    return;
+  }
+  if (e.key === 'Control') {
+    if (!ctrlHeld) {
+      ctrlHeld = true;
+      ctrlCombo = false;
+    }
+    return;
+  }
+  if (altHeld) altCombo = true;
+  if (ctrlHeld) ctrlCombo = true;
+  const t = e.target.tagName;
+  if (t === 'INPUT' || t === 'TEXTAREA') return;
+  // Đang điều hướng bằng bàn phím: Enter/Space phải kích hoạt nút/mục menu đang chọn (không bị phím tắt "Giải"/"Xáo" nuốt),
+  // và mũi tên trong menu không được xoay mặt khối. Chuột bấm nút không đặt :focus-visible nên phím tắt vẫn dùng bình thường.
+  if (e.target.closest) {
+    const tg = e.target;
+    let fv = false;
+    try {
+      fv = tg.matches(':focus-visible');
+    } catch (_) {}
+    if (tg.closest('#menu')) return;
+    if (fv && (e.code === 'Enter' || e.code === 'Space') && tg.closest('button,a,select,summary,[role=menuitem]'))
+      return;
+  }
+  if (e.key === 'F11') {
+    e.preventDefault();
+    toggleFs();
+    return;
+  }
+  if (dlg.open) {
+    if (e.code === 'Space' && !SC.result && !allCaptured()) {
+      e.preventDefault();
+      doCapture();
+    }
+    return;
+  }
+  if (e.key === 'Escape') {
+    if (menu.classList.contains('open')) {
+      closeMenu(true);
+      return;
+    }
+    const fw = document.activeElement && document.activeElement.closest && document.activeElement.closest('.win');
+    if (fw) {
+      closeWin(fw.dataset.win);
+      return;
+    }
+    if (!document.querySelector('dialog[open]')) stop();
+    return;
+  }
+  if (document.querySelector('dialog[open]')) return;
+  const ctrl = e.ctrlKey || e.metaKey,
+    code = e.code,
+    L = code.startsWith('Key') ? code.slice(3) : '';
+  const go = () => e.preventDefault();
+  if (ctrl && L === 'Z') {
+    go();
+    undo();
+    return;
+  }
+  if (ctrl && L === 'Y') {
+    go();
+    openStats();
+    return;
+  }
+  if (ctrl && L === 'K') {
+    go();
+    openScan();
+    return;
+  }
+  if (ctrl && L === 'J') {
+    go();
+    openWin('lib', true);
+    $('q').focus();
+    return;
+  }
+  if (ctrl && L === 'T') {
+    go();
+    showBreakdown();
+    return;
+  }
+  if ('UDFBLR'.includes(L) && L) {
+    go();
+    userMove(tokFor(L, { p: e.shiftKey, d: e.altKey, w: ctrl }));
+    return;
+  }
+  if (ctrl) return;
+  if ('MES'.includes(L) && L) {
+    go();
+    userMove(L + (e.shiftKey ? "'" : ''));
+    return;
+  }
+  if ('XYZ'.includes(L) && L) {
+    go();
+    userMove(L.toLowerCase() + (e.shiftKey ? "'" : ''));
+    return;
+  }
+  if (code === 'Space') {
+    go();
+    shuffle();
+    return;
+  }
+  if (code === 'Enter') {
+    go();
+    autoSolve();
+    return;
+  }
+  if (L === 'H') {
+    go();
+    doHint();
+    return;
+  }
+  if (e.key === '[' || e.key === ']') {
+    const sp = $('spd');
+    sp.value = Math.round(Math.min(1000, Math.max(30, sp.value * (e.key === '[' ? 1.3 : 1 / 1.3))));
+    sp.oninput();
+    return;
+  }
+  if (selFace && ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(code)) {
+    go();
+    userMove(selFace + (code === 'ArrowDown' || code === 'ArrowLeft' ? "'" : ''));
+  }
+});
+addEventListener('keyup', e => {
+  const free = !document.querySelector('dialog[open]') && !['INPUT', 'TEXTAREA'].includes(e.target.tagName);
+  if (e.key === 'Control' && ctrlHeld) {
+    ctrlHeld = false;
+    if (!ctrlCombo && free) runHint();
+    return;
+  }
+  if (e.key !== 'Alt' || !altHeld) return;
+  e.preventDefault();
+  altHeld = false;
+  if (!altCombo && free) altStep();
+});
+addEventListener('blur', () => {
+  altHeld = false;
+  ctrlHeld = false;
+});
+//@@SLOT3@@
+/* ============ tài khoản, ván xếp hạng, bảng xếp hạng ============
+   Thời gian và số nước do server đo và kiểm tra; trình duyệt chỉ gửi danh sách nước đã đi. */
+let me = null,
+  ranked = null,
+  authMode = 'login',
+  lbTab = 'time';
+const fmtT = ms => {
+  if (ms == null) return '–';
+  const s = ms / 1000;
+  return s < 60 ? s.toFixed(2) + ' s' : Math.floor(s / 60) + ':' + (s % 60).toFixed(2).padStart(5, '0');
+};
+function setMe(u) {
+  me = u;
+  $('accName').textContent = u ? u.username : 'Đăng nhập';
+  $('lbout').hidden = !u;
+  syncAcctBtns();
+}
+function stopTimer() {
+  if (ranked && ranked.iv) clearInterval(ranked.iv);
+}
+function abortRanked(reason) {
+  if (!ranked) return;
+  const id = ranked.id;
+  stopTimer();
+  ranked = null;
+  $('rtimer').textContent = 'Đã huỷ ván';
+  setTimeout(() => {
+    if (!ranked && $('rtimer').textContent === 'Đã huỷ ván') $('rtimer').textContent = '';
+  }, 4000);
+  acc.abandon(id).catch(() => {});
+  say('Đã huỷ ván xếp hạng vì ' + reason + '.');
+}
+async function startRanked() {
+  if (busy()) return warnBusy();
+  if (!me) {
+    openAuth('login');
+    $('aerr').textContent = 'Đăng nhập để chơi ván xếp hạng.';
+    return;
+  }
+  try {
+    gameReset();
+    const g = await acc.start();
+    $('lbdlg').close();
+    state = g.state;
+    paint();
+    emptyPlan();
+    ranked = { id: g.game_id, moves: [], t0: performance.now() };
+    ranked.iv = setInterval(() => {
+      if (ranked) $('rtimer').textContent = fmtT(performance.now() - ranked.t0);
+    }, 50);
+    say('Ván xếp hạng bắt đầu. Đề xáo: ' + g.scramble);
+  } catch (e) {
+    say(e.message);
+    if (/đăng nhập/i.test(e.message)) setMe(null);
+  }
+}
+/* Đóng tab/chuyển trang giữa ván: báo server huỷ ván ngay (bản server có sendBeacon; bản Supabase dựa vào việc dọn định kỳ). */
+addEventListener('pagehide', e => {
+  if (ranked && !e.persisted && acc.beacon) acc.beacon(ranked.id);
+});
+function rankedMove(r) {
+  ranked.moves.push(r.moves.join(' '));
+  if (r.solved) finishRanked();
+}
+async function finishRanked() {
+  const g = ranked;
+  stopTimer();
+  ranked = null;
+  try {
+    const res = await acc.finish(g.id, g.moves.join(' '));
+    $('rtimer').textContent = fmtT(res.time_ms);
+    say(
+      `🎉 Giải xong: ${fmtT(res.time_ms)} · ${res.move_count} nước${res.personal_best ? ' · Kỷ lục cá nhân mới!' : ''}`
+    );
+  } catch (e) {
+    $('rtimer').textContent = '';
+    say('Không ghi nhận được ván: ' + e.message);
+  }
+}
+function openAuth(mode) {
+  authMode = mode;
+  document.querySelectorAll('#adlg [data-a]').forEach(b => b.classList.toggle('on', b.dataset.a === mode));
+  $('asub').textContent = mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản';
+  $('ahelp').hidden = mode === 'login';
+  $('apass').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+  $('aerr').textContent = '';
+  if (!$('adlg').open) $('adlg').showModal();
+  $('auser').focus();
+}
+document.querySelectorAll('#adlg [data-a]').forEach(b => (b.onclick = () => openAuth(b.dataset.a)));
+$('aform').onsubmit = async e => {
+  e.preventDefault();
+  $('aerr').textContent = '';
+  $('asub').disabled = true;
+  try {
+    const u = await acc.auth(authMode, $('auser').value.trim(), $('apass').value);
+    setMe(u);
+    $('apass').value = '';
+    $('adlg').close();
+    say((authMode === 'login' ? 'Đã đăng nhập: ' : 'Đã tạo tài khoản: ') + u.username);
+  } catch (err) {
+    $('aerr').textContent = err.message;
+  } finally {
+    $('asub').disabled = false;
+  }
+};
+$('aclose').onclick = () => $('adlg').close();
+async function openBoard(t) {
+  lbTab = t || lbTab;
+  if (lbTab === 'me' && !me) lbTab = 'time';
+  if (!$('lbdlg').open) $('lbdlg').showModal();
+  renderBoard();
+}
+/* Nút đổi mật khẩu / xoá tài khoản chỉ hiện ở tab "Của tôi" khi đã đăng nhập và backend hỗ trợ. */
+function syncAcctBtns() {
+  const on = !!me && lbTab === 'me' && !!acc.changePassword;
+  $('chpw').hidden = $('delacc').hidden = !on;
+}
+let pwMode = 'change';
+function openPw(mode) {
+  pwMode = mode;
+  const change = mode === 'change';
+  $('pwtitle').textContent = change ? 'Đổi mật khẩu' : 'Xoá tài khoản';
+  $('pwsub').textContent = change ? 'Đổi mật khẩu' : 'Xoá vĩnh viễn';
+  $('pwsub').classList.toggle('danger', !change);
+  $('pwnewrow').hidden = !change;
+  $('pwwarn').hidden = change;
+  $('pwnew').required = $('pwnew2').required = change;
+  $('pwuser').value = me ? me.username : '';
+  $('pwold').value = $('pwnew').value = $('pwnew2').value = '';
+  $('pwerr').textContent = '';
+  $('pwdlg').showModal();
+  $('pwold').focus();
+}
+$('chpw').onclick = () => openPw('change');
+$('delacc').onclick = () => openPw('delete');
+$('pwclose').onclick = () => $('pwdlg').close();
+$('pwform').onsubmit = async e => {
+  e.preventDefault();
+  $('pwerr').textContent = '';
+  const old = $('pwold').value;
+  if (pwMode === 'change' && $('pwnew').value !== $('pwnew2').value) {
+    $('pwerr').textContent = 'Hai mật khẩu mới không khớp.';
+    return;
+  }
+  $('pwsub').disabled = true;
+  try {
+    if (pwMode === 'change') {
+      await acc.changePassword(old, $('pwnew').value);
+      $('pwdlg').close();
+      say('Đã đổi mật khẩu.');
+    } else {
+      abortRanked('xoá tài khoản');
+      await acc.deleteAccount(old);
+      setMe(null);
+      $('pwdlg').close();
+      $('lbdlg').close();
+      say('Đã xoá tài khoản và toàn bộ dữ liệu của bạn.');
+    }
+  } catch (err) {
+    $('pwerr').textContent = err.message;
+  } finally {
+    $('pwsub').disabled = false;
+    $('pwold').value = $('pwnew').value = $('pwnew2').value = '';
+  }
+};
+async function renderBoard() {
+  syncAcctBtns();
+  document.querySelectorAll('#lbdlg [data-lb]').forEach(b => b.classList.toggle('on', b.dataset.lb === lbTab));
+  const box = $('lbbody');
+  box.innerHTML = '<p style="color:var(--mut)">Đang tải…</p>';
+  try {
+    if (lbTab === 'me') {
+      if (!me) {
+        box.innerHTML = '<p>Đăng nhập để xem thành tích của bạn.</p>';
+        return;
+      }
+      const p = await acc.profile();
+      box.innerHTML =
+        `<div class="kpi"><div><small>Số ván</small><b>${p.games}</b></div><div><small>Lượt giải</small><b>${p.solves}</b></div><div><small>Nhanh nhất</small><b>${fmtT(p.best_time_ms)}</b></div><div><small>Ít nước nhất</small><b>${p.best_moves ?? '–'}</b></div><div><small>Trung bình</small><b>${fmtT(p.avg_time_ms)}</b></div></div>` +
+        (p.recent.length
+          ? `<table class="lbt"><tr><th>#</th><th>Thời điểm</th><th>Thời gian</th><th>Số nước</th></tr>${p.recent.map((g, i) => `<tr><td>${i + 1}</td><td>${new Date(g.finished_at).toLocaleString('vi-VN')}</td><td>${fmtT(g.time_ms)}</td><td>${g.move_count}</td></tr>`).join('')}</table>`
+          : '<p style="color:var(--mut)">Chưa có ván nào giải xong.</p>');
+      return;
+    }
+    const rows = await acc.board(lbTab);
+    box.innerHTML = rows.length
+      ? `<table class="lbt"><tr><th>Hạng</th><th>Tài khoản</th><th>Nhanh nhất</th><th>Ít nước nhất</th><th>Lượt giải</th><th>Trung bình</th></tr>${rows.map(x => `<tr class="${me && x.username.toLowerCase() === me.username.toLowerCase() ? 'me' : ''}"><td>${x.rank}</td><td>${esc(x.username)}</td><td>${fmtT(x.best_time_ms)}</td><td>${x.best_moves}</td><td>${x.solves}</td><td>${fmtT(x.avg_time_ms)}</td></tr>`).join('')}</table>`
+      : '<p style="color:var(--mut)">Chưa có ai giải xong ván xếp hạng nào. Hãy là người đầu tiên!</p>';
+  } catch (e) {
+    box.innerHTML = `<p class="err">${esc(e.message)}</p>`;
+  }
+}
+document.querySelectorAll('#lbdlg [data-lb]').forEach(b => (b.onclick = () => openBoard(b.dataset.lb)));
+$('rankBtn').onclick = $('rankM').onclick = () => openBoard();
+$('accBtn').onclick = $('accM').onclick = () => (me ? openBoard('me') : openAuth('login'));
+$('lbplay').onclick = startRanked;
+if (!acc.enabled) ['rankBtn', 'accBtn', 'rankM', 'accM'].forEach(id => ($(id).hidden = true));
+$('lbclose').onclick = () => $('lbdlg').close();
+$('lbout').onclick = async () => {
+  abortRanked('đăng xuất');
+  try {
+    await acc.logout();
+  } catch (e) {}
+  setMe(null);
+  $('lbdlg').close();
+  say('Đã đăng xuất.');
+};
+/* ============ khởi động ============ */
+//@@SLOT4@@
+(async () => {
+  try {
+    state = (await api('solved')).state;
+    paint();
+    algos = await api('algos');
+    lib();
+  } catch (e) {
+    say(BOOTERR + e.message);
+  }
+  try {
+    setMe(await acc.me());
+  } catch (e) {}
+})();

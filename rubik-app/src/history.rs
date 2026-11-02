@@ -83,7 +83,13 @@ fn now_epoch() -> i64 {
 /// ngay lúc ghi rẻ hơn nhiều so với đi sửa file đã hỏng.
 fn sanitize(name: &str) -> String {
     name.chars()
-        .map(|c| if c == '\t' || c == '\n' || c == '\r' { '_' } else { c })
+        .map(|c| {
+            if c == '\t' || c == '\n' || c == '\r' {
+                '_'
+            } else {
+                c
+            }
+        })
         .collect()
 }
 
@@ -126,7 +132,9 @@ pub fn append(entries: &[(&str, String, usize)]) -> Result<(), String> {
 /// file này người dùng có thể mở sửa tay, nên phải chịu được dữ liệu bẩn.
 fn counts_from(p: &Path) -> HashMap<(String, String), u32> {
     let mut out = HashMap::new();
-    let Ok(text) = std::fs::read_to_string(p) else { return out };
+    let Ok(text) = std::fs::read_to_string(p) else {
+        return out;
+    };
     for line in text.lines() {
         let cols: Vec<&str> = line.split('\t').collect();
         if cols.len() < 4 {
@@ -136,7 +144,8 @@ fn counts_from(p: &Path) -> HashMap<(String, String), u32> {
         if kind != "OLL" && kind != "PLL" {
             continue; // bỏ dòng tiêu đề và dòng rác
         }
-        *out.entry((kind.to_string(), cols[3].to_string())).or_insert(0) += 1;
+        *out.entry((kind.to_string(), cols[3].to_string()))
+            .or_insert(0) += 1;
     }
     out
 }
@@ -194,7 +203,11 @@ impl CaseLog {
 
 /// Tổng số lần đã ghi cho một loại.
 pub fn total(counts: &HashMap<(String, String), u32>, kind: &str) -> u32 {
-    counts.iter().filter(|((k, _), _)| k == kind).map(|(_, v)| *v).sum()
+    counts
+        .iter()
+        .filter(|((k, _), _)| k == kind)
+        .map(|(_, v)| *v)
+        .sum()
 }
 
 #[cfg(test)]
@@ -205,7 +218,10 @@ mod tests {
     /// dùng chung tên file.
     fn tmp(tag: &str) -> PathBuf {
         let mut p = std::env::temp_dir();
-        p.push(format!("rubik_history_test_{tag}_{}.tsv", std::process::id()));
+        p.push(format!(
+            "rubik_history_test_{tag}_{}.tsv",
+            std::process::id()
+        ));
         let _ = std::fs::remove_file(&p);
         p
     }
@@ -251,8 +267,18 @@ mod tests {
     #[test]
     fn dem_dung_va_bo_qua_dong_rac() {
         let p = tmp("counts");
-        append_to(&p, &[("OLL", "OLL27".into(), 7), ("PLL", "T".into(), 14)], 1).unwrap();
-        append_to(&p, &[("OLL", "OLL27".into(), 7), ("PLL", "Ua".into(), 9)], 2).unwrap();
+        append_to(
+            &p,
+            &[("OLL", "OLL27".into(), 7), ("PLL", "T".into(), 14)],
+            1,
+        )
+        .unwrap();
+        append_to(
+            &p,
+            &[("OLL", "OLL27".into(), 7), ("PLL", "Ua".into(), 9)],
+            2,
+        )
+        .unwrap();
         // Giả lập người dùng mở file sửa tay rồi để lại rác.
         {
             let mut f = OpenOptions::new().append(true).open(&p).unwrap();
@@ -265,7 +291,11 @@ mod tests {
         assert_eq!(g("OLL", "OLL27"), 2);
         assert_eq!(g("PLL", "T"), 1);
         assert_eq!(g("PLL", "Ua"), 1);
-        assert_eq!(c.iter().filter(|((k, _), _)| k == "XYZ").count(), 0, "dòng rác lọt vào");
+        assert_eq!(
+            c.iter().filter(|((k, _), _)| k == "XYZ").count(),
+            0,
+            "dòng rác lọt vào"
+        );
         assert_eq!(total(&c, "OLL"), 2);
         assert_eq!(total(&c, "PLL"), 2);
         let _ = std::fs::remove_file(&p);
@@ -298,7 +328,10 @@ mod tests {
         let mut l = CaseLog::default();
         assert!(l.nen_ghi("OLL", "OLL27"));
         assert!(l.nen_ghi("PLL", "T"));
-        assert!(!l.nen_ghi("OLL", "OLL27"), "H sau Ctrl+T không được đếm lại");
+        assert!(
+            !l.nen_ghi("OLL", "OLL27"),
+            "H sau Ctrl+T không được đếm lại"
+        );
         assert_eq!(l.so_ca(), 2);
     }
 
@@ -321,7 +354,10 @@ mod tests {
         assert!(!l.nen_ghi("OLL", "OLL27"));
         l.van_moi(); // xáo, hoặc nạp trạng thái mới từ camera
         assert_eq!(l.so_ca(), 0);
-        assert!(l.nen_ghi("OLL", "OLL27"), "ván mới thì gặp lại phải tính lại");
+        assert!(
+            l.nen_ghi("OLL", "OLL27"),
+            "ván mới thì gặp lại phải tính lại"
+        );
     }
 
     #[test]

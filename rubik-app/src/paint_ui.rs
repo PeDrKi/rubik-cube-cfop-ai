@@ -21,12 +21,12 @@ const COLOR_NAMES: [&str; 6] = ["Vàng", "Trắng", "Xanh lá", "Xanh dương", 
 /// -- xem `face_color()` trong main.rs. Copy y hệt giá trị RGB để nhất
 /// quán, tránh người dùng thấy 2 bảng màu khác nhau cho cùng 1 mặt.
 const DISPLAY_COLORS: [egui::Color32; 6] = [
-    egui::Color32::from_rgb(255, 210, 0),  // U = vàng
+    egui::Color32::from_rgb(255, 210, 0),   // U = vàng
     egui::Color32::from_rgb(255, 255, 255), // D = trắng
-    egui::Color32::from_rgb(15, 160, 55),  // F = xanh lá
-    egui::Color32::from_rgb(15, 75, 210),  // B = xanh dương
-    egui::Color32::from_rgb(210, 30, 45),  // L = đỏ
-    egui::Color32::from_rgb(255, 100, 0),  // R = cam
+    egui::Color32::from_rgb(15, 160, 55),   // F = xanh lá
+    egui::Color32::from_rgb(15, 75, 210),   // B = xanh dương
+    egui::Color32::from_rgb(210, 30, 45),   // L = đỏ
+    egui::Color32::from_rgb(255, 100, 0),   // R = cam
 ];
 const FACE_LABELS: [&str; 6] = ["U", "D", "F", "B", "L", "R"];
 
@@ -46,13 +46,22 @@ impl Default for PaintState {
         for (f, face) in faces.iter_mut().enumerate() {
             face[4] = Some(f as u8);
         }
-        Self { open: false, faces, current_color: 0, error: None }
+        Self {
+            open: false,
+            faces,
+            current_color: 0,
+            error: None,
+        }
     }
 }
 
 impl PaintState {
     fn count_of(&self, color: u8) -> usize {
-        self.faces.iter().flatten().filter(|&&c| c == Some(color)).count()
+        self.faces
+            .iter()
+            .flatten()
+            .filter(|&&c| c == Some(color))
+            .count()
     }
 
     /// Nếu chỉ còn ĐÚNG 1 màu chưa đủ 9 ô (5 màu kia đã 9/9), toàn bộ ô
@@ -91,7 +100,9 @@ fn find_conflicts(faces: &[[Option<u8>; 9]; 6]) -> Vec<String> {
 
     let mut edge_pairs: Vec<(u8, u8)> = Vec::new();
     for &(p1, p2) in EDGE_SLOTS.iter() {
-        let (Some(a), Some(b)) = (get(faces, p1), get(faces, p2)) else { continue };
+        let (Some(a), Some(b)) = (get(faces, p1), get(faces, p2)) else {
+            continue;
+        };
         if a == b {
             msgs.push(format!(
                 "⚠ Cạnh {}-{} đang bị tô CÙNG 1 màu ({}) -- 1 cạnh thật luôn gồm 2 màu khác nhau.",
@@ -112,7 +123,9 @@ fn find_conflicts(faces: &[[Option<u8>; 9]; 6]) -> Vec<String> {
 
     let mut corner_sets: Vec<[u8; 3]> = Vec::new();
     for &(p1, p2, p3) in CORNER_SLOTS.iter() {
-        let (Some(a), Some(b), Some(c)) = (get(faces, p1), get(faces, p2), get(faces, p3)) else { continue };
+        let (Some(a), Some(b), Some(c)) = (get(faces, p1), get(faces, p2), get(faces, p3)) else {
+            continue;
+        };
         if a == b || b == c || a == c {
             msgs.push(format!(
                 "⚠ Góc {}-{}-{} đang có 2 mặt trùng màu -- 1 góc thật luôn gồm 3 màu khác nhau đôi một.",
@@ -166,7 +179,7 @@ pub fn show(ctx: &egui::Context, s: &mut PaintState) -> Option<CubeState> {
                 let label = format!("{} {}/9", COLOR_NAMES[c as usize], count);
                 let mut button = egui::Button::new(egui::RichText::new(label).color(text_color)).fill(bg);
                 if s.current_color == c {
-                    button = button.stroke(egui::Stroke::new(3.0, egui::Color32::WHITE));
+                    button = button.stroke(egui::Stroke::new(3.0_f32, egui::Color32::WHITE));
                 }
                 if ui.add_enabled(!maxed || s.current_color == c, button).clicked() {
                     s.current_color = c;
@@ -202,7 +215,7 @@ pub fn show(ctx: &egui::Context, s: &mut PaintState) -> Option<CubeState> {
                                 .map(|c| DISPLAY_COLORS[c as usize])
                                 .unwrap_or(egui::Color32::from_gray(55));
                             ui.painter().rect_filled(rect, 3.0, color);
-                            ui.painter().rect_stroke(rect, 3.0, egui::Stroke::new(1.0, egui::Color32::from_gray(15)));
+                            ui.painter().rect_stroke(rect, 3.0, egui::Stroke::new(1.0_f32, egui::Color32::from_gray(15)));
 
                             if resp.clicked() {
                                 if cell == 4 {
@@ -294,7 +307,10 @@ mod tests {
         faces[0][7] = Some(0); // 1 ô cạnh của U, tô trùng màu U (test coarse: any same-face-color edge)
         faces[2][1] = Some(0); // 1 ô cạnh của F, cũng tô màu 0 -> nếu đây đúng là 1 cặp cạnh thật, phải bị báo
         let msgs = find_conflicts(&faces);
-        assert!(!msgs.is_empty(), "phải phát hiện được cạnh trùng màu, msgs={msgs:?}");
+        assert!(
+            !msgs.is_empty(),
+            "phải phát hiện được cạnh trùng màu, msgs={msgs:?}"
+        );
     }
 
     #[test]
@@ -305,7 +321,10 @@ mod tests {
         }
         // Chỉ có 6 tâm, chưa điền gì thêm -> không thể có xung đột.
         let msgs = find_conflicts(&faces);
-        assert!(msgs.is_empty(), "6 tâm mặc định không được báo lỗi, msgs={msgs:?}");
+        assert!(
+            msgs.is_empty(),
+            "6 tâm mặc định không được báo lỗi, msgs={msgs:?}"
+        );
     }
 
     #[test]
@@ -323,8 +342,9 @@ mod tests {
         let mut s = PaintState::default();
         // Cho 5 màu (0..=4) đủ 9/9: mỗi màu đã có sẵn 1 ô tâm, tô thêm 8
         // ô bất kỳ còn trống cho đủ 9. Màu 5 (tâm mặt R) cứ để nguyên 1/9.
-        let mut cells: Vec<(usize, usize)> =
-            (0..6).flat_map(|f| (0..9).filter(move |&c| c != 4).map(move |c| (f, c))).collect();
+        let mut cells: Vec<(usize, usize)> = (0..6)
+            .flat_map(|f| (0..9).filter(move |&c| c != 4).map(move |c| (f, c)))
+            .collect();
         cells.retain(|&(f, _)| f != 5); // chừa hẳn mặt 5 (màu cam) ra, không đụng vào
         for color in 0u8..5 {
             let mut given = 0;
@@ -336,14 +356,24 @@ mod tests {
                 }
             }
         }
-        assert_eq!(s.count_of(5), 1, "màu 5 (cam) phải vẫn còn đúng 1/9 (chỉ có tâm)");
+        assert_eq!(
+            s.count_of(5),
+            1,
+            "màu 5 (cam) phải vẫn còn đúng 1/9 (chỉ có tâm)"
+        );
         let empty_before = s.faces.iter().flatten().filter(|c| c.is_none()).count();
-        assert_eq!(empty_before, 8, "phải còn đúng 8 ô trống (9 - 1 tâm) dành cho màu 5");
+        assert_eq!(
+            empty_before, 8,
+            "phải còn đúng 8 ô trống (9 - 1 tâm) dành cho màu 5"
+        );
 
         s.auto_fill_last_color();
 
         assert_eq!(s.count_of(5), 9, "màu cuối cùng phải được tự điền đủ 9/9");
         let filled = s.faces.iter().flatten().filter(|c| c.is_some()).count();
-        assert_eq!(filled, 54, "phải điền kín hết 54 ô sau khi tự điền màu cuối");
+        assert_eq!(
+            filled, 54,
+            "phải điền kín hết 54 ô sau khi tự điền màu cuối"
+        );
     }
 }

@@ -32,6 +32,7 @@ pub mod full_state;
 pub mod hint;
 pub mod macro_solver;
 pub mod move_simplify;
+pub mod move_table;
 pub mod oll_algorithms;
 pub mod oll_solver;
 pub mod pdb;

@@ -60,8 +60,14 @@ pub fn pair_pdb_get(slot: &'static str, ep: usize, eo: u8, cp: usize, co: u8) ->
 
 fn mismatch_penalty(full: &FullState, done_slots: &[&str]) -> u32 {
     let (ep, eo, cp, co) = full;
-    let mut bad = if ep[4] == 4 && ep[5] == 5 && ep[6] == 6 && ep[7] == 7
-        && eo[4] == 0 && eo[5] == 0 && eo[6] == 0 && eo[7] == 0
+    let mut bad = if ep[4] == 4
+        && ep[5] == 5
+        && ep[6] == 6
+        && ep[7] == 7
+        && eo[4] == 0
+        && eo[5] == 0
+        && eo[6] == 0
+        && eo[7] == 0
     {
         0
     } else {
@@ -85,7 +91,9 @@ fn heuristic(full: &FullState, slot: &'static str, done_slots: &[&str]) -> u32 {
     let (ep, eo, cp, co) = full;
     let ci = CM::slot_index(slot);
     let ei = EM::slot_index(f2l_edge_of(slot));
-    let base = pair_pdb(slot).get(ep[ei], eo[ei], cp[ci], co[ci]).unwrap_or(8) as u32;
+    let base = pair_pdb(slot)
+        .get(ep[ei], eo[ei], cp[ci], co[ci])
+        .unwrap_or(8) as u32;
     base + 2 * mismatch_penalty(full, done_slots)
 }
 
@@ -156,13 +164,26 @@ fn solve_pair(
     let h0 = heuristic(&full_start, slot, done_slots);
     let mut counter: u64 = 0;
     let mut heap = BinaryHeap::new();
-    heap.push(HeapItem { f: h0, g: 0, counter, state: full_start, node_idx: 0, last_face: None });
+    heap.push(HeapItem {
+        f: h0,
+        g: 0,
+        counter,
+        state: full_start,
+        node_idx: 0,
+        last_face: None,
+    });
     let mut best_g: FxHashMap<FullState, u32> = FxHashMap::default();
     best_g.insert(full_start, 0);
     let mut nodes: u32 = 0;
 
     while let Some(item) = heap.pop() {
-        let HeapItem { g, state: cur, node_idx, last_face, .. } = item;
+        let HeapItem {
+            g,
+            state: cur,
+            node_idx,
+            last_face,
+            ..
+        } = item;
         if g > *best_g.get(&cur).unwrap_or(&u32::MAX) {
             continue;
         }
@@ -170,7 +191,7 @@ fn solve_pair(
             continue;
         }
         nodes += 1;
-        if nodes % crate::cancel::CHECK_EVERY == 0 && crate::cancel::is_cancelled() {
+        if nodes.is_multiple_of(crate::cancel::CHECK_EVERY) && crate::cancel::is_cancelled() {
             return None;
         }
         if nodes > max_nodes {
@@ -193,7 +214,14 @@ fn solve_pair(
                 }
                 counter += 1;
                 let h = heuristic(&nxt, slot, done_slots);
-                heap.push(HeapItem { f: ng + h, g: ng, counter, state: nxt, node_idx: nxt_idx, last_face: Some(face) });
+                heap.push(HeapItem {
+                    f: ng + h,
+                    g: ng,
+                    counter,
+                    state: nxt,
+                    node_idx: nxt_idx,
+                    last_face: Some(face),
+                });
             }
         }
     }
@@ -214,10 +242,19 @@ fn solve_pair_ladder(
     nodes_per_depth: u32,
     move_table: &[(usize, &'static str, char)],
 ) -> Option<Vec<&'static str>> {
-    use rayon::prelude::*;
-    depths
-        .par_iter()
-        .find_map_first(|&depth| solve_pair(full, slot, done, nodes_per_depth, depth, move_table))
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        depths.par_iter().find_map_first(|&depth| {
+            solve_pair(full, slot, done, nodes_per_depth, depth, move_table)
+        })
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        depths
+            .iter()
+            .find_map(|&depth| solve_pair(full, slot, done, nodes_per_depth, depth, move_table))
+    }
 }
 
 pub struct F2lResult {
@@ -236,20 +273,31 @@ pub fn solve_f2l(full: FullState, depths: &[u32], nodes_per_depth: u32) -> F2lRe
 /// định nên thử lại với cùng ngân sách sẽ ra y hệt lần trước; xáo trộn
 /// thứ tự giúp khám phá nhánh khác, hội tụ về 1 kết quả F2L KHÁC (vẫn
 /// tối ưu/gần tối ưu) -- dùng khi case OLL/PLL theo sau hoá ra quá khó.
-pub fn solve_f2l_seeded(mut full: FullState, depths: &[u32], nodes_per_depth: u32, retry_seed: Option<u64>) -> F2lResult {
+pub fn solve_f2l_seeded(
+    mut full: FullState,
+    depths: &[u32],
+    nodes_per_depth: u32,
+    retry_seed: Option<u64>,
+) -> F2lResult {
     let mut no_d = no_d_moves();
     if let Some(seed) = retry_seed {
-        use rand::SeedableRng;
         use rand::seq::SliceRandom;
+        use rand::SeedableRng;
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
         no_d.shuffle(&mut rng);
     }
-    let move_table: Vec<(usize, &'static str, char)> =
-        no_d.iter().map(|&m| (move_index(m), m, m.chars().next().unwrap())).collect();
+    let move_table: Vec<(usize, &'static str, char)> = no_d
+        .iter()
+        .map(|&m| (move_index(m), m, m.chars().next().unwrap()))
+        .collect();
 
     let mut all_moves = Vec::new();
     let mut per_slot = FxHashMap::default();
-    let mut done: Vec<&'static str> = F2L_ORDER.iter().copied().filter(|&s| pair_ok(&full, s)).collect();
+    let mut done: Vec<&'static str> = F2L_ORDER
+        .iter()
+        .copied()
+        .filter(|&s| pair_ok(&full, s))
+        .collect();
 
     for &slot in F2L_ORDER.iter() {
         if pair_ok(&full, slot) {
@@ -283,5 +331,9 @@ pub fn solve_f2l_seeded(mut full: FullState, depths: &[u32], nodes_per_depth: u3
         }
     }
 
-    F2lResult { moves: all_moves, per_slot, solved_slots: done }
+    F2lResult {
+        moves: all_moves,
+        per_slot,
+        solved_slots: done,
+    }
 }

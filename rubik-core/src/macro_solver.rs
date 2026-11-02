@@ -8,7 +8,7 @@
 //! nên nhanh và gần như luôn thành công — đúng cách người chơi CFOP thật
 //! xử lý khi không nhận diện được case cụ thể.
 
-use crate::full_state::{apply_move, u_corners_oriented, u_corners_home, u_edges_home, FullState};
+use crate::full_state::{apply_move, u_corners_home, u_corners_oriented, u_edges_home, FullState};
 
 // ── OCLL macro (Sune / Anti-Sune × 4 AUF) — dùng khi bảng OLL đầy đủ miss,
 // pha B (định hướng góc) của kiến trúc 2-look. ─────────────────────────────
@@ -62,9 +62,15 @@ pub fn solve_ocll_macro(full: FullState, max_depth: u32) -> Option<Vec<&'static 
 // ── PLL macro (T-perm / T-perm-mirror / Y-perm / Corner-3-cycle / Edge-3-
 // cycle × 4 AUF) — lưới an toàn khi bảng 21 PLL chuẩn miss. Theo comment
 // gốc: 200/200 case tổng hợp + 10/10 case thật đều thành công, luôn <0.13s.
-const TPERM: [&str; 14] = ["R", "U", "R'", "U'", "R'", "F", "R2", "U'", "R'", "U'", "R", "U", "R'", "F'"];
-const TPERM_MIRROR: [&str; 14] = ["L'", "U'", "L", "U", "L", "F'", "L2", "U", "L", "U", "L'", "U'", "L", "F"];
-const YPERM: [&str; 17] = ["F", "R", "U'", "R'", "U'", "R", "U", "R'", "F'", "R", "U", "R'", "U'", "R'", "F", "R", "F'"];
+const TPERM: [&str; 14] = [
+    "R", "U", "R'", "U'", "R'", "F", "R2", "U'", "R'", "U'", "R", "U", "R'", "F'",
+];
+const TPERM_MIRROR: [&str; 14] = [
+    "L'", "U'", "L", "U", "L", "F'", "L2", "U", "L", "U", "L'", "U'", "L", "F",
+];
+const YPERM: [&str; 17] = [
+    "F", "R", "U'", "R'", "U'", "R", "U", "R'", "F'", "R", "U", "R'", "U'", "R'", "F", "R", "F'",
+];
 const CORNER3: [&str; 9] = ["R'", "F", "R'", "B2", "R", "F'", "R'", "B2", "R2"];
 const EDGE3: [&str; 11] = ["R", "U'", "R", "U", "R", "U", "R", "U'", "R'", "U'", "R2"];
 

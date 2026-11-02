@@ -61,7 +61,12 @@ impl MlDetector {
         let off_x = (w - side) / 2;
         let off_y = (h - side) / 2;
         let square = image::imageops::crop_imm(img, off_x, off_y, side, side).to_image();
-        let resized = image::imageops::resize(&square, INPUT_SIZE, INPUT_SIZE, image::imageops::FilterType::Triangle);
+        let resized = image::imageops::resize(
+            &square,
+            INPUT_SIZE,
+            INPUT_SIZE,
+            image::imageops::FilterType::Triangle,
+        );
 
         let mut input = Array4::<f32>::zeros((1, 3, INPUT_SIZE as usize, INPUT_SIZE as usize));
         for y in 0..INPUT_SIZE {
@@ -73,7 +78,10 @@ impl MlDetector {
             }
         }
 
-        let outputs = self.session.run(ort::inputs!["image" => TensorRef::from_array_view(&input).ok()?]).ok()?;
+        let outputs = self
+            .session
+            .run(ort::inputs!["image" => TensorRef::from_array_view(&input).ok()?])
+            .ok()?;
         let arr = outputs["bbox"].try_extract_array::<f32>().ok()?;
         let (cx, cy, half) = (arr[[0, 0]], arr[[0, 1]], arr[[0, 2]]);
 

@@ -19,7 +19,10 @@ pub enum StageStatus {
     /// Chặng này vốn đã xong sẵn, không cần nước nào.
     Done,
     /// Giải được — kèm chuỗi nước và tên thế (nếu có).
-    Moves { moves: Vec<String>, case_name: Option<String> },
+    Moves {
+        moves: Vec<String>,
+        case_name: Option<String>,
+    },
     /// Không tìm được trong ngân sách hiện tại.
     Failed,
     /// Chưa tới lượt (chặng trước chưa xong nên không tính được).

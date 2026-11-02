@@ -68,7 +68,9 @@ pub(crate) fn build_auto_plan(
 /// bao nhiêu nước kể từ lúc bắt đầu thì tới lượt chặng này" cho TỪNG
 /// chặng, theo đúng thứ tự trong `plan`. Hàm thuần, xem
 /// `tests::build_boundaries_*`.
-pub(crate) fn build_boundaries(plan: &[(String, Vec<String>)]) -> VecDeque<(usize, String, Vec<String>)> {
+pub(crate) fn build_boundaries(
+    plan: &[(String, Vec<String>)],
+) -> VecDeque<(usize, String, Vec<String>)> {
     let mut boundaries = VecDeque::new();
     let mut acc = 0usize;
     for (label, moves) in plan {
@@ -93,7 +95,9 @@ pub(crate) fn advance_auto_plan(
     let mut latest = None;
     while let Some((start, _, _)) = boundaries.front() {
         if progress >= *start {
-            latest = boundaries.pop_front().map(|(_, label, moves)| (label, moves));
+            latest = boundaries
+                .pop_front()
+                .map(|(_, label, moves)| (label, moves));
         } else {
             break;
         }
@@ -189,7 +193,10 @@ mod tests {
     // nhãn không. ----
 
     fn moves(v: &[&str]) -> StageStatus {
-        StageStatus::Moves { moves: v.iter().map(|s| s.to_string()).collect(), case_name: None }
+        StageStatus::Moves {
+            moves: v.iter().map(|s| s.to_string()).collect(),
+            case_name: None,
+        }
     }
 
     fn breakdown_giai_binh_thuong() -> Breakdown {
@@ -212,7 +219,17 @@ mod tests {
         assert_eq!(failed, None);
         let labels: Vec<&str> = plan.iter().map(|(l, _)| l.as_str()).collect();
         // DFL đã "Done" (xong sẵn) nên KHÔNG được xuất hiện trong kế hoạch.
-        assert_eq!(labels, vec!["Cross", "F2L - cặp DFR", "F2L - cặp DBR", "F2L - cặp DBL", "OLL", "PLL"]);
+        assert_eq!(
+            labels,
+            vec![
+                "Cross",
+                "F2L - cặp DFR",
+                "F2L - cặp DBR",
+                "F2L - cặp DBL",
+                "OLL",
+                "PLL"
+            ]
+        );
     }
 
     #[test]
@@ -249,7 +266,10 @@ mod tests {
     fn build_boundaries_moc_dau_luon_la_0_va_cong_don_dung() {
         let plan = vec![
             ("Cross".to_string(), vec!["F".to_string(), "R".to_string()]), // 2 nước
-            ("OLL".to_string(), vec!["R".to_string(), "U".to_string(), "R'".to_string()]), // 3 nước
+            (
+                "OLL".to_string(),
+                vec!["R".to_string(), "U".to_string(), "R'".to_string()],
+            ), // 3 nước
         ];
         let b = build_boundaries(&plan);
         let starts: Vec<usize> = b.iter().map(|(s, _, _)| *s).collect();
@@ -274,7 +294,10 @@ mod tests {
         // Cross: 2 nước (mốc 0), F2L: 3 nước (mốc 2), OLL: 1 nước (mốc 5).
         let plan = vec![
             ("Cross".to_string(), vec!["A".to_string(), "B".to_string()]),
-            ("F2L".to_string(), vec!["C".to_string(), "D".to_string(), "E".to_string()]),
+            (
+                "F2L".to_string(),
+                vec!["C".to_string(), "D".to_string(), "E".to_string()],
+            ),
             ("OLL".to_string(), vec!["F".to_string()]),
         ];
         let mut b = build_boundaries(&plan);

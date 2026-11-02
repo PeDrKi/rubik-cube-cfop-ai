@@ -76,24 +76,24 @@ pub fn install_style(ctx: &egui::Context) {
     let r = egui::Rounding::same(7.0);
     v.widgets.noninteractive.rounding = r;
     v.widgets.noninteractive.bg_fill = BG_CARD;
-    v.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, TEXT_DIM);
-    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, BG_CARD_HI);
+    v.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0_f32, TEXT_DIM);
+    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, BG_CARD_HI);
 
     v.widgets.inactive.rounding = r;
     v.widgets.inactive.bg_fill = BG_CARD_HI;
     v.widgets.inactive.weak_bg_fill = BG_CARD_HI;
-    v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, TEXT);
+    v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, TEXT);
 
     v.widgets.hovered.rounding = r;
     v.widgets.hovered.bg_fill = egui::Color32::from_rgb(60, 66, 90);
     v.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(60, 66, 90);
-    v.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
-    v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, ACCENT_DIM);
+    v.widgets.hovered.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
+    v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, ACCENT_DIM);
 
     v.widgets.active.rounding = r;
     v.widgets.active.bg_fill = ACCENT_DIM;
     v.widgets.active.weak_bg_fill = ACCENT_DIM;
-    v.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+    v.widgets.active.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
 
     style.spacing.item_spacing = egui::vec2(8.0, 7.0);
     style.spacing.button_padding = egui::vec2(10.0, 6.0);
@@ -107,7 +107,7 @@ pub fn card(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
         .fill(BG_CARD)
         .rounding(egui::Rounding::same(10.0))
         .inner_margin(egui::Margin::symmetric(11.0, 10.0))
-        .stroke(egui::Stroke::new(1.0, BG_CARD_HI))
+        .stroke(egui::Stroke::new(1.0_f32, BG_CARD_HI))
         .show(ui, add);
 }
 
@@ -127,10 +127,15 @@ pub fn section_label(ui: &mut egui::Ui, text: &str) {
 // chung hợp lý cho nút accent chiếm hết bề ngang, có thể cần lại sau.
 #[allow(dead_code)]
 pub fn primary_button(ui: &mut egui::Ui, label: &str, hint: &str) -> egui::Response {
-    let text = egui::RichText::new(label).size(14.0).strong().color(egui::Color32::from_rgb(28, 20, 6));
+    let text = egui::RichText::new(label)
+        .size(14.0)
+        .strong()
+        .color(egui::Color32::from_rgb(28, 20, 6));
     ui.add_sized(
         [ui.available_width(), 34.0],
-        egui::Button::new(text).fill(ACCENT).rounding(egui::Rounding::same(8.0)),
+        egui::Button::new(text)
+            .fill(ACCENT)
+            .rounding(egui::Rounding::same(8.0)),
     )
     .on_hover_text(hint)
 }

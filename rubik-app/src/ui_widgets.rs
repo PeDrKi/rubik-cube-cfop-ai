@@ -47,7 +47,10 @@ pub(crate) fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: 
     let panel = cell * 3.0 + gap * 2.0;
     let grid_pos: [(char, i32, i32); 6] = [
         ('U', 1, 0),
-        ('L', 0, 1), ('F', 1, 1), ('R', 2, 1), ('B', 3, 1),
+        ('L', 0, 1),
+        ('F', 1, 1),
+        ('R', 2, 1),
+        ('B', 3, 1),
         ('D', 1, 2),
     ];
     let origin = ui.cursor().min;
@@ -101,7 +104,7 @@ pub(crate) fn draw_six_face_net(ui: &mut egui::Ui, state: &CubeState, sel_face: 
             painter.rect_stroke(
                 panel_rect,
                 egui::Rounding::same(5.0),
-                egui::Stroke::new(2.0, crate::theme::ACCENT),
+                egui::Stroke::new(2.0_f32, crate::theme::ACCENT),
             );
         }
     }

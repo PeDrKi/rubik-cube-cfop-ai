@@ -1,0 +1,11 @@
+{
+  "name": "rubik-web-tests",
+  "private": true,
+  "description": "Kiểm thử giao diện bản web (không cần trình duyệt thật)",
+  "scripts": {
+    "test": "node ui.test.js",
+    "semantic": "node semantic.test.js",
+    "frames": "node render_frames.js"
+  },
+  "devDependencies": { "jsdom": "^26.0.0", "pngjs": "^7.0.0" }
+}

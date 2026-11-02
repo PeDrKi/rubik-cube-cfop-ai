@@ -1,0 +1,60 @@
+@@SLOT1@@
+
+@@SLOT2@@
+/* Gọi server: báo lỗi tiếng Việt dễ hiểu cả khi mất mạng hoặc server/proxy trả trang lỗi không phải JSON (502, 413…). */
+async function req(url, opt) {
+  let r,
+    j = null;
+  try {
+    r = await fetch(url, opt);
+  } catch (e) {
+    throw new Error('Mất kết nối tới máy chủ, kiểm tra mạng rồi thử lại.');
+  }
+  try {
+    j = await r.json();
+  } catch (e) {}
+  if (r.ok && j) return j;
+  throw new Error(
+    (j && j.error) ||
+      (r.status === 429
+        ? 'Bạn thao tác quá nhanh, hãy thử lại sau ít phút.'
+        : r.status === 413
+          ? 'Dữ liệu gửi lên quá lớn.'
+          : r.status >= 500
+            ? `Máy chủ đang gặp sự cố (mã ${r.status}), hãy thử lại sau.`
+            : `Yêu cầu không hợp lệ (mã ${r.status}).`)
+  );
+}
+const api = (p, b) =>
+  req(
+    '/api/' + p,
+    b ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) } : {}
+  );
+const frameApi = (w, h, buf, s) => req(`/api/scan_frame?w=${w}&h=${h}&s=${s}`, { method: 'POST', body: buf });
+const cancelCompute = () => {};
+const BOOTERR = 'Không kết nối được backend: ';
+@@SLOT3@@
+/* ============ tài khoản: backend là server axum (rubik-web) ============ */
+const acc = {
+  enabled: true,
+  me: async () => (await api('auth/me')).user,
+  auth: async (mode, username, password) => (await api('auth/' + mode, { username, password })).user,
+  logout: () => api('auth/logout', {}),
+  start: () => api('game/start', {}),
+  finish: (id, moves) => api('game/finish', { game_id: id, moves }),
+  abandon: id => api('game/abandon', { game_id: id }),
+  beacon: id => {
+    try {
+      navigator.sendBeacon(
+        '/api/game/abandon',
+        new Blob([JSON.stringify({ game_id: id })], { type: 'application/json' })
+      );
+    } catch (e) {}
+  },
+  changePassword: (o, n) => api('auth/change_password', { old_password: o, new_password: n }),
+  deleteAccount: p => api('auth/delete', { password: p }),
+  board: async by => (await api('leaderboard?by=' + by)).rows,
+  profile: () => api('profile'),
+};
+@@SLOT4@@
+emptyPlan();

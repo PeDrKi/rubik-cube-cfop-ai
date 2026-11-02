@@ -8,9 +8,12 @@
 
 fn opposite(face: char) -> char {
     match face {
-        'U' => 'D', 'D' => 'U',
-        'F' => 'B', 'B' => 'F',
-        'L' => 'R', 'R' => 'L',
+        'U' => 'D',
+        'D' => 'U',
+        'F' => 'B',
+        'B' => 'F',
+        'L' => 'R',
+        'R' => 'L',
         _ => face,
     }
 }
@@ -52,7 +55,10 @@ pub fn simplify(moves: &[&str]) -> Vec<String> {
         let mut i = 0;
         while i < moves.len() {
             if i + 1 < moves.len() && face_of(&moves[i]) == face_of(&moves[i + 1]) {
-                let nm = make(face_of(&moves[i]), turns_of(&moves[i]) + turns_of(&moves[i + 1]));
+                let nm = make(
+                    face_of(&moves[i]),
+                    turns_of(&moves[i]) + turns_of(&moves[i + 1]),
+                );
                 if let Some(nm) = nm {
                     out.push(nm);
                 }

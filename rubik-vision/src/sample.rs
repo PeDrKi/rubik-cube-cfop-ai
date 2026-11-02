@@ -59,7 +59,10 @@ pub fn sample_grid(img: &RgbImage, region: SquareRegion) -> [[u8; 3]; 9] {
 /// đầu file. Đây là hàm nên dùng khi lấy mẫu từ webcam/ảnh thật (nơi
 /// loá/nhiễu có thể xảy ra); `RawFace::from_samples` (tin cậy tuyệt đối
 /// mặc định) chỉ phù hợp cho dữ liệu đã biết chắc chắn đúng.
-pub fn sample_grid_with_confidence(img: &RgbImage, region: SquareRegion) -> ([[u8; 3]; 9], [f32; 9]) {
+pub fn sample_grid_with_confidence(
+    img: &RgbImage,
+    region: SquareRegion,
+) -> ([[u8; 3]; 9], [f32; 9]) {
     let cell = region.size as f32 / 3.0;
     // patch lấy mẫu = 30% kích thước ô, canh giữa ô.
     let patch = (cell * 0.3).max(1.0) as i64;
@@ -102,14 +105,21 @@ const MIN_CONFIDENCE: f32 = 0.05;
 /// cậy từ tỉ lệ cháy sáng trung bình và độ lệch của 5 patch con so với
 /// trung vị đó (patch nào bị loá cục bộ dù đã lọc vẫn có xu hướng lệch
 /// khỏi số đông).
-fn robust_cell_color(img: &RgbImage, cx: i64, cy: i64, half: i64, sub_offset: i64) -> ([u8; 3], f32) {
+fn robust_cell_color(
+    img: &RgbImage,
+    cx: i64,
+    cy: i64,
+    half: i64,
+    sub_offset: i64,
+) -> ([u8; 3], f32) {
     let half = half.max(1);
     let mut rs = [0u8; 5];
     let mut gs = [0u8; 5];
     let mut bs = [0u8; 5];
     let mut clip_fracs = [0f32; 5];
     for (i, (dx, dy)) in SUB_PATCH_OFFSETS.iter().enumerate() {
-        let ([r, g, b], clip_frac) = trimmed_mean_patch(img, cx + dx * sub_offset, cy + dy * sub_offset, half);
+        let ([r, g, b], clip_frac) =
+            trimmed_mean_patch(img, cx + dx * sub_offset, cy + dy * sub_offset, half);
         rs[i] = r;
         gs[i] = g;
         bs[i] = b;
@@ -120,12 +130,18 @@ fn robust_cell_color(img: &RgbImage, cx: i64, cy: i64, half: i64, sub_offset: i6
     let avg_clip = clip_fracs.iter().sum::<f32>() / clip_fracs.len() as f32;
     let spread = (0..5)
         .map(|i| {
-            let d = [rs[i] as f32 - color[0] as f32, gs[i] as f32 - color[1] as f32, bs[i] as f32 - color[2] as f32];
+            let d = [
+                rs[i] as f32 - color[0] as f32,
+                gs[i] as f32 - color[1] as f32,
+                bs[i] as f32 - color[2] as f32,
+            ];
             (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
         })
         .fold(0f32, f32::max);
 
-    let confidence = 1.0 - CLIP_WEIGHT * avg_clip.clamp(0.0, 1.0) - SPREAD_WEIGHT * (spread / SPREAD_SCALE).clamp(0.0, 1.0);
+    let confidence = 1.0
+        - CLIP_WEIGHT * avg_clip.clamp(0.0, 1.0)
+        - SPREAD_WEIGHT * (spread / SPREAD_SCALE).clamp(0.0, 1.0);
     (color, confidence.clamp(MIN_CONFIDENCE, 1.0))
 }
 
@@ -163,7 +179,10 @@ fn trimmed_mean_patch(img: &RgbImage, cx: i64, cy: i64, half: i64) -> ([u8; 3], 
         return ([128, 128, 128], 1.0); // vùng ngoài ảnh (region khoanh lệch hoặc patch con lệch ra ngoài) -> xám trung tính, tin cậy thấp nhất có thể
     }
 
-    let clipped = pixels.iter().filter(|p| p[0] >= CLIP_THRESHOLD || p[1] >= CLIP_THRESHOLD || p[2] >= CLIP_THRESHOLD).count();
+    let clipped = pixels
+        .iter()
+        .filter(|p| p[0] >= CLIP_THRESHOLD || p[1] >= CLIP_THRESHOLD || p[2] >= CLIP_THRESHOLD)
+        .count();
     let clip_frac = clipped as f32 / pixels.len() as f32;
     // >= 2/3 pixel cháy sáng -> coi như cả patch thật sự sáng (trắng
     // thật), giữ nguyên toàn bộ thay vì loại hết còn lại quá ít mẫu.
@@ -217,7 +236,10 @@ const TEMPORAL_SPREAD_SCALE: f32 = 40.0;
 /// Gọi với slice RỖNG là lỗi logic ở nơi gọi (`debug_assert`); ở bản
 /// release trả về màu xám trung tính + tin cậy thấp nhất thay vì panic.
 pub fn aggregate_frames(frames: &[([[u8; 3]; 9], [f32; 9])]) -> ([[u8; 3]; 9], [f32; 9]) {
-    debug_assert!(!frames.is_empty(), "aggregate_frames không được gọi với slice rỗng");
+    debug_assert!(
+        !frames.is_empty(),
+        "aggregate_frames không được gọi với slice rỗng"
+    );
     if frames.is_empty() {
         return ([[128, 128, 128]; 9], [MIN_CONFIDENCE; 9]);
     }
@@ -237,7 +259,11 @@ pub fn aggregate_frames(frames: &[([[u8; 3]; 9], [f32; 9])]) -> ([[u8; 3]; 9], [
                     acc[k] += samples[cell][k] as f32 * w;
                 }
             }
-            [acc[0] / weight_sum, acc[1] / weight_sum, acc[2] / weight_sum]
+            [
+                acc[0] / weight_sum,
+                acc[1] / weight_sum,
+                acc[2] / weight_sum,
+            ]
         } else {
             // Mọi khung đều gần như 0 tin cậy -- trọng số hoá vô nghĩa,
             // lùi về trung bình cộng thô thay vì chia cho ~0.
@@ -250,7 +276,11 @@ pub fn aggregate_frames(frames: &[([[u8; 3]; 9], [f32; 9])]) -> ([[u8; 3]; 9], [
             let n = frames.len() as f32;
             [acc[0] / n, acc[1] / n, acc[2] / n]
         };
-        colors[cell] = [mean[0].round() as u8, mean[1].round() as u8, mean[2].round() as u8];
+        colors[cell] = [
+            mean[0].round() as u8,
+            mean[1].round() as u8,
+            mean[2].round() as u8,
+        ];
 
         let spread = frames
             .iter()
@@ -265,7 +295,8 @@ pub fn aggregate_frames(frames: &[([[u8; 3]; 9], [f32; 9])]) -> ([[u8; 3]; 9], [
             .fold(0f32, f32::max);
 
         let avg_frame_conf = frames.iter().map(|(_, c)| c[cell]).sum::<f32>() / frames.len() as f32;
-        let temporal_factor = 1.0 - TEMPORAL_SPREAD_WEIGHT * (spread / TEMPORAL_SPREAD_SCALE).clamp(0.0, 1.0);
+        let temporal_factor =
+            1.0 - TEMPORAL_SPREAD_WEIGHT * (spread / TEMPORAL_SPREAD_SCALE).clamp(0.0, 1.0);
         confidence[cell] = (avg_frame_conf * temporal_factor).clamp(MIN_CONFIDENCE, 1.0);
     }
     (colors, confidence)
@@ -290,7 +321,14 @@ mod tests {
                 }
             }
         }
-        let out = sample_grid(&img, SquareRegion { x: 0, y: 0, size: 90 });
+        let out = sample_grid(
+            &img,
+            SquareRegion {
+                x: 0,
+                y: 0,
+                size: 90,
+            },
+        );
         for row in 0..3usize {
             for col in 0..3usize {
                 let expected = (row * 3 + col) as u8 * 25;
@@ -309,19 +347,30 @@ mod tests {
     #[test]
     fn ignores_localized_glare_spot_at_cell_center() {
         let mut img = RgbImage::from_pixel(90, 90, Rgb([230, 20, 20])); // đỏ thật phủ toàn bộ ảnh
-        // Đốm loá nhỏ ở giữa ẢNH (x,y: 40..50) -- với lưới 3x3 trên vùng
-        // 90x90 (mỗi ô 30x30), toạ độ này rơi đúng vào Ô GIỮA (hàng/cột 1
-        // = [30,60)) tức index 4, KHÔNG PHẢI index 0 (đã sửa lỗi test cũ:
-        // trước đây kiểm tra nhầm out[0] -- ô đó chưa từng dính loá nên
-        // luôn đúng dù không thực sự kiểm chứng được cơ chế chống loá).
+                                                                        // Đốm loá nhỏ ở giữa ẢNH (x,y: 40..50) -- với lưới 3x3 trên vùng
+                                                                        // 90x90 (mỗi ô 30x30), toạ độ này rơi đúng vào Ô GIỮA (hàng/cột 1
+                                                                        // = [30,60)) tức index 4, KHÔNG PHẢI index 0 (đã sửa lỗi test cũ:
+                                                                        // trước đây kiểm tra nhầm out[0] -- ô đó chưa từng dính loá nên
+                                                                        // luôn đúng dù không thực sự kiểm chứng được cơ chế chống loá).
         for y in 40..50u32 {
             for x in 40..50u32 {
                 img.put_pixel(x, y, Rgb([255, 255, 255]));
             }
         }
-        let out = sample_grid(&img, SquareRegion { x: 0, y: 0, size: 90 });
+        let out = sample_grid(
+            &img,
+            SquareRegion {
+                x: 0,
+                y: 0,
+                size: 90,
+            },
+        );
         let [r, g, b] = out[4];
-        assert!(r > 200 && g < 60 && b < 60, "màu đọc được lệch quá xa màu đỏ thật do loá: {:?}", out[4]);
+        assert!(
+            r > 200 && g < 60 && b < 60,
+            "màu đọc được lệch quá xa màu đỏ thật do loá: {:?}",
+            out[4]
+        );
     }
 
     /// Ô dính loá (dù màu đọc được đã được sửa gần đúng nhờ 2 lớp phòng
@@ -336,8 +385,19 @@ mod tests {
                 img.put_pixel(x, y, Rgb([255, 255, 255]));
             }
         }
-        let (_, conf) = sample_grid_with_confidence(&img, SquareRegion { x: 0, y: 0, size: 90 });
-        assert_eq!(conf[0], 1.0, "ô hoàn toàn sạch (không dính loá) phải tin cậy tuyệt đối, được: {}", conf[0]);
+        let (_, conf) = sample_grid_with_confidence(
+            &img,
+            SquareRegion {
+                x: 0,
+                y: 0,
+                size: 90,
+            },
+        );
+        assert_eq!(
+            conf[0], 1.0,
+            "ô hoàn toàn sạch (không dính loá) phải tin cậy tuyệt đối, được: {}",
+            conf[0]
+        );
         assert!(
             conf[4] < conf[0],
             "ô dính loá (idx 4, conf={}) phải tin cậy THẤP HƠN ô sạch (idx 0, conf={})",
@@ -352,7 +412,14 @@ mod tests {
     #[test]
     fn keeps_genuinely_white_sticker_under_bright_light() {
         let img = RgbImage::from_pixel(90, 90, Rgb([255, 255, 255]));
-        let out = sample_grid(&img, SquareRegion { x: 0, y: 0, size: 90 });
+        let out = sample_grid(
+            &img,
+            SquareRegion {
+                x: 0,
+                y: 0,
+                size: 90,
+            },
+        );
         assert_eq!(out[0], [255, 255, 255]);
     }
 
@@ -377,7 +444,10 @@ mod tests {
         let (colors, _) = aggregate_frames(&frames);
         for ch in 0..3 {
             let v = colors[0][ch] as i32;
-            assert!((v - 100).abs() <= 2, "kênh {ch} lệch quá xa 100 sau khi gộp: {v}");
+            assert!(
+                (v - 100).abs() <= 2,
+                "kênh {ch} lệch quá xa 100 sau khi gộp: {v}"
+            );
         }
     }
 
@@ -395,7 +465,11 @@ mod tests {
             "màu gộp phải lệch về phía khung tin cậy cao hơn, được: {:?}",
             colors[0]
         );
-        assert!(colors[0][0] < 120, "khung tin cậy thấp phải gần như không kéo được màu, được: {:?}", colors[0]);
+        assert!(
+            colors[0][0] < 120,
+            "khung tin cậy thấp phải gần như không kéo được màu, được: {:?}",
+            colors[0]
+        );
     }
 
     /// 2 khung hình ĐỒNG THUẬN (cùng đọc ra gần như 1 màu) phải cho ra kết
@@ -405,8 +479,14 @@ mod tests {
     /// tự phát hiện được.
     #[test]
     fn aggregate_frames_penalizes_disagreement_between_frames() {
-        let agreeing = [([[100u8, 100, 100]; 9], [0.9f32; 9]), ([[102u8, 99, 101]; 9], [0.9f32; 9])];
-        let disagreeing = [([[80u8, 100, 100]; 9], [0.9f32; 9]), ([[160u8, 100, 100]; 9], [0.9f32; 9])];
+        let agreeing = [
+            ([[100u8, 100, 100]; 9], [0.9f32; 9]),
+            ([[102u8, 99, 101]; 9], [0.9f32; 9]),
+        ];
+        let disagreeing = [
+            ([[80u8, 100, 100]; 9], [0.9f32; 9]),
+            ([[160u8, 100, 100]; 9], [0.9f32; 9]),
+        ];
         let (_, conf_agree) = aggregate_frames(&agreeing);
         let (_, conf_disagree) = aggregate_frames(&disagreeing);
         assert!(

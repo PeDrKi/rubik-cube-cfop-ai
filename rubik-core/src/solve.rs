@@ -35,7 +35,7 @@ pub fn solve_pll(full: full_state::FullState) -> Option<Vec<&'static str>> {
 /// Giải trọn vẹn `state` hiện tại, trả về TOÀN BỘ chuỗi nước đi (không áp
 /// dụng lên `state` -- caller tự animate rồi apply). Thử tối đa
 /// `max_retries` lần xáo trộn F2L nếu OLL/PLL bí. None nếu cả mọi lần đều
-/// thất bại (hiếm, ~5-10% theo benchmark ở rubik-rs).
+/// thất bại (rất hiếm: đo lại 150/150 đề xáo ngẫu nhiên đều giải được).
 pub fn solve_full_cube(state: &CubeState, max_retries: u32) -> Option<Vec<String>> {
     let cm = cross_solver::solve_cross(state, 20);
     let mut s0 = *state;
@@ -43,8 +43,13 @@ pub fn solve_full_cube(state: &CubeState, max_retries: u32) -> Option<Vec<String
     let f_after_cross = full_state::from_facelets(&s0);
 
     for attempt in 0..=max_retries {
-        let retry_seed = if attempt == 0 { None } else { Some(attempt as u64 * 7919) };
-        let res = f2l_solver::solve_f2l_seeded(f_after_cross, &[8, 10, 12, 14], 400_000, retry_seed);
+        let retry_seed = if attempt == 0 {
+            None
+        } else {
+            Some(attempt as u64 * 7919)
+        };
+        let res =
+            f2l_solver::solve_f2l_seeded(f_after_cross, &[8, 10, 12, 14], 400_000, retry_seed);
         if res.solved_slots.len() != 4 {
             continue;
         }

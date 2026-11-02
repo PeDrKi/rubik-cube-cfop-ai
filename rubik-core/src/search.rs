@@ -68,13 +68,26 @@ where
     let h0 = heuristic(&full_start);
     let mut counter: u64 = 0;
     let mut heap = BinaryHeap::new();
-    heap.push(HeapItem { f: h0, g: 0, counter, state: full_start, node_idx: 0, last_face: None });
+    heap.push(HeapItem {
+        f: h0,
+        g: 0,
+        counter,
+        state: full_start,
+        node_idx: 0,
+        last_face: None,
+    });
     let mut best_g: FxHashMap<FullState, u32> = FxHashMap::default();
     best_g.insert(full_start, 0);
     let mut nodes: u32 = 0;
 
     while let Some(item) = heap.pop() {
-        let HeapItem { g, state: cur, node_idx, last_face, .. } = item;
+        let HeapItem {
+            g,
+            state: cur,
+            node_idx,
+            last_face,
+            ..
+        } = item;
         if g > *best_g.get(&cur).unwrap_or(&u32::MAX) {
             continue;
         }
@@ -82,7 +95,7 @@ where
             continue;
         }
         nodes += 1;
-        if nodes % crate::cancel::CHECK_EVERY == 0 && crate::cancel::is_cancelled() {
+        if nodes.is_multiple_of(crate::cancel::CHECK_EVERY) && crate::cancel::is_cancelled() {
             return None;
         }
         if nodes > max_nodes {
@@ -103,7 +116,14 @@ where
                 }
                 counter += 1;
                 let h = heuristic(&nxt);
-                heap.push(HeapItem { f: ng + h, g: ng, counter, state: nxt, node_idx: nxt_idx, last_face: Some(face) });
+                heap.push(HeapItem {
+                    f: ng + h,
+                    g: ng,
+                    counter,
+                    state: nxt,
+                    node_idx: nxt_idx,
+                    last_face: Some(face),
+                });
             }
         }
     }
@@ -137,8 +157,17 @@ where
     G: Fn(&FullState) -> bool + Sync,
     H: Fn(&FullState) -> u32 + Sync,
 {
-    use rayon::prelude::*;
-    tiers
-        .par_iter()
-        .find_map_first(|&(nodes, depth)| a_star(full_start, &goal, &heuristic, nodes, depth, moves))
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        tiers.par_iter().find_map_first(|&(nodes, depth)| {
+            a_star(full_start, &goal, &heuristic, nodes, depth, moves)
+        })
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        tiers
+            .iter()
+            .find_map(|&(nodes, depth)| a_star(full_start, &goal, &heuristic, nodes, depth, moves))
+    }
 }

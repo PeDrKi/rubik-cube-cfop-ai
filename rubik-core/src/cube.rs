@@ -359,8 +359,8 @@ impl fmt::Debug for CubeState {
 // ── Scramble ────────────────────────────────────────────────────────────────
 
 pub const ALL_MOVES: [&str; 18] = [
-    "U", "U'", "U2", "D", "D'", "D2", "F", "F'", "F2", "B", "B'", "B2", "L", "L'", "L2", "R",
-    "R'", "R2",
+    "U", "U'", "U2", "D", "D'", "D2", "F", "F'", "F2", "B", "B'", "B2", "L", "L'", "L2", "R", "R'",
+    "R2",
 ];
 
 /// Scramble n nước ngẫu nhiên, tránh 2 nước liên tiếp cùng mặt.
@@ -393,8 +393,23 @@ pub fn random_scramble_moves(
 
 const VALID_BASES: &str = "UDFBLRMESxyzudfblr";
 
+/// Số nước tối đa một công thức được phép sinh ra (sau khi bung các nhóm lặp `(...)n`).
+/// Giới hạn này chặn tấn công từ chối dịch vụ: không có nó, chuỗi `(R U)999999999`
+/// bắt máy cấp phát hàng GB bộ nhớ, còn `(R)99999999999999999999` làm panic khi đọc số.
+pub const MAX_PARSED_MOVES: usize = 5000;
+/// Độ dài tối đa (ký tự) của chuỗi đầu vào và của chuỗi sau khi bung.
+const MAX_FORMULA_CHARS: usize = 40_000;
+
+fn too_long() -> String {
+    format!("Công thức quá dài (tối đa {MAX_PARSED_MOVES} nước sau khi bung các nhóm lặp)")
+}
+
 /// Mở rộng nhóm lặp `(...)n`, lồng nhau, giới hạn 10 vòng như bản Python.
-pub fn expand_repeats(text: &str) -> String {
+/// Trả lỗi (không panic, không cấp phát quá mức) khi số lặp hoặc độ dài sau khi bung quá lớn.
+pub fn expand_repeats(text: &str) -> Result<String, String> {
+    if text.len() > MAX_FORMULA_CHARS {
+        return Err(too_long());
+    }
     let mut text = text.to_string();
     for _ in 0..10 {
         let Some(open) = text.find('(') else { break };
@@ -414,9 +429,14 @@ pub fn expand_repeats(text: &str) -> String {
         if digits.is_empty() {
             break;
         }
-        let count: usize = digits.parse().unwrap();
-        let expanded = std::iter::repeat(inner.as_str())
-            .take(count)
+        // Số quá lớn (tràn usize) cũng là "quá dài", không được panic.
+        let count: usize = digits.parse().map_err(|_| too_long())?;
+        // Kiểm tra độ dài TRƯỚC khi bung để không bao giờ cấp phát chuỗi khổng lồ.
+        let grown = (inner.len() + 1).saturating_mul(count);
+        if count > MAX_PARSED_MOVES || text.len().saturating_add(grown) > MAX_FORMULA_CHARS {
+            return Err(too_long());
+        }
+        let expanded = std::iter::repeat_n(inner.as_str(), count)
             .collect::<Vec<_>>()
             .join(" ");
         text = format!(
@@ -426,7 +446,7 @@ pub fn expand_repeats(text: &str) -> String {
             &text[close + 1 + digits.len()..]
         );
     }
-    text
+    Ok(text)
 }
 
 fn is_valid_base(c: char) -> bool {
@@ -435,7 +455,7 @@ fn is_valid_base(c: char) -> bool {
 
 /// Parse chuỗi Singmaster. Ok(moves) hoặc Err(thông báo lỗi).
 pub fn parse_singmaster(text: &str) -> Result<Vec<String>, String> {
-    let expanded = expand_repeats(text);
+    let expanded = expand_repeats(text)?;
     let chars: Vec<char> = expanded.chars().collect();
     let mut i = 0;
     let mut moves = Vec::new();
@@ -466,6 +486,9 @@ pub fn parse_singmaster(text: &str) -> Result<Vec<String>, String> {
                 i += 1;
             }
             moves.push(tok);
+            if moves.len() > MAX_PARSED_MOVES {
+                return Err(too_long());
+            }
         } else {
             leftover.push(c);
             i += 1;
@@ -473,7 +496,7 @@ pub fn parse_singmaster(text: &str) -> Result<Vec<String>, String> {
     }
 
     if !leftover.is_empty() {
-        return Err(format!("Unknown: '{leftover}'"));
+        return Err(format!("Ký hiệu không hợp lệ trong công thức: '{leftover}' (chỉ dùng U D F B L R, M E S, x y z, u d f b l r kèm ' hoặc 2)"));
     }
     Ok(moves)
 }
@@ -515,5 +538,8 @@ impl CubeState {
 /// Toàn bộ 18 nước outer-move, thứ tự cố định — dùng làm chỉ số (move_index)
 /// xuyên suốt các bảng hoán vị edge/corner, giống ALL_MOVES trong Python.
 pub fn move_index(mv: &str) -> usize {
-    ALL_MOVES.iter().position(|&m| m == mv).unwrap_or_else(|| panic!("unknown move {mv}"))
+    ALL_MOVES
+        .iter()
+        .position(|&m| m == mv)
+        .unwrap_or_else(|| panic!("unknown move {mv}"))
 }

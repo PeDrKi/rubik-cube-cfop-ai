@@ -39,66 +39,64 @@ use std::sync::OnceLock;
 /// lên trạng thái của khoá thì lớp U định hướng xong, Cross/F2L còn nguyên
 /// (xem test `moi_muc_giai_dung_that` và examples/oll_shorten.rs).
 const RAW_ALGS: &[(&str, &str)] = &[
-    ("OLL01", "R U2 R2 F R F' U2 R' F R F'"),   // 11 nuoc, dang dung
-    ("OLL02", "L F L' U2 R U2 R' U2 L F' L'"),   // 11 nuoc, chuan B
-    ("OLL03", "R' F2 R2 U2 R' F R U2 R2 F2 R"),   // 11 nuoc, dang dung
-    ("OLL04", "R' F2 R2 U2 R' F' R U2 R2 F2 R"),   // 11 nuoc, dang dung
-    ("OLL05", "L' B2 R B R' B L"),   // 7 nuoc, chuan B
-    ("OLL06", "L F2 R' F' R F' L'"),   // 7 nuoc, chuan A
-    ("OLL07", "L F R' F R F2 L'"),   // 7 nuoc, chuan A
-    ("OLL08", "R' F' L F' L' F2 R"),   // 7 nuoc, chuan A
-    ("OLL09", "R U R' U' R' F R2 U R' U' F'"),   // 11 nuoc, dang dung
-    ("OLL10", "R U R' U R' F R F' R U2 R'"),   // 11 nuoc, dang dung
-    ("OLL11", "F' B U L U' L U L2 U' L2 F B'"),   // 12 nuoc, chuan B
-    ("OLL12", "F' B U' L' U L' U' L2 U L2 F B'"),   // 12 nuoc, chuan B
-    ("OLL13", "F U R U2 R' U' R U R' F'"),   // 10 nuoc, dang dung
-    ("OLL14", "R' F R U R' F' R F U' F'"),   // 10 nuoc, dang dung
-    ("OLL15", "R' F' R L' U' L U R' F R"),   // 10 nuoc, chuan B
-    ("OLL16", "L F L' R U R' U' L F' L'"),   // 10 nuoc, chuan B
-    ("OLL17", "F R' F' R U F B' D R' D' F' B"),   // 12 nuoc, chuan B
-    ("OLL18", "R U2 R2 F R F' U2 L R' F R F' L'"),   // 13 nuoc, chuan A
-    ("OLL19", "F B' D R D' F' B U' R' F R F'"),   // 12 nuoc, chuan A
-    ("OLL20", "F' B U' L' U L U L U L' U' F B'"),   // 13 nuoc, chuan B
-    ("OLL21", "R U R' U R U' R' U R U2 R'"),   // 11 nuoc, dang dung
-    ("OLL22", "R U2 R2 U' R2 U' R2 U2 R"),   // 9 nuoc, dang dung
-    ("OLL23", "R2 D' R U2 R' D R U2 R"),   // 9 nuoc, dang dung
-    ("OLL24", "L F R' F' L' F R F'"),   // 8 nuoc, chuan A
-    ("OLL25", "F R' F' L F R F' L'"),   // 8 nuoc, chuan A
-    ("OLL26", "R U2 R' U' R U' R'"),   // 7 nuoc, dang dung
-    ("OLL27", "R U R' U R U2 R'"),   // 7 nuoc, dang dung
-    ("OLL28", "R' F R F' B U' F' U F B'"),   // 10 nuoc, chuan B
-    ("OLL29", "L2 U' L B L' U L2 U' L' B' L"),   // 11 nuoc, chuan B
-    ("OLL30", "L' F' L U' L' F L2 F' L' U L F L'"),   // 13 nuoc, chuan B
-    ("OLL31", "R' U' F U R U' R' F' R"),   // 9 nuoc, dang dung
-    ("OLL32", "F' B U L U' L' U' F U B'"),   // 10 nuoc, chuan A
-    ("OLL33", "R U R' U' R' F R F'"),   // 8 nuoc, dang dung
-    ("OLL34", "B U B' U' L' B' R B L R'"),   // 10 nuoc, chuan B
-    ("OLL35", "R U2 R2 F R F' R U2 R'"),   // 9 nuoc, dang dung
-    ("OLL36", "L' U' L U' L' U L U L F' L' F"),   // 12 nuoc, dang dung
-    ("OLL37", "F R' F' R U R U' R'"),   // 8 nuoc, dang dung
-    ("OLL38", "R U R' U R U' R' U' R' F R F'"),   // 12 nuoc, dang dung
-    ("OLL39", "L F' L' U' L U F U' L'"),   // 9 nuoc, dang dung
-    ("OLL40", "R' F R U R' U' F' U R"),   // 9 nuoc, dang dung
-    ("OLL41", "R U R' U R U2 R' F R U R' U' F'"),   // 13 nuoc, dang dung
-    ("OLL42", "B' U' R' U R B R U2 R' U' R U' R'"),   // 13 nuoc, dang dung
-    ("OLL43", "B' U' R' U R B"),   // 6 nuoc, dang dung
-    ("OLL44", "F U R U' R' F'"),   // 6 nuoc, dang dung
-    ("OLL45", "F R U R' U' F'"),   // 6 nuoc, dang dung
-    ("OLL46", "R' U' R' F R F' U R"),   // 8 nuoc, dang dung
-    ("OLL47", "F' L' U' L U L' U' L U F"),   // 10 nuoc, dang dung
-    ("OLL48", "F R U R' U' R U R' U' F'"),   // 10 nuoc, dang dung
-    ("OLL49", "L F' L2 B L2 F L2 B' L"),   // 9 nuoc, chuan B
-    ("OLL50", "L' B L2 F' L2 B' L2 F L'"),   // 9 nuoc, chuan B
-    ("OLL51", "F U R U' R' U R U' R' F'"),   // 10 nuoc, dang dung
-    ("OLL52", "R' F' U' F U' R U R' U R"),   // 10 nuoc, dang dung
-    ("OLL53", "R' F' L F' L' F L F' L' F2 R"),   // 11 nuoc, chuan A
-    ("OLL54", "L F R' F R F' R' F R F2 L'"),   // 11 nuoc, chuan B
-    ("OLL55", "R' F U R U' R2 F' R2 U R' U' R"),   // 12 nuoc, dang dung
-    ("OLL56", "L F L' U R U' R' U R U' R' L F' L'"),   // 14 nuoc, chuan A
-    ("OLL57", "F' B U' F U F B' R' F' R"),   // 10 nuoc, chuan B
+    ("OLL01", "R U2 R2 F R F' U2 R' F R F'"), // 11 nuoc, dang dung
+    ("OLL02", "L F L' U2 R U2 R' U2 L F' L'"), // 11 nuoc, chuan B
+    ("OLL03", "R' F2 R2 U2 R' F R U2 R2 F2 R"), // 11 nuoc, dang dung
+    ("OLL04", "R' F2 R2 U2 R' F' R U2 R2 F2 R"), // 11 nuoc, dang dung
+    ("OLL05", "L' B2 R B R' B L"),            // 7 nuoc, chuan B
+    ("OLL06", "L F2 R' F' R F' L'"),          // 7 nuoc, chuan A
+    ("OLL07", "L F R' F R F2 L'"),            // 7 nuoc, chuan A
+    ("OLL08", "R' F' L F' L' F2 R"),          // 7 nuoc, chuan A
+    ("OLL09", "R U R' U' R' F R2 U R' U' F'"), // 11 nuoc, dang dung
+    ("OLL10", "R U R' U R' F R F' R U2 R'"),  // 11 nuoc, dang dung
+    ("OLL11", "F' B U L U' L U L2 U' L2 F B'"), // 12 nuoc, chuan B
+    ("OLL12", "F' B U' L' U L' U' L2 U L2 F B'"), // 12 nuoc, chuan B
+    ("OLL13", "F U R U2 R' U' R U R' F'"),    // 10 nuoc, dang dung
+    ("OLL14", "R' F R U R' F' R F U' F'"),    // 10 nuoc, dang dung
+    ("OLL15", "R' F' R L' U' L U R' F R"),    // 10 nuoc, chuan B
+    ("OLL16", "L F L' R U R' U' L F' L'"),    // 10 nuoc, chuan B
+    ("OLL17", "F R' F' R U F B' D R' D' F' B"), // 12 nuoc, chuan B
+    ("OLL18", "R U2 R2 F R F' U2 L R' F R F' L'"), // 13 nuoc, chuan A
+    ("OLL19", "F B' D R D' F' B U' R' F R F'"), // 12 nuoc, chuan A
+    ("OLL20", "F' B U' L' U L U L U L' U' F B'"), // 13 nuoc, chuan B
+    ("OLL21", "R U R' U R U' R' U R U2 R'"),  // 11 nuoc, dang dung
+    ("OLL22", "R U2 R2 U' R2 U' R2 U2 R"),    // 9 nuoc, dang dung
+    ("OLL23", "R2 D' R U2 R' D R U2 R"),      // 9 nuoc, dang dung
+    ("OLL24", "L F R' F' L' F R F'"),         // 8 nuoc, chuan A
+    ("OLL25", "F R' F' L F R F' L'"),         // 8 nuoc, chuan A
+    ("OLL26", "R U2 R' U' R U' R'"),          // 7 nuoc, dang dung
+    ("OLL27", "R U R' U R U2 R'"),            // 7 nuoc, dang dung
+    ("OLL28", "R' F R F' B U' F' U F B'"),    // 10 nuoc, chuan B
+    ("OLL29", "L2 U' L B L' U L2 U' L' B' L"), // 11 nuoc, chuan B
+    ("OLL30", "L' F' L U' L' F L2 F' L' U L F L'"), // 13 nuoc, chuan B
+    ("OLL31", "R' U' F U R U' R' F' R"),      // 9 nuoc, dang dung
+    ("OLL32", "F' B U L U' L' U' F U B'"),    // 10 nuoc, chuan A
+    ("OLL33", "R U R' U' R' F R F'"),         // 8 nuoc, dang dung
+    ("OLL34", "B U B' U' L' B' R B L R'"),    // 10 nuoc, chuan B
+    ("OLL35", "R U2 R2 F R F' R U2 R'"),      // 9 nuoc, dang dung
+    ("OLL36", "L' U' L U' L' U L U L F' L' F"), // 12 nuoc, dang dung
+    ("OLL37", "F R' F' R U R U' R'"),         // 8 nuoc, dang dung
+    ("OLL38", "R U R' U R U' R' U' R' F R F'"), // 12 nuoc, dang dung
+    ("OLL39", "L F' L' U' L U F U' L'"),      // 9 nuoc, dang dung
+    ("OLL40", "R' F R U R' U' F' U R"),       // 9 nuoc, dang dung
+    ("OLL41", "R U R' U R U2 R' F R U R' U' F'"), // 13 nuoc, dang dung
+    ("OLL42", "B' U' R' U R B R U2 R' U' R U' R'"), // 13 nuoc, dang dung
+    ("OLL43", "B' U' R' U R B"),              // 6 nuoc, dang dung
+    ("OLL44", "F U R U' R' F'"),              // 6 nuoc, dang dung
+    ("OLL45", "F R U R' U' F'"),              // 6 nuoc, dang dung
+    ("OLL46", "R' U' R' F R F' U R"),         // 8 nuoc, dang dung
+    ("OLL47", "F' L' U' L U L' U' L U F"),    // 10 nuoc, dang dung
+    ("OLL48", "F R U R' U' R U R' U' F'"),    // 10 nuoc, dang dung
+    ("OLL49", "L F' L2 B L2 F L2 B' L"),      // 9 nuoc, chuan B
+    ("OLL50", "L' B L2 F' L2 B' L2 F L'"),    // 9 nuoc, chuan B
+    ("OLL51", "F U R U' R' U R U' R' F'"),    // 10 nuoc, dang dung
+    ("OLL52", "R' F' U' F U' R U R' U R"),    // 10 nuoc, dang dung
+    ("OLL53", "R' F' L F' L' F L F' L' F2 R"), // 11 nuoc, chuan A
+    ("OLL54", "L F R' F R F' R' F R F2 L'"),  // 11 nuoc, chuan B
+    ("OLL55", "R' F U R U' R2 F' R2 U R' U' R"), // 12 nuoc, dang dung
+    ("OLL56", "L F L' U R U' R' U R U' R' L F' L'"), // 14 nuoc, chuan A
+    ("OLL57", "F' B U' F U F B' R' F' R"),    // 10 nuoc, chuan B
 ];
-
-
 
 pub type OriKey = ([u8; 4], [u8; 4]); // (eo_key, co_key) slot-indexed
 
@@ -126,7 +124,11 @@ fn delta_of(seq: &[&str]) -> ([u8; 4], [u8; 4], bool) {
     let full = from_facelets(&st);
     let (_, eo, _, co) = full;
     let valid = cross_f2l_ok(&full);
-    ([eo[0], eo[1], eo[2], eo[3]], [co[0], co[1], co[2], co[3]], valid)
+    (
+        [eo[0], eo[1], eo[2], eo[3]],
+        [co[0], co[1], co[2], co[3]],
+        valid,
+    )
 }
 
 fn build_table() -> OllTable {
@@ -154,10 +156,16 @@ pub fn table() -> &'static OllTable {
 
 /// Thử cả 4 AUF (không xoay / U / U2 / U'), trả về (auf_prefix, solve_moves,
 /// case_name) cho lần đầu khớp bảng, hoặc None nếu không case nào khớp.
-pub fn solve_oll_with_auf(full: FullState) -> Option<(Vec<&'static str>, Vec<&'static str>, &'static str)> {
+pub fn solve_oll_with_auf(
+    full: FullState,
+) -> Option<(Vec<&'static str>, Vec<&'static str>, &'static str)> {
     let t = table();
     for auf in ["", "U", "U2", "U'"] {
-        let state = if auf.is_empty() { full } else { apply_move(&full, auf) };
+        let state = if auf.is_empty() {
+            full
+        } else {
+            apply_move(&full, auf)
+        };
         let (ep, eo, cp, co) = state;
         let eo_slot: [u8; 4] = slot_indexed::<4>(&ep, &eo);
         let co_slot: [u8; 4] = slot_indexed::<4>(&cp, &co);
@@ -203,7 +211,12 @@ mod tests {
                 continue;
             }
             for c in 0..81u32 {
-                let co = [(c % 3) as u8, (c / 3 % 3) as u8, (c / 9 % 3) as u8, (c / 27 % 3) as u8];
+                let co = [
+                    (c % 3) as u8,
+                    (c / 3 % 3) as u8,
+                    (c / 9 % 3) as u8,
+                    (c / 27 % 3) as u8,
+                ];
                 if co.iter().map(|x| *x as u32).sum::<u32>() % 3 != 0 {
                     continue;
                 }
@@ -276,7 +289,11 @@ mod tests {
                 missing.push(orb[0]);
             }
         }
-        assert!(missing.is_empty(), "thiếu {} thế OLL: {missing:?}", missing.len());
+        assert!(
+            missing.is_empty(),
+            "thiếu {} thế OLL: {missing:?}",
+            missing.len()
+        );
         assert_eq!(covered, 57);
     }
 
@@ -351,7 +368,9 @@ mod tests {
         let mut nums: Vec<u8> = RAW_ALGS
             .iter()
             .map(|(n, _)| {
-                let d = n.strip_prefix("OLL").unwrap_or_else(|| panic!("tên lạ: {n}"));
+                let d = n
+                    .strip_prefix("OLL")
+                    .unwrap_or_else(|| panic!("tên lạ: {n}"));
                 d.parse::<u8>().unwrap_or_else(|_| panic!("tên lạ: {n}"))
             })
             .collect();

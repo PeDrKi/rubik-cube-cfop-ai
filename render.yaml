@@ -1,0 +1,25 @@
+# Render Blueprint: Dashboard → New → Blueprint → chọn repo, Render đọc file này và tạo dịch vụ.
+# Gói miễn phí (free) KHÔNG có ổ đĩa bền: mỗi lần khởi động lại là mất database. Để giữ tài khoản và bảng xếp hạng cần gói starter trở lên.
+services:
+  - type: web
+    name: rubik-web
+    runtime: rust
+    buildCommand: cargo build --release --locked -p rubik-web
+    startCommand: ./target/release/rubik-web
+    plan: starter
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: rubik-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      # Render tự đặt PORT; server tự nghe trên 0.0.0.0:PORT.
+      - key: RUBIK_DB
+        value: /var/data/rubik.db
+      - key: RUBIK_SECURE_COOKIE   # Render phục vụ qua HTTPS
+        value: "1"
+      - key: RUBIK_TRUST_PROXY     # lấy IP thật của người dùng từ proxy của Render (bắt buộc, nếu không giới hạn tốc độ chặn nhầm)
+        value: "1"
+      - key: RUBIK_BACKUP_DIR      # tự sao lưu mỗi 24 giờ, giữ 7 bản mới nhất, cùng ổ đĩa bền
+        value: /var/data/backups

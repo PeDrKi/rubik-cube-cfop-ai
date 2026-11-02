@@ -5,7 +5,8 @@ edition = "2021"
 description = "Nhận diện trạng thái Rubik từ ảnh (phân loại màu sticker + ghép facelet), tách khỏi rubik-core."
 
 [dependencies]
-rubik-core = { path = "../rubik-core" }
+# Không bật feature "parallel" của rubik-core ở đây: bản wasm không có rayon. rubik-app và rubik-web vẫn tự bật (khai báo rubik-core mặc định).
+rubik-core = { path = "../rubik-core", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [dev-dependencies]

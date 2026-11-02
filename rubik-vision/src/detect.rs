@@ -102,7 +102,11 @@ pub fn detect_cube_face(img: &RgbImage) -> Option<Detection> {
         let score = area_frac * fill_dilated * (1.0 - dist_from_center.min(1.0));
 
         let side = bw.max(bh);
-        let rect = RectF { x: cx - side / 2.0, y: cy - side / 2.0, size: side };
+        let rect = RectF {
+            x: cx - side / 2.0,
+            y: cy - side / 2.0,
+            size: side,
+        };
         if best.as_ref().map(|(s, _)| score > *s).unwrap_or(true) {
             best = Some((score, rect));
         }
@@ -126,7 +130,12 @@ pub fn detect_cube_face(img: &RgbImage) -> Option<Detection> {
     // lượng 4 góc TỨ GIÁC thật của mặt cube (xem doc `Detection::quad`),
     // thay vì chỉ trả về hộp bao thẳng trục như trước đây.
     let (mut min_s, mut max_s, mut min_d, mut max_d) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
-    let (mut p_min_s, mut p_max_s, mut p_min_d, mut p_max_d) = ((0.0f32, 0.0f32), (0.0f32, 0.0f32), (0.0f32, 0.0f32), (0.0f32, 0.0f32));
+    let (mut p_min_s, mut p_max_s, mut p_min_d, mut p_max_d) = (
+        (0.0f32, 0.0f32),
+        (0.0f32, 0.0f32),
+        (0.0f32, 0.0f32),
+        (0.0f32, 0.0f32),
+    );
     for y in y0.max(0)..y1.max(0) {
         for x in x0.max(0)..x1.max(0) {
             if x < 0 || y < 0 || x as u32 >= ww || y as u32 >= wh {
@@ -156,7 +165,11 @@ pub fn detect_cube_face(img: &RgbImage) -> Option<Detection> {
             }
         }
     }
-    let fill_ratio = if total > 0 { on as f32 / total as f32 } else { 0.0 };
+    let fill_ratio = if total > 0 {
+        on as f32 / total as f32
+    } else {
+        0.0
+    };
     if fill_ratio < 0.28 {
         return None; // quá rỗng/lởm chởm để tin là 1 mặt cube thật
     }
@@ -174,7 +187,12 @@ pub fn detect_cube_face(img: &RgbImage) -> Option<Detection> {
         // Thứ tự BẮT BUỘC TL,TR,BR,BL (khớp `perspective::warp_to_square`):
         // x+y nhỏ nhất -> trên-trái; x-y lớn nhất -> trên-phải; x+y lớn
         // nhất -> dưới-phải; x-y nhỏ nhất -> dưới-trái.
-        quad: [to_orig(p_min_s), to_orig(p_max_d), to_orig(p_max_s), to_orig(p_min_d)],
+        quad: [
+            to_orig(p_min_s),
+            to_orig(p_max_d),
+            to_orig(p_max_s),
+            to_orig(p_min_d),
+        ],
     })
 }
 
@@ -236,7 +254,12 @@ fn label_components(mask: &[bool], w: u32, h: u32) -> Vec<Component> {
             maxx = maxx.max(x);
             maxy = maxy.max(y);
             count += 1;
-            let neighbors = [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)];
+            let neighbors = [
+                (x.wrapping_sub(1), y),
+                (x + 1, y),
+                (x, y.wrapping_sub(1)),
+                (x, y + 1),
+            ];
             for (nx, ny) in neighbors {
                 if nx >= w || ny >= h {
                     continue;
@@ -248,7 +271,13 @@ fn label_components(mask: &[bool], w: u32, h: u32) -> Vec<Component> {
                 }
             }
         }
-        out.push(Component { minx, miny, maxx, maxy, count });
+        out.push(Component {
+            minx,
+            miny,
+            maxx,
+            maxy,
+            count,
+        });
     }
     out
 }
@@ -263,7 +292,7 @@ mod tests {
     /// đúng vị trí/kích thước khối đó không, KHÔNG phải khoanh nhầm nền.
     fn synth_scene(face_x: u32, face_y: u32, face_size: u32) -> RgbImage {
         let mut img = RgbImage::from_pixel(500, 400, Rgb([25, 25, 25])); // nền tối
-        // Vài đốm sáng nhỏ rải rác trên nền (nhiễu, không phải cube).
+                                                                         // Vài đốm sáng nhỏ rải rác trên nền (nhiễu, không phải cube).
         for (nx, ny) in [(30, 30), (450, 40), (20, 350), (470, 370)] {
             for y in ny..(ny + 12).min(400) {
                 for x in nx..(nx + 12).min(500) {
@@ -274,9 +303,15 @@ mod tests {
 
         let cell = face_size / 3;
         let colors: [[u8; 3]; 9] = [
-            [230, 30, 30], [30, 180, 60], [230, 220, 20],
-            [30, 90, 220], [230, 230, 230], [230, 140, 20],
-            [230, 30, 30], [30, 180, 60], [230, 220, 20],
+            [230, 30, 30],
+            [30, 180, 60],
+            [230, 220, 20],
+            [30, 90, 220],
+            [230, 230, 230],
+            [230, 140, 20],
+            [230, 30, 30],
+            [30, 180, 60],
+            [230, 220, 20],
         ];
         let gap = (cell / 12).max(1); // khe đen mảnh giữa các ô
         for row in 0..3u32 {
@@ -309,14 +344,24 @@ mod tests {
 
         // Cho phép sai số vì đã hạ độ phân giải khi dò -- chỉ cần tâm và
         // kích thước gần đúng, không cần khớp pixel-chính-xác.
-        assert!((cx - true_cx).abs() < 25.0, "lệch tâm X quá nhiều: {cx} vs {true_cx}");
-        assert!((cy - true_cy).abs() < 25.0, "lệch tâm Y quá nhiều: {cy} vs {true_cy}");
+        assert!(
+            (cx - true_cx).abs() < 25.0,
+            "lệch tâm X quá nhiều: {cx} vs {true_cx}"
+        );
+        assert!(
+            (cy - true_cy).abs() < 25.0,
+            "lệch tâm Y quá nhiều: {cy} vs {true_cy}"
+        );
         assert!(
             (d.region.size as f32 - fsize as f32).abs() < 40.0,
             "kích thước lệch quá nhiều: {} vs {fsize}",
             d.region.size
         );
-        assert!(d.fill_ratio > 0.4, "fill_ratio thấp bất thường: {}", d.fill_ratio);
+        assert!(
+            d.fill_ratio > 0.4,
+            "fill_ratio thấp bất thường: {}",
+            d.fill_ratio
+        );
     }
 
     /// Với 1 mặt cube chụp THẲNG (không xoay/lệch góc), 4 góc `quad` ước
@@ -338,8 +383,14 @@ mod tests {
         ];
         for (i, (ex, ey)) in expected.iter().enumerate() {
             let (gx, gy) = d.quad[i];
-            assert!((gx - ex).abs() < 40.0, "góc {i}: lệch X quá nhiều: {gx} vs {ex}");
-            assert!((gy - ey).abs() < 40.0, "góc {i}: lệch Y quá nhiều: {gy} vs {ey}");
+            assert!(
+                (gx - ex).abs() < 40.0,
+                "góc {i}: lệch X quá nhiều: {gx} vs {ex}"
+            );
+            assert!(
+                (gy - ey).abs() < 40.0,
+                "góc {i}: lệch Y quá nhiều: {gy} vs {ey}"
+            );
         }
     }
 

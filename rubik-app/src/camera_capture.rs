@@ -50,8 +50,12 @@ impl CameraHandle {
         let error: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
         let running = Arc::new(AtomicBool::new(true));
 
-        let (latest_bg, version_bg, error_bg, running_bg) =
-            (latest.clone(), version.clone(), error.clone(), running.clone());
+        let (latest_bg, version_bg, error_bg, running_bg) = (
+            latest.clone(),
+            version.clone(),
+            error.clone(),
+            running.clone(),
+        );
         let join = std::thread::spawn(move || {
             // Yêu cầu THẲNG định dạng YUYV (thô) thay vì để nokhwa tự
             // chọn độ phân giải cao nhất — hầu hết webcam chỉ đạt độ
@@ -92,7 +96,9 @@ impl CameraHandle {
                             *latest_bg.lock().unwrap() = Some(img);
                             version_bg.fetch_add(1, Ordering::Relaxed);
                         }
-                        Err(e) => *error_bg.lock().unwrap() = Some(format!("Lỗi giải mã frame: {e}")),
+                        Err(e) => {
+                            *error_bg.lock().unwrap() = Some(format!("Lỗi giải mã frame: {e}"))
+                        }
                     },
                     Err(e) => {
                         *error_bg.lock().unwrap() = Some(format!("Lỗi đọc frame: {e}"));
@@ -105,7 +111,13 @@ impl CameraHandle {
             let _ = camera.stop_stream();
         });
 
-        Self { latest, version, error, running, join: Some(join) }
+        Self {
+            latest,
+            version,
+            error,
+            running,
+            join: Some(join),
+        }
     }
 
     /// Lấy bản sao frame mới nhất hiện có (None nếu chưa có frame nào,

@@ -53,7 +53,10 @@ fn identify(state: &CubeState, slot_idx: usize, solved: &CubeState) -> (usize, u
         sv_sorted.sort_unstable();
         v_sorted.sort_unstable();
         if sv_sorted == v_sorted {
-            let ori = v.iter().position(|&x| x == U as u8 || x == D as u8).unwrap();
+            let ori = v
+                .iter()
+                .position(|&x| x == U as u8 || x == D as u8)
+                .unwrap();
             return (orig, ori as u8);
         }
     }
@@ -83,7 +86,10 @@ fn build_move_tables() -> CornerMoveTables {
                     break;
                 }
             }
-            assert!(found, "corner table inference failed move={mv} slot={slot_idx}");
+            assert!(
+                found,
+                "corner table inference failed move={mv} slot={slot_idx}"
+            );
         }
     }
     CornerMoveTables { perm, ori_delta }
@@ -117,7 +123,11 @@ pub fn apply_move_idx(positions: &[usize], orients: &[u8], mi: usize) -> (Vec<us
 
 /// Bản không cấp phát heap cho 8 góc đầy đủ — xem edge_model::apply_move_idx_full.
 #[inline]
-pub fn apply_move_idx_full(positions: &[usize; 8], orients: &[u8; 8], mi: usize) -> ([usize; 8], [u8; 8]) {
+pub fn apply_move_idx_full(
+    positions: &[usize; 8],
+    orients: &[u8; 8],
+    mi: usize,
+) -> ([usize; 8], [u8; 8]) {
     let t = tables();
     let mut new_pos = [0usize; 8];
     let mut new_ori = [0u8; 8];

@@ -202,8 +202,16 @@ mod tests {
         let h = homography_from_points(UNIT_SQUARE, quad).unwrap();
         for i in 0..4 {
             let (x, y) = apply_homography(&h, UNIT_SQUARE[i]);
-            assert!((x - quad[i].0).abs() < 0.01, "góc {i}: x lệch {x} vs {}", quad[i].0);
-            assert!((y - quad[i].1).abs() < 0.01, "góc {i}: y lệch {y} vs {}", quad[i].1);
+            assert!(
+                (x - quad[i].0).abs() < 0.01,
+                "góc {i}: x lệch {x} vs {}",
+                quad[i].0
+            );
+            assert!(
+                (y - quad[i].1).abs() < 0.01,
+                "góc {i}: y lệch {y} vs {}",
+                quad[i].1
+            );
         }
     }
 
@@ -217,10 +225,10 @@ mod tests {
         for y in 40..160u32 {
             for x in 40..160u32 {
                 let color = match (x >= 100, y >= 100) {
-                    (false, false) => Rgb([255, 0, 0]),   // trên-trái
-                    (true, false) => Rgb([0, 255, 0]),    // trên-phải
-                    (false, true) => Rgb([0, 0, 255]),    // dưới-trái
-                    (true, true) => Rgb([255, 255, 0]),   // dưới-phải
+                    (false, false) => Rgb([255, 0, 0]), // trên-trái
+                    (true, false) => Rgb([0, 255, 0]),  // trên-phải
+                    (false, true) => Rgb([0, 0, 255]),  // dưới-trái
+                    (true, true) => Rgb([255, 255, 0]), // dưới-phải
                 };
                 img.put_pixel(x, y, color);
             }
@@ -260,7 +268,8 @@ mod tests {
                 let u = (ox as f32 + 0.5) / render_res as f32;
                 let (sx, sy) = apply_homography(&h, (u, v));
                 let (sx, sy) = (sx.round(), sy.round());
-                if sx >= 0.0 && sy >= 0.0 && (sx as u32) < img.width() && (sy as u32) < img.height() {
+                if sx >= 0.0 && sy >= 0.0 && (sx as u32) < img.width() && (sy as u32) < img.height()
+                {
                     let r = (u * 255.0).round() as u8;
                     img.put_pixel(sx as u32, sy as u32, Rgb([r, 128, 128]));
                 }

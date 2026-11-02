@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 description = "Lõi giải Rubik's Cube 3x3 (CFOP: Cross/F2L/OLL/PLL)"
 
+[features]
+default = ["parallel"]
+parallel = ["dep:rayon"]
+
 [dependencies]
 rand = "0.8"
 rustc-hash = "1"
-rayon = "1"
+rayon = { version = "1", optional = true }
 
 [dev-dependencies]
 rand = "0.8"

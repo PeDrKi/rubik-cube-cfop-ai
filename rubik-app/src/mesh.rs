@@ -89,13 +89,20 @@ pub(crate) fn build_cube_mesh(state: &CubeState, anim: Option<(char, f32)>) -> C
     let mut colors: Vec<Srgba> = Vec::new();
     let mut normals: Vec<Vec3> = Vec::new();
 
-    let spec = anim.and_then(|(mv, ang)| move_spec(mv).map(|(axis, idx, allowed)| (axis, idx, allowed, ang)));
+    let spec = anim
+        .and_then(|(mv, ang)| move_spec(mv).map(|(axis, idx, allowed)| (axis, idx, allowed, ang)));
 
     let mut push_quad = |corners: [Vec3; 4], normal: Vec3, color: [u8; 3], rot: Option<Mat3>| {
         let c = Srgba::new(color[0], color[1], color[2], 255);
         for &i in &[0usize, 1, 2, 0, 2, 3] {
-            let p = match rot { Some(m) => m * corners[i], None => corners[i] };
-            let n = match rot { Some(m) => m * normal, None => normal };
+            let p = match rot {
+                Some(m) => m * corners[i],
+                None => corners[i],
+            };
+            let n = match rot {
+                Some(m) => m * normal,
+                None => normal,
+            };
             positions.push(p);
             colors.push(c);
             normals.push(n);
@@ -121,9 +128,12 @@ pub(crate) fn build_cube_mesh(state: &CubeState, anim: Option<(char, f32)>) -> C
                 for &face in &FACES {
                     let (n, rv, uv) = face_info(face);
                     let (axis_val, layer_val): (i32, i32) = match face {
-                        'U' => (iy, 1), 'D' => (iy, -1),
-                        'F' => (iz, 1), 'B' => (iz, -1),
-                        'L' => (ix, -1), 'R' => (ix, 1),
+                        'U' => (iy, 1),
+                        'D' => (iy, -1),
+                        'F' => (iz, 1),
+                        'B' => (iz, -1),
+                        'L' => (ix, -1),
+                        'R' => (ix, 1),
                         _ => unreachable!(),
                     };
                     let is_sticker = axis_val == layer_val;
@@ -135,7 +145,9 @@ pub(crate) fn build_cube_mesh(state: &CubeState, anim: Option<(char, f32)>) -> C
                     push_quad(panel, n, PLASTIC, rot);
                     if is_sticker {
                         let (row, col) = cubie_to_rc(ix, iy, iz, rv, uv);
-                        let ck = cube::face_char(state.facelet_at(cube::idx_of(face), row, col) as usize);
+                        let ck = cube::face_char(
+                            state.facelet_at(cube::idx_of(face), row, col) as usize
+                        );
                         let sticker_center = center + n * (CUBIE_H / 2. + 0.015);
                         let sticker = quad_corners(sticker_center, rv, uv, STICKER_H / 2.);
                         push_quad(sticker, n, face_color(ck), rot);
@@ -160,7 +172,8 @@ mod tests {
     #[test]
     fn move_spec_6_mat_co_ban_deu_hop_le_va_dung_1_lop() {
         for &c in &['U', 'D', 'F', 'B', 'L', 'R'] {
-            let (_, _axis, layers) = move_spec(c).unwrap_or_else(|| panic!("move_spec('{c}') = None"));
+            let (_, _axis, layers) =
+                move_spec(c).unwrap_or_else(|| panic!("move_spec('{c}') = None"));
             assert_eq!(layers.len(), 1, "mặt '{c}' phải xoay đúng 1 lớp");
         }
     }
@@ -188,14 +201,22 @@ mod tests {
     fn move_spec_xoay_ca_khoi_xoay_du_3_lop() {
         for &c in &['x', 'y', 'z'] {
             let (_, _axis, layers) = move_spec(c).unwrap();
-            assert_eq!(layers.len(), 3, "xoay cả khối '{c}' phải xoay đủ 3 lớp trên trục đó");
+            assert_eq!(
+                layers.len(),
+                3,
+                "xoay cả khối '{c}' phải xoay đủ 3 lớp trên trục đó"
+            );
         }
     }
 
     #[test]
     fn move_spec_ky_tu_khong_hop_le_tra_ve_none() {
         for c in ['Q', ' ', '2', '\'', 'a'] {
-            assert_eq!(move_spec(c), None, "'{c}' không phải 1 nước hợp lệ, phải trả None");
+            assert_eq!(
+                move_spec(c),
+                None,
+                "'{c}' không phải 1 nước hợp lệ, phải trả None"
+            );
         }
     }
 
@@ -212,7 +233,10 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         for (face, expected) in mapping {
             assert_eq!(face_color(face), expected);
-            assert!(seen.insert(expected), "màu của mặt '{face}' trùng với 1 mặt khác");
+            assert!(
+                seen.insert(expected),
+                "màu của mặt '{face}' trùng với 1 mặt khác"
+            );
         }
     }
 }

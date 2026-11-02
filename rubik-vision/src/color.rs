@@ -52,7 +52,7 @@ fn srgb_to_lab([r, g, b]: [u8; 3]) -> [f32; 3] {
     // sRGB -> XYZ (D65)
     let x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
     let y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
-    let z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+    let z = r * 0.0193339 + g * 0.119_192 + b * 0.9503041;
 
     // Chuẩn hoá theo white point D65
     let (xn, yn, zn) = (0.95047, 1.0, 1.08883);
@@ -122,7 +122,11 @@ const TOTAL_STICKERS: usize = N_COLORS * STICKERS_PER_COLOR; // 54
 /// toán sẽ ưu tiên "hy sinh" đúng ô kém tin cậy đó thay vì đổi nhãn 1 ô
 /// đo chắc chắn ở nơi khác (vốn có trọng số ~1.0, đổi nhãn tốn kém hơn
 /// nhiều). Xem `sample::sample_grid_with_confidence` để biết cách đo.
-fn balanced_assign(labs: &[[[f32; 3]; 9]; 6], confidence: &[[f32; 9]; 6], centers: &[[f32; 3]; 6]) -> ClassifiedFaces {
+fn balanced_assign(
+    labs: &[[[f32; 3]; 9]; 6],
+    confidence: &[[f32; 9]; 6],
+    centers: &[[f32; 3]; 6],
+) -> ClassifiedFaces {
     // Làm phẳng 54 ô theo thứ tự (face, sticker) cố định: index i ứng
     // với face = i/9, sticker = i%9.
     let points: Vec<[f32; 3]> = labs.iter().flat_map(|f| f.iter().copied()).collect();
@@ -245,7 +249,11 @@ fn refine_centers(labs: &[[[f32; 3]; 9]; 6], confidence: &[[f32; 9]; 6]) -> [[f3
             // weight_sum[c] > 0 luôn đúng: balanced_assign đảm bảo đúng
             // 9 ô/cụm, và confidence luôn > 0 (kẹp ở MIN_CONFIDENCE của
             // sample.rs) nên tổng trọng số không bao giờ bằng 0.
-            let mean = [sum[c][0] / weight_sum[c], sum[c][1] / weight_sum[c], sum[c][2] / weight_sum[c]];
+            let mean = [
+                sum[c][0] / weight_sum[c],
+                sum[c][1] / weight_sum[c],
+                sum[c][2] / weight_sum[c],
+            ];
             for k in 0..3 {
                 centers[c][k] = centers[c][k] * (1.0 - REFINE_PULL) + mean[k] * REFINE_PULL;
             }
@@ -275,9 +283,17 @@ pub fn classify_scan(scan: &RawScan) -> ClassifiedFaces {
 /// (chỉ số tâm gần nhất, khoảng cách gần nhì - gần nhất) -- hiệu số dùng
 /// làm thước đo "độ chắc chắn": hiệu số càng nhỏ càng mơ hồ.
 fn nearest_center(lab: [f32; 3], centers: &[[f32; 3]; 6]) -> (usize, f32) {
-    let mut dists: Vec<(usize, f32)> = centers.iter().enumerate().map(|(i, &c)| (i, lab_dist2(lab, c).sqrt())).collect();
+    let mut dists: Vec<(usize, f32)> = centers
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| (i, lab_dist2(lab, c).sqrt()))
+        .collect();
     dists.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-    let gap = if dists.len() >= 2 { dists[1].1 - dists[0].1 } else { f32::MAX };
+    let gap = if dists.len() >= 2 {
+        dists[1].1 - dists[0].1
+    } else {
+        f32::MAX
+    };
     (dists[0].0, gap)
 }
 
@@ -328,11 +344,23 @@ pub fn ambiguous_candidates(scan: &RawScan, limit: usize) -> Vec<AmbiguousCandid
             if s == 4 {
                 continue;
             }
-            let mut dists: Vec<(usize, f32)> =
-                centers.iter().enumerate().map(|(i, &c)| (i, lab_dist2(labs[f][s], c).sqrt())).collect();
+            let mut dists: Vec<(usize, f32)> = centers
+                .iter()
+                .enumerate()
+                .map(|(i, &c)| (i, lab_dist2(labs[f][s], c).sqrt()))
+                .collect();
             dists.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-            let gap = if dists.len() >= 2 { dists[1].1 - dists[0].1 } else { f32::MAX };
-            out.push(AmbiguousCandidate { face: f, sticker: s, alt_label: dists[1].0 as u8, gap });
+            let gap = if dists.len() >= 2 {
+                dists[1].1 - dists[0].1
+            } else {
+                f32::MAX
+            };
+            out.push(AmbiguousCandidate {
+                face: f,
+                sticker: s,
+                alt_label: dists[1].0 as u8,
+                gap,
+            });
         }
     }
     out.sort_by(|a, b| a.gap.partial_cmp(&b.gap).unwrap());
@@ -360,10 +388,16 @@ mod tests {
             [255, 130, 0],   // cam
             [200, 0, 0],     // đỏ
         ];
-        let scan = RawScan { faces: std::array::from_fn(|i| face(refs[i])) };
+        let scan = RawScan {
+            faces: std::array::from_fn(|i| face(refs[i])),
+        };
         let out = classify_scan(&scan);
         for f in 0..6 {
-            assert!(out[f].iter().all(|&v| v == f as u8), "face {f} không đồng nhất: {:?}", out[f]);
+            assert!(
+                out[f].iter().all(|&v| v == f as u8),
+                "face {f} không đồng nhất: {:?}",
+                out[f]
+            );
         }
     }
 
@@ -377,7 +411,9 @@ mod tests {
             [255, 130, 0],
             [200, 0, 0],
         ];
-        let mut scan = RawScan { faces: std::array::from_fn(|i| face(refs[i])) };
+        let mut scan = RawScan {
+            faces: std::array::from_fn(|i| face(refs[i])),
+        };
         // ô số 0 của mặt 0 nằm giữa trắng và "gần trắng"
         scan.faces[0].samples[0] = [255, 252, 250];
         let flagged = low_confidence_stickers(&scan, 8.0);
@@ -434,7 +470,11 @@ mod tests {
                     continue; // bỏ qua chính ô tâm bị ám màu cố tình
                 }
                 if state.faces[f][s] == 0 {
-                    assert_eq!(out[f][s], 0, "ô trắng thật ở mặt {f} ô {s} bị phân loại nhầm: {}", out[f][s]);
+                    assert_eq!(
+                        out[f][s], 0,
+                        "ô trắng thật ở mặt {f} ô {s} bị phân loại nhầm: {}",
+                        out[f][s]
+                    );
                 }
             }
         }

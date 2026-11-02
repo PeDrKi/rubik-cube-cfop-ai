@@ -1,0 +1,13 @@
+[package]
+name = "rubik-api"
+version = "0.1.0"
+edition = "2021"
+description = "Logic API dùng chung cho bản WebAssembly (rubik-wasm) và bản server (rubik-web)"
+
+[dependencies]
+rubik-core = { path = "../rubik-core", default-features = false }
+rubik-vision = { path = "../rubik-vision" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+image = { version = "0.25", default-features = false }

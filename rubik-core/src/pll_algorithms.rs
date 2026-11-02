@@ -39,7 +39,10 @@ const RAW_ALGS: &[(&str, &str)] = &[
     ("Gc", "R2 U' R U' R U R' U R2 U D' R U' R' D"),
     ("Gd", "R U R' U' D R2 U' R U' R' U R' U R2 D'"),
     ("V", "R' U R' U' B' R' B2 U' B' U B' R B R"),
-    ("Na", "R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'"),
+    (
+        "Na",
+        "R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'",
+    ),
     ("Nb", "R' U R U' R' F' U' F R U R' F R' F' R U' R"),
     ("Z", "U2 R U R' U R' U' R' U R U' R' U' R2 U R"),
 ];
@@ -53,12 +56,24 @@ const RAW_ALGS: &[(&str, &str)] = &[
 
 fn inv_move(m: &str) -> &'static str {
     match m {
-        "R" => "R'", "R'" => "R", "R2" => "R2",
-        "L" => "L'", "L'" => "L", "L2" => "L2",
-        "U" => "U'", "U'" => "U", "U2" => "U2",
-        "D" => "D'", "D'" => "D", "D2" => "D2",
-        "F" => "F'", "F'" => "F", "F2" => "F2",
-        "B" => "B'", "B'" => "B", "B2" => "B2",
+        "R" => "R'",
+        "R'" => "R",
+        "R2" => "R2",
+        "L" => "L'",
+        "L'" => "L",
+        "L2" => "L2",
+        "U" => "U'",
+        "U'" => "U",
+        "U2" => "U2",
+        "D" => "D'",
+        "D'" => "D",
+        "D2" => "D2",
+        "F" => "F'",
+        "F'" => "F",
+        "F2" => "F2",
+        "B" => "B'",
+        "B'" => "B",
+        "B2" => "B2",
         other => panic!("unexpected move {other}"),
     }
 }
@@ -79,7 +94,11 @@ fn pattern_of(seq: &[&str]) -> ([usize; 4], [usize; 4], bool) {
     let full = from_facelets(&st);
     let (ep, eo, cp, co) = full;
     let valid = eo[0..4] == [0, 0, 0, 0] && co[0..4] == [0, 0, 0, 0] && cross_f2l_ok(&full);
-    ([cp[0], cp[1], cp[2], cp[3]], [ep[0], ep[1], ep[2], ep[3]], valid)
+    (
+        [cp[0], cp[1], cp[2], cp[3]],
+        [ep[0], ep[1], ep[2], ep[3]],
+        valid,
+    )
 }
 
 /// Nước U chèn TRƯỚC và nối SAU công thức.
@@ -166,11 +185,14 @@ pub fn table() -> &'static PllTable {
     TABLE.get_or_init(build_table)
 }
 
-const AUF_OPTIONS: [(&str, &[&str]); 4] = [("", &[]), ("U", &["U"]), ("U2", &["U2"]), ("U'", &["U'"])];
+const AUF_OPTIONS: [(&str, &[&str]); 4] =
+    [("", &[]), ("U", &["U"]), ("U2", &["U2"]), ("U'", &["U'"])];
 
 /// Trả về (moves, case_name) hoặc (None, None) nếu không case nào khớp.
 /// case_name = "solved" nếu PLL đã xong sẵn (không cần nước nào).
-pub fn solve_pll_lookup_named(full: FullState) -> (Option<Vec<&'static str>>, Option<&'static str>) {
+pub fn solve_pll_lookup_named(
+    full: FullState,
+) -> (Option<Vec<&'static str>>, Option<&'static str>) {
     let (ep0, _eo0, cp0, _co0) = full;
     if cp0[0..4] == [0, 1, 2, 3] && ep0[0..4] == [0, 1, 2, 3] {
         return (Some(vec![]), Some("solved"));
@@ -184,7 +206,11 @@ pub fn solve_pll_lookup_named(full: FullState) -> (Option<Vec<&'static str>>, Op
         let (ep, _eo, cp, _co) = s;
         let key: PermKey = ([cp[0], cp[1], cp[2], cp[3]], [ep[0], ep[1], ep[2], ep[3]]);
         if let Some(mvs) = t.table.get(&key) {
-            let mut full_moves: Vec<&'static str> = if auf_name.is_empty() { vec![] } else { vec![auf[0]] };
+            let mut full_moves: Vec<&'static str> = if auf_name.is_empty() {
+                vec![]
+            } else {
+                vec![auf[0]]
+            };
             full_moves.extend(mvs.iter().copied());
             let name = *t.name_table.get(&key).unwrap();
             return (Some(full_moves), Some(name));
@@ -291,7 +317,11 @@ mod tests {
                 missing.push((cp4, ep4));
             }
         }
-        assert!(missing.is_empty(), "{} trạng thái không tra được: {missing:?}", missing.len());
+        assert!(
+            missing.is_empty(),
+            "{} trạng thái không tra được: {missing:?}",
+            missing.len()
+        );
     }
 
     #[test]

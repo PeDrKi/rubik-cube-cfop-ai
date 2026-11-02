@@ -41,7 +41,10 @@ impl RawFace {
     /// dùng khi nguồn dữ liệu không đo được độ tin cậy (nhập tay, ML,
     /// test).
     pub fn from_samples(samples: [[u8; 3]; 9]) -> Self {
-        Self { samples, confidence: [1.0; 9] }
+        Self {
+            samples,
+            confidence: [1.0; 9],
+        }
     }
 }
 
@@ -166,7 +169,7 @@ fn perm_is_even(perm: &[usize]) -> bool {
             j = perm[j];
         }
     }
-    (n - cycles) % 2 == 0
+    (n - cycles).is_multiple_of(2)
 }
 
 /// 3 điều kiện parity chuẩn của Rubik's cube hợp lệ về lý thuyết (không
@@ -238,15 +241,27 @@ fn search_rotations(classified: &[[u8; 9]; 6]) -> Vec<([u8; 6], CubeState)> {
 /// Gói `search_rotations` thành đúng kiểu trả về của `resolve_scan`
 /// (thành công / mơ hồ), gắn kèm danh sách ô đã tự sửa (`fixed`) để
 /// `ScanReport` phản ánh đúng những gì đã thay đổi so với phân loại gốc.
-fn finalize(valid: Vec<([u8; 6], CubeState)>, fixed: Vec<(usize, usize)>) -> Result<ScanReport, ScanError> {
+fn finalize(
+    valid: Vec<([u8; 6], CubeState)>,
+    fixed: Vec<(usize, usize)>,
+) -> Result<ScanReport, ScanError> {
     let min_cost = valid.iter().map(|(r, _)| rotation_cost(r)).min().unwrap();
-    let best: Vec<_> = valid.into_iter().filter(|(r, _)| rotation_cost(r) == min_cost).collect();
+    let best: Vec<_> = valid
+        .into_iter()
+        .filter(|(r, _)| rotation_cost(r) == min_cost)
+        .collect();
 
     if best.len() == 1 {
         let (rot, state) = best.into_iter().next().unwrap();
-        Ok(ScanReport { state, rotations_applied: rot, auto_fixed: fixed })
+        Ok(ScanReport {
+            state,
+            rotations_applied: rot,
+            auto_fixed: fixed,
+        })
     } else {
-        Err(ScanError::Ambiguous { candidates: best.into_iter().map(|(_, s)| s).collect() })
+        Err(ScanError::Ambiguous {
+            candidates: best.into_iter().map(|(_, s)| s).collect(),
+        })
     }
 }
 
@@ -264,7 +279,10 @@ const MAX_AMBIGUOUS_TO_TRY: usize = 6;
 /// Đây chính là cách xử lý "báo không ghép được dù cầm cube đúng, do 1-2
 /// ô mơ hồ" — thay vì bắt người dùng quét lại từ đầu, tận dụng luôn
 /// thông tin "phương án nhì" đã có sẵn từ bước phân loại màu.
-fn try_resolve_with_fixes(scan: &RawScan, classified: &[[u8; 9]; 6]) -> Option<Result<ScanReport, ScanError>> {
+fn try_resolve_with_fixes(
+    scan: &RawScan,
+    classified: &[[u8; 9]; 6],
+) -> Option<Result<ScanReport, ScanError>> {
     let candidates = ambiguous_candidates(scan, MAX_AMBIGUOUS_TO_TRY);
     let n = candidates.len();
     if n == 0 {
@@ -358,7 +376,8 @@ mod tests {
                 }
             }
         }
-        let (tf, ts) = target.expect("cube sau vài nước xoay phải còn ít nhất 1 ô trắng không phải ô tâm");
+        let (tf, ts) =
+            target.expect("cube sau vài nước xoay phải còn ít nhất 1 ô trắng không phải ô tâm");
         // Lệch về phía vàng, đúng kiểu lỗi thực tế do loá/ám màu.
         scan.faces[tf].samples[ts] = [255, 240, 147];
 
@@ -367,7 +386,8 @@ mod tests {
             classified[tf][ts], 0,
             "ràng buộc đúng-9-ô-mỗi-màu phải tự sửa đúng ô này về trắng ngay ở bước phân loại"
         );
-        let report = resolve_scan(&scan).expect("phải ghép ra trạng thái hợp lệ, không cần quét lại");
+        let report =
+            resolve_scan(&scan).expect("phải ghép ra trạng thái hợp lệ, không cần quét lại");
         assert!(bijection_legal(&report.state.faces));
     }
 
@@ -411,8 +431,9 @@ mod tests {
         scan.faces[wf].samples[ws] = [255, 240, 147]; // trắng thật, lệch hẳn sang vàng
         scan.faces[yf].samples[ys] = [255, 235, 108]; // vàng thật, lệch hẳn sang trắng
 
-        let report = resolve_scan(&scan)
-            .expect("phải tự sửa được cả 2 ô mơ hồ và ghép ra trạng thái hợp lệ, không cần quét lại");
+        let report = resolve_scan(&scan).expect(
+            "phải tự sửa được cả 2 ô mơ hồ và ghép ra trạng thái hợp lệ, không cần quét lại",
+        );
         assert!(bijection_legal(&report.state.faces));
     }
 

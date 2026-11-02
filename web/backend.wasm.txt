@@ -1,0 +1,178 @@
+@@SLOT1@@
+<script src="config.js"></script>
+@@SLOT2@@
+/* Bộ giải chạy trong Web Worker. Nếu WebAssembly lỗi (panic, hết bộ nhớ, không tải được) thì mọi lời gọi đang chờ
+   được báo lỗi ngay thay vì treo mãi, và worker tự khởi động lại (tối đa 3 lần trong 30 giây để tránh lặp vô hạn). */
+let W = null,
+  wid = 0,
+  pend = {},
+  crashes = [];
+const failAll = m => {
+  const ps = Object.values(pend);
+  pend = {};
+  ps.forEach(p => p.rej(new Error(m)));
+};
+function startWorker() {
+  W = new Worker('worker.js', { type: 'module' });
+  W.onmessage = e => {
+    const d = e.data;
+    if (d.ready) {
+      say('Sẵn sàng.');
+      return;
+    }
+    if (d.fatal) {
+      W.terminate();
+      W = null;
+      failAll(d.fatal);
+      say(d.fatal + ' Hãy tải lại trang.');
+      return;
+    }
+    const p = pend[d.id];
+    delete pend[d.id];
+    if (p) {
+      const j = JSON.parse(d.out);
+      j.ok ? p.res(j.data) : p.rej(new Error(j.error));
+    }
+    if (d.crashed) restartWorker('Bộ giải gặp lỗi nội bộ và đã được khởi động lại.');
+  };
+  W.onerror = e => {
+    if (e && e.preventDefault) e.preventDefault();
+    restartWorker('Lỗi WebAssembly: ' + ((e && e.message) || 'không tải được') + '.');
+  };
+}
+function restartWorker(msg) {
+  const now = Date.now();
+  crashes = crashes.filter(t => now - t < 30000);
+  crashes.push(now);
+  if (W) W.terminate();
+  W = null;
+  failAll(msg);
+  if (crashes.length > 3) {
+    say(msg + ' Bộ giải lỗi liên tục, hãy tải lại trang.');
+    return;
+  }
+  say(msg + ' Đang khởi tạo lại…');
+  startWorker();
+}
+startWorker();
+const post = (msg, tr) =>
+  new Promise((res, rej) => {
+    if (!W) return rej(new Error('Bộ giải chưa sẵn sàng, hãy tải lại trang.'));
+    const id = ++wid;
+    pend[id] = { res, rej };
+    W.postMessage(Object.assign({ id }, msg), tr || []);
+  });
+const api = (route, body) => post({ route, body });
+const frameApi = (w, h, buf, s) => post({ frame: { w, h, s }, buf }, [buf]);
+function cancelCompute() {
+  if (W) W.terminate();
+  failAll('Đã huỷ');
+  startWorker();
+  say('Đã huỷ phép tính, đang khởi tạo lại bộ giải…');
+}
+const BOOTERR = 'Lỗi khởi tạo: ';
+@@SLOT3@@
+/* ============ tài khoản: backend là Supabase (bản GitHub Pages) ============
+   Cấu hình ở config.js. Tên tài khoản được đổi thành email nội bộ <tên>@<emailDomain> vì Supabase Auth đăng nhập bằng email;
+   không có email nào được gửi đi (cần tắt "Confirm email"). Thời gian và kiểm tra lời giải do hàm SQL trong supabase/schema.sql làm. */
+const SBC = window.RUBIK_SUPABASE || {};
+let sbP = null;
+function sb() {
+  if (!sbP)
+    sbP = import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm').then(m =>
+      m.createClient(SBC.url, SBC.anonKey)
+    );
+  return sbP;
+}
+const emailOf = u => u.toLowerCase() + '@' + (SBC.emailDomain || 'rubik.local');
+const sbErr = m =>
+  /invalid login/i.test(m)
+    ? 'Sai tên tài khoản hoặc mật khẩu'
+    : /already registered|already exists/i.test(m)
+      ? 'Tên tài khoản đã có người dùng'
+      : /password should be/i.test(m)
+        ? 'Mật khẩu ít nhất 6 ký tự'
+        : /rate limit|too many/i.test(m)
+          ? 'Thao tác quá nhiều lần, thử lại sau ít phút'
+          : /email not confirmed/i.test(m)
+            ? 'Supabase đang bật xác nhận email: tắt "Confirm email" trong Authentication → Sign In / Providers → Email'
+            : m;
+async function rpc(fn, args) {
+  const { data, error } = await (await sb()).rpc(fn, args || {});
+  if (error) throw new Error(sbErr(error.message));
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+const acc = {
+  enabled: !!(SBC.url && SBC.anonKey),
+  me: async () => {
+    if (!acc.enabled) return null;
+    const {
+      data: { session },
+    } = await (await sb()).auth.getSession();
+    return session ? { id: session.user.id, username: session.user.user_metadata.username } : null;
+  },
+  auth: async (mode, u, p) => {
+    const c = await sb();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(u))
+      throw new Error('Tên tài khoản dài 3–20 ký tự, chỉ gồm chữ không dấu, số và dấu _');
+    if (mode === 'register') {
+      if (p.length < 6) throw new Error('Mật khẩu ít nhất 6 ký tự');
+      if (!(await rpc('username_available', { p_username: u }))) throw new Error('Tên tài khoản đã có người dùng');
+      const { data, error } = await c.auth.signUp({
+        email: emailOf(u),
+        password: p,
+        options: { data: { username: u } },
+      });
+      if (error) throw new Error(sbErr(error.message));
+      if (!data.session) throw new Error(sbErr('email not confirmed'));
+      return { id: data.user.id, username: u };
+    }
+    const { data, error } = await c.auth.signInWithPassword({ email: emailOf(u), password: p });
+    if (error) throw new Error(sbErr(error.message));
+    return { id: data.user.id, username: data.user.user_metadata.username || u };
+  },
+  logout: async () => {
+    await (await sb()).auth.signOut();
+  },
+  start: () => rpc('start_game'),
+  finish: (id, moves) => rpc('finish_game', { p_game_id: id, p_moves: moves }),
+  abandon: id => rpc('abandon_game', { p_game_id: id }),
+  // Đổi mật khẩu / xoá tài khoản: đăng nhập lại bằng mật khẩu hiện tại trước để chắc đúng chủ tài khoản (phiên bị đánh cắp không đủ).
+  changePassword: async (o, n) => {
+    if (n.length < 6) throw new Error('Mật khẩu ít nhất 6 ký tự');
+    const c = await sb(),
+      {
+        data: { session },
+      } = await c.auth.getSession();
+    const { error: e1 } = await c.auth.signInWithPassword({
+      email: emailOf(session.user.user_metadata.username),
+      password: o,
+    });
+    if (e1) throw new Error(/invalid login/i.test(e1.message) ? 'Mật khẩu hiện tại không đúng' : sbErr(e1.message));
+    const { error } = await c.auth.updateUser({ password: n });
+    if (error) throw new Error(sbErr(error.message));
+    await c.auth.signOut({ scope: 'others' }); // đăng xuất các thiết bị khác
+  },
+  deleteAccount: async p => {
+    const c = await sb(),
+      {
+        data: { session },
+      } = await c.auth.getSession();
+    const { error: e1 } = await c.auth.signInWithPassword({
+      email: emailOf(session.user.user_metadata.username),
+      password: p,
+    });
+    if (e1) throw new Error(/invalid login/i.test(e1.message) ? 'Mật khẩu hiện tại không đúng' : sbErr(e1.message));
+    await rpc('delete_my_account');
+    await c.auth.signOut();
+  },
+  board: by => rpc('leaderboard', { p_by: by, p_limit: 50 }),
+  profile: () => rpc('my_profile'),
+};
+@@SLOT4@@
+emptyPlan();
+say('Đang khởi tạo bảng dữ liệu của bộ giải, lần đầu có thể mất vài giây…');
+/* PWA: service worker cho phép mở ngoại tuyến và cài lên màn hình. Bỏ qua khi mở bằng file:// hoặc trình duyệt cũ. */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol))
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

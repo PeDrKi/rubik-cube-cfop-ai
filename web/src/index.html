@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#161b26">
+<title>Rubik’s Cube – Bộ giải CFOP</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" type="image/png" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preload" href="fonts/be-vietnam-pro-vietnamese-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+<!--@@STYLE@@-->
+</style></head><body class="">
+<div class="app">
+<header class="top">
+ <div class="brand"><span class="logo" aria-hidden="true"></span><b>Rubik</b><small>Bộ giải CFOP</small></div>
+ <div class="actions">
+  <button id="shuf" title="Xáo ngẫu nhiên 25 nước (Space)"><span class="ic">⇄</span><span class="tx">Xáo</span></button>
+  <button class="p" id="auto" title="Giải tự động (Enter)"><span class="ic">▶</span><span class="tx">Giải tự động</span></button>
+  <button id="hint" title="Gợi ý một bước (H)"><span class="ic">✦</span><span class="tx">Gợi ý</span></button>
+  <button id="undo" title="Hoàn tác (Ctrl+Z)"><span class="ic">↶</span><span class="tx">Hoàn tác</span></button>
+  <button id="stop" title="Dừng (Esc)"><span class="ic">■</span><span class="tx">Dừng</span></button>
+ </div>
+ <div class="winbtns">
+  <button id="winPlanBtn" title="Bảng công thức (Ctrl+T)" aria-haspopup="dialog"><span class="ic">▤</span><span class="tx">Bảng</span></button>
+  <button id="winLibBtn" title="Thư viện công thức (Ctrl+J)" aria-haspopup="dialog"><span class="ic">≡</span><span class="tx">Công thức</span></button>
+  <button id="rankBtn" title="Bảng xếp hạng và ván xếp hạng" aria-haspopup="dialog"><span class="ic">🏆</span><span class="tx">Xếp hạng</span></button>
+  <button id="accBtn" title="Tài khoản" aria-haspopup="dialog"><span class="ic">👤</span><span class="tx" id="accName">Đăng nhập</span></button>
+ </div>
+ <div class="menuwrap"><button id="menub" aria-haspopup="true" aria-expanded="false" aria-controls="menu"><span class="ic">⋯</span><span class="tx">Thêm</span></button>
+  <div class="menu" id="menu" role="menu">
+   <button id="rankM" role="menuitem">🏆 Bảng xếp hạng</button>
+   <button id="accM" role="menuitem">👤 Tài khoản</button>
+   <button id="winPlanM" role="menuitem">Bảng công thức <kbd>Ctrl+T</kbd></button>
+   <button id="tbl" role="menuitem">Tính bảng cho khối hiện tại</button>
+   <button id="libm" role="menuitem">Thư viện công thức <kbd>Ctrl+J</kbd></button>
+   <button id="stb" role="menuitem">Thống kê OLL/PLL <kbd>Ctrl+Y</kbd></button>
+   <button id="scanb" role="menuitem">Quét bằng camera <kbd>Ctrl+K</kbd></button>
+   <button id="paintb" role="menuitem">Điền màu thủ công</button>
+   <button id="fsb" role="menuitem">Toàn màn hình <kbd>F11</kbd></button>
+   <button id="helpb" role="menuitem">Phím tắt &amp; hướng dẫn</button>
+  </div></div>
+</header>
+<main class="main">
+ <section class="board">
+  <div class="scene" id="scene"><canvas id="cv" role="img" aria-label="Khối Rubik 3D"></canvas>
+  <div id="a11y" class="sr" aria-live="polite" aria-atomic="true"></div>
+   <div class="ovl tl" id="selhint"></div>
+   <div class="ovl tm" id="rtimer" aria-live="off"></div>
+   <div class="ovl tr"><small>Sơ đồ · bấm để chọn mặt</small><div class="net" id="net" aria-hidden="true" style="--cs:11px"></div></div>
+   <div class="ovl bc" id="status" role="status" aria-live="polite"></div>
+   <div class="ovl bl" id="viewhint">Kéo để xoay · Cuộn để thu phóng · Nhấp đúp để đặt lại góc nhìn</div>
+  </div>
+  <div class="dock">
+   <div class="palette">
+    <div class="mods"><button id="mP" title="Xoay ngược (giữ Shift)">’ Nghịch</button><button id="mD" title="Xoay đúp (giữ Alt)">2 Đúp</button><button id="mW" title="Xoay 2 lớp (giữ Ctrl)">w Wide</button></div>
+    <div class="moves" id="mv"></div>
+   </div>
+   <div class="cmd"><input type="text" id="fx" placeholder="Công thức, vd R U R' U'" title="Ví dụ: R U R' U' hoặc (R U)3" aria-label="Công thức"><button id="run">Chạy</button>
+    <label class="spd"><span class="lbl">Tốc độ</span> <input type="range" id="spd" min="30" max="1000" value="260"><span id="spv"></span></label></div>
+  </div>
+ </section>
+</main>
+</div>
+
+
+<section class="win" id="win-plan" data-win="plan" role="dialog" aria-label="Bảng công thức" hidden>
+ <header class="wh"><span class="wt">Bảng công thức</span><span class="wbtns"><button data-wact="min" title="Thu gọn / mở rộng (nhấp đúp tiêu đề)" aria-label="Thu gọn">–</button><button data-wact="close" title="Đóng" aria-label="Đóng">✕</button></span></header>
+ <div class="wb"><div id="plan" class="plan"></div></div>
+</section>
+<section class="win" id="win-lib" data-win="lib" role="dialog" aria-label="Thư viện công thức" hidden>
+ <header class="wh"><span class="wt">Thư viện công thức</span><span class="wbtns"><button data-wact="min" title="Thu gọn / mở rộng (nhấp đúp tiêu đề)" aria-label="Thu gọn">–</button><button data-wact="close" title="Đóng" aria-label="Đóng">✕</button></span></header>
+ <div class="wb wb-lib">
+  <div class="tabs"><button data-t="oll" class="on">57 OLL</button><button data-t="pll">21 PLL</button><input type="text" id="q" placeholder="Tìm công thức…" title="Ctrl+J" aria-label="Tìm công thức"></div>
+  <div id="lib"></div>
+ </div>
+</section>
+
+<dialog id="adlg" style="max-width:400px"><h2>Tài khoản</h2>
+<div class="tabs"><button type="button" data-a="login" class="on">Đăng nhập</button><button type="button" data-a="register">Đăng ký</button></div>
+<form id="aform"><label>Tên tài khoản<input type="text" id="auser" autocomplete="username" maxlength="20" required></label>
+<label>Mật khẩu<input type="password" id="apass" autocomplete="current-password" maxlength="128" required></label>
+<p id="ahelp" style="color:var(--mut);font-size:13px;margin:0 0 6px" hidden>Tên 3–20 ký tự (chữ không dấu, số, dấu _), mật khẩu ít nhất 6 ký tự.</p>
+<div id="aerr" class="err" style="min-height:22px"></div>
+<div class="row"><button class="p" type="submit" id="asub">Đăng nhập</button><button type="button" id="aclose">Đóng</button></div></form></dialog>
+<dialog id="pwdlg" style="max-width:400px"><h2 id="pwtitle">Đổi mật khẩu</h2>
+<form id="pwform"><input type="text" id="pwuser" autocomplete="username" hidden tabindex="-1" aria-hidden="true">
+<label>Mật khẩu hiện tại<input type="password" id="pwold" autocomplete="current-password" maxlength="128" required></label>
+<div id="pwnewrow"><label>Mật khẩu mới<input type="password" id="pwnew" autocomplete="new-password" maxlength="128"></label>
+<label>Nhập lại mật khẩu mới<input type="password" id="pwnew2" autocomplete="new-password" maxlength="128"></label>
+<p style="color:var(--mut);font-size:13px;margin:0 0 6px">Mật khẩu mới dài 6–128 ký tự. Các thiết bị khác đang đăng nhập sẽ bị đăng xuất.</p></div>
+<p id="pwwarn" class="err" role="alert" hidden>Xoá vĩnh viễn tài khoản cùng toàn bộ ván và thành tích. Không thể hoàn tác. Nhập mật khẩu để xác nhận.</p>
+<div id="pwerr" class="err" role="alert" style="min-height:22px"></div>
+<div class="row"><button class="p" type="submit" id="pwsub">Đổi mật khẩu</button><button type="button" id="pwclose">Huỷ</button></div></form></dialog>
+<dialog id="lbdlg" style="max-width:640px"><h2>🏆 Bảng xếp hạng</h2>
+<div class="tabs"><button data-lb="time" class="on">Nhanh nhất</button><button data-lb="moves">Ít nước nhất</button><button data-lb="solves">Giải nhiều nhất</button><button data-lb="me">Của tôi</button></div>
+<div id="lbbody" style="max-height:52vh;overflow:auto"></div>
+<p style="color:var(--mut);font-size:13px">Ván xếp hạng: server phát đề xáo, tự bấm giờ và kiểm tra lời giải. Dùng gợi ý, giải tự động, bảng công thức hoặc xáo lại sẽ huỷ ván.</p>
+<div class="row"><button class="p" id="lbplay">▶ Chơi ván xếp hạng</button><button id="lbout" hidden>Đăng xuất</button><button id="chpw" hidden>Đổi mật khẩu</button><button id="delacc" class="danger" hidden>Xoá tài khoản</button><button id="lbclose">Đóng</button></div></dialog>
+<dialog id="hdlg"><h2>⚙ Phím tắt &amp; hướng dẫn</h2><table id="htab" style="width:100%;border-collapse:collapse;font-size:14px"></table>
+<p id="hspd" style="color:var(--mut)"></p><p style="color:var(--mut);font-size:13px">Trình duyệt giữ một số tổ hợp Ctrl (Ctrl+T, Ctrl+D…), nên các chức năng đó đều có nút bấm thay thế.</p>
+<div class="row"><button id="hclose">Đóng</button></div></dialog>
+<dialog id="dlg" style="max-width:560px"><h2>Quét trạng thái từ camera</h2>
+<div class="row"><span>Nguồn ảnh:</span><button data-m="cam" class="on">Webcam</button><button data-m="file">Nạp file ảnh</button></div>
+<div class="row" id="capRow" style="margin-top:6px"><span>Chụp:</span><button data-c="manual" class="on">Thủ công (Space)</button><button data-c="auto">Tự động khi giữ yên</button></div>
+<hr style="border:0;border-top:1px solid var(--ln);margin:10px 0">
+<div id="capture">
+ <div class="row" style="align-items:flex-start"><div class="net" id="guide" style="--cs:22px;grid:repeat(3,22px)/repeat(4,22px)"></div><p id="hintTxt" style="margin:0;flex:1;font-size:14px"></p></div>
+ <div class="pv" style="margin-top:8px"><canvas id="pv" width="640" height="480"></canvas></div>
+ <div class="row" style="margin-top:6px"><input type="file" id="file" accept="image/*" hidden><label id="sclRow" hidden>Chưa tự dò được, chỉnh khung tay <input type="range" id="scl" min="0.4" max="0.95" step="0.01" value="0.7"></label></div>
+ <div class="row" style="margin-top:6px"><div class="sw" id="sw"></div><div class="msg" id="scmsg" style="flex:1"></div></div>
+ <div class="bar2" id="prog" hidden><span></span></div>
+ <div class="row" style="margin-top:8px"><button class="p" id="snap">Chụp (Space)</button></div>
+</div>
+<div class="row chips" id="chips" style="margin:10px 0"></div>
+<div id="res"></div>
+<div class="row" style="margin-top:8px"><button id="cancel">Đóng</button></div></dialog>
+
+<dialog id="pdlg"><h2>Điền màu thủ công</h2>
+<p style="color:var(--mut);margin-top:0">Ô tâm cố định. Chọn màu rồi bấm vào ô để tô, tối đa 9 ô mỗi màu.</p>
+<div class="row pal" id="pal"></div><div class="net" id="pnet" style="--cs:24px;margin:12px 0"></div>
+<div id="perr" style="color:#ff9b8a;min-height:22px"></div>
+<div class="row"><button class="p" id="papply">Áp dụng</button><button id="pcur">Lấy từ khối hiện tại</button><button id="pclose">Đóng</button></div></dialog>
+
+<dialog id="sdlg"><h2>Thống kê OLL/PLL</h2>
+<div class="tabs"><button data-s="OLL" class="on">OLL</button><button data-s="PLL">PLL</button></div>
+<div id="sinfo" style="color:var(--mut);margin-bottom:8px"></div><div id="srows" style="max-height:340px;overflow:auto"></div>
+<p style="color:var(--mut);font-size:13px">Nhật ký lưu trong trình duyệt này (localStorage), mỗi thế chỉ ghi một lần cho mỗi ván.</p>
+<div class="row"><button id="sexp">Xuất TSV</button><button id="simp">Nhập TSV</button><input type="file" id="simpf" accept=".tsv,.txt" hidden><button id="sclr">Xoá nhật ký</button><button id="sclose">Đóng</button></div></dialog>
+
+<!--@@SLOT1@@-->
+<script>
+<!--@@SCRIPT@@-->
+</script></body></html>

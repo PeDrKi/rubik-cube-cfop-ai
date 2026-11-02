@@ -11,9 +11,13 @@ use crate::cross_solver;
 use crate::cube::move_index;
 use crate::edge_model as EM;
 use crate::f2l_solver;
-use crate::full_state::{apply_move, cross_f2l_ok, no_d_moves, u_corners_oriented, u_edges_oriented, FullState};
+use crate::full_state::{
+    apply_move, cross_f2l_ok, no_d_moves, u_corners_oriented, u_edges_oriented, FullState,
+};
 use crate::macro_solver;
-use crate::pdb::{build_group_pdb_corners_anyperm, build_group_pdb_edges_anyperm, CornerGroupPdb, CrossPdb};
+use crate::pdb::{
+    build_group_pdb_corners_anyperm, build_group_pdb_edges_anyperm, CornerGroupPdb, CrossPdb,
+};
 use crate::search::a_star_ladder;
 use std::sync::OnceLock;
 
@@ -52,7 +56,9 @@ fn cross_f2l_lower_bound(full: &FullState) -> u32 {
     let (ep, eo, cp, co) = full;
     let cross_pos: [usize; 4] = [ep[4], ep[5], ep[6], ep[7]];
     let cross_ori: [u8; 4] = [eo[4], eo[5], eo[6], eo[7]];
-    let mut best = cross_solver::get_pdb().get(&cross_pos, &cross_ori).unwrap_or(8) as u32;
+    let mut best = cross_solver::get_pdb()
+        .get(&cross_pos, &cross_ori)
+        .unwrap_or(8) as u32;
     for &slot in F2L_ORDER.iter() {
         let ci = CM::slot_index(slot);
         let ei = EM::slot_index(f2l_edge_of(slot));
@@ -183,20 +189,30 @@ pub fn solve_phase_a(full: FullState, retry_seed: Option<u64>) -> Option<Vec<&'s
         use rand::SeedableRng;
         no_d.shuffle(&mut rand::rngs::StdRng::seed_from_u64(seed));
     }
-    let move_table: Vec<(usize, &'static str, char)> =
-        no_d.iter().map(|&m| (move_index(m), m, m.chars().next().unwrap())).collect();
+    let move_table: Vec<(usize, &'static str, char)> = no_d
+        .iter()
+        .map(|&m| (move_index(m), m, m.chars().next().unwrap()))
+        .collect();
     // Tầng cuối hạ 300_000 -> 150_000 (xem lý do đầy đủ ở hằng số
     // F2L_NODE_BUDGET trong hint.rs -- cùng lý do, cùng cách đo bằng
     // đúng 2 bài test success-rate, đều ra 100%/100% ở mức đã hạ).
-    a_star_ladder(full, goal_a, heuristic_a, &[(80_000, 8), (150_000, 10), (150_000, 12)], &move_table)
+    a_star_ladder(
+        full,
+        goal_a,
+        heuristic_a,
+        &[(80_000, 8), (150_000, 10), (150_000, 12)],
+        &move_table,
+    )
 }
 
 /// Ban debug: cho phep chi dinh tiers tuy y (dung de do xem can do sau bao
 /// nhieu thi giai duoc cac case kho).
 pub fn solve_phase_a_tiers(full: FullState, tiers: &[(u32, u32)]) -> Option<Vec<&'static str>> {
     let no_d = no_d_moves();
-    let move_table: Vec<(usize, &'static str, char)> =
-        no_d.iter().map(|&m| (move_index(m), m, m.chars().next().unwrap())).collect();
+    let move_table: Vec<(usize, &'static str, char)> = no_d
+        .iter()
+        .map(|&m| (move_index(m), m, m.chars().next().unwrap()))
+        .collect();
     a_star_ladder(full, goal_a, heuristic_a, tiers, &move_table)
 }
 
@@ -214,11 +230,19 @@ pub fn solve_phase_b(full: FullState, retry_seed: Option<u64>) -> Option<Vec<&'s
         use rand::SeedableRng;
         no_d.shuffle(&mut rand::rngs::StdRng::seed_from_u64(seed));
     }
-    let move_table: Vec<(usize, &'static str, char)> =
-        no_d.iter().map(|&m| (move_index(m), m, m.chars().next().unwrap())).collect();
+    let move_table: Vec<(usize, &'static str, char)> = no_d
+        .iter()
+        .map(|&m| (move_index(m), m, m.chars().next().unwrap()))
+        .collect();
     // Tầng cuối hạ 300_000 -> 150_000, tầng giữa 150_000 -> 120_000 --
     // cùng lý do/cách đo như solve_phase_a ở trên.
-    a_star_ladder(full, goal_b, heuristic_b, &[(80_000, 9), (120_000, 11), (150_000, 13)], &move_table)
+    a_star_ladder(
+        full,
+        goal_b,
+        heuristic_b,
+        &[(80_000, 9), (120_000, 11), (150_000, 13)],
+        &move_table,
+    )
 }
 
 /// Giải OLL bằng kiến trúc 2-look đầy đủ (pha A rồi pha B) -- dùng làm lưới
@@ -284,7 +308,11 @@ mod tests {
                 }
             }
         }
-        assert!(fail.is_empty(), "không giải được {} thế: {fail:?}", fail.len());
+        assert!(
+            fail.is_empty(),
+            "không giải được {} thế: {fail:?}",
+            fail.len()
+        );
     }
 
     #[test]
@@ -303,7 +331,10 @@ mod tests {
             for mv in got.unwrap() {
                 s = apply_move(&s, mv);
             }
-            assert!(cross_f2l_ok(&s) && u_edges_oriented(&s), "cạnh {eo4:?} giải sai");
+            assert!(
+                cross_f2l_ok(&s) && u_edges_oriented(&s),
+                "cạnh {eo4:?} giải sai"
+            );
         }
     }
 }

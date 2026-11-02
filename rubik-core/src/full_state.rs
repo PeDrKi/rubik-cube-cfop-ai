@@ -9,7 +9,11 @@ pub type FullState = ([usize; 12], [u8; 12], [usize; 8], [u8; 8]);
 
 /// 15 nước không dùng D (bảo toàn lớp D trong khi ghép F2L).
 pub fn no_d_moves() -> Vec<&'static str> {
-    ALL_MOVES.iter().copied().filter(|m| !m.starts_with('D')).collect()
+    ALL_MOVES
+        .iter()
+        .copied()
+        .filter(|m| !m.starts_with('D'))
+        .collect()
 }
 
 pub fn from_facelets(state: &CubeState) -> FullState {
@@ -42,7 +46,14 @@ pub fn apply_move_idx(full: &FullState, mi: usize) -> FullState {
 
 pub fn cross_ok(full: &FullState) -> bool {
     let (ep, eo, _, _) = full;
-    ep[4] == 4 && ep[5] == 5 && ep[6] == 6 && ep[7] == 7 && eo[4] == 0 && eo[5] == 0 && eo[6] == 0 && eo[7] == 0
+    ep[4] == 4
+        && ep[5] == 5
+        && ep[6] == 6
+        && ep[7] == 7
+        && eo[4] == 0
+        && eo[5] == 0
+        && eo[6] == 0
+        && eo[7] == 0
 }
 
 /// slot F2L (tên viết hoa, VD "DFR") -> tên khe edge tương ứng.
@@ -72,12 +83,30 @@ pub const F2L_ORDER: [&str; 4] = ["DFR", "DFL", "DBR", "DBL"];
 /// tìm kiếm tránh phá hỏng phần đã giải (mismatch penalty).
 pub fn cross_f2l_ok(full: &FullState) -> bool {
     let (ep, eo, cp, co) = full;
-    ep[4] == 4 && ep[5] == 5 && ep[6] == 6 && ep[7] == 7
-        && ep[8] == 8 && ep[9] == 9 && ep[10] == 10 && ep[11] == 11
-        && eo[4] == 0 && eo[5] == 0 && eo[6] == 0 && eo[7] == 0
-        && eo[8] == 0 && eo[9] == 0 && eo[10] == 0 && eo[11] == 0
-        && cp[4] == 4 && cp[5] == 5 && cp[6] == 6 && cp[7] == 7
-        && co[4] == 0 && co[5] == 0 && co[6] == 0 && co[7] == 0
+    ep[4] == 4
+        && ep[5] == 5
+        && ep[6] == 6
+        && ep[7] == 7
+        && ep[8] == 8
+        && ep[9] == 9
+        && ep[10] == 10
+        && ep[11] == 11
+        && eo[4] == 0
+        && eo[5] == 0
+        && eo[6] == 0
+        && eo[7] == 0
+        && eo[8] == 0
+        && eo[9] == 0
+        && eo[10] == 0
+        && eo[11] == 0
+        && cp[4] == 4
+        && cp[5] == 5
+        && cp[6] == 6
+        && cp[7] == 7
+        && co[4] == 0
+        && co[5] == 0
+        && co[6] == 0
+        && co[7] == 0
 }
 
 /// 4 cạnh lớp U (UF,UB,UL,UR) đã đúng hướng (không quan tâm vị trí).
@@ -95,13 +124,25 @@ pub fn u_corners_oriented(full: &FullState) -> bool {
 /// 4 góc lớp U đúng cả vị trí lẫn hướng (PLL: pha góc đã xong).
 pub fn u_corners_home(full: &FullState) -> bool {
     let (_, _, cp, co) = full;
-    cp[0] == 0 && cp[1] == 1 && cp[2] == 2 && cp[3] == 3
-        && co[0] == 0 && co[1] == 0 && co[2] == 0 && co[3] == 0
+    cp[0] == 0
+        && cp[1] == 1
+        && cp[2] == 2
+        && cp[3] == 3
+        && co[0] == 0
+        && co[1] == 0
+        && co[2] == 0
+        && co[3] == 0
 }
 
 /// 4 cạnh lớp U đúng cả vị trí lẫn hướng (PLL: pha cạnh đã xong).
 pub fn u_edges_home(full: &FullState) -> bool {
     let (ep, eo, _, _) = full;
-    ep[0] == 0 && ep[1] == 1 && ep[2] == 2 && ep[3] == 3
-        && eo[0] == 0 && eo[1] == 0 && eo[2] == 0 && eo[3] == 0
+    ep[0] == 0
+        && ep[1] == 1
+        && ep[2] == 2
+        && ep[3] == 3
+        && eo[0] == 0
+        && eo[1] == 0
+        && eo[2] == 0
+        && eo[3] == 0
 }

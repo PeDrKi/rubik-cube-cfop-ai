@@ -1,0 +1,72 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [main]
+  # Pull request chỉ chạy kiểm thử (job test), không build/đăng trang.
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # rubik-app (cửa sổ 3D, camera) cần thư viện hệ thống, không build trên CI.
+      - name: Test Rust
+        run: cargo test --release -p rubik-core -p rubik-vision -p rubik-api -p rubik-web
+      # Bốn gợi ý clippy thuần phong cách bị tắt có chủ đích: viết lại các vòng lặp chỉ số trong bộ giải là rủi ro hơn lợi ích.
+      - name: Kiểu mã (rustfmt) và gợi ý (clippy)
+        run: |
+          cargo fmt --all --check
+          cargo clippy --release -p rubik-core -p rubik-vision -p rubik-api -p rubik-web --all-targets -- -D warnings -A clippy::needless_range_loop -A clippy::manual_memcpy -A clippy::len_without_is_empty -A clippy::doc_lazy_continuation
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Giao diện sinh từ mẫu chung phải khớp file đã commit
+        run: node web/build.js --check
+      - name: Test giao diện
+        working-directory: rubik-web/tests
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+  build:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - name: Build WebAssembly
+        run: wasm-pack build rubik-wasm --release --target web --out-dir www/pkg
+      - name: Prepare site
+        run: |
+          mkdir site
+          cp -r rubik-wasm/www/. site/
+          rm -f site/pkg/.gitignore
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4

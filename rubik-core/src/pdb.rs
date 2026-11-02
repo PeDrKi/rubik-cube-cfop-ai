@@ -25,8 +25,10 @@ const CROSS_TABLE_SIZE: usize = 12 * 12 * 12 * 12 * 16; // 331,776
 
 #[inline]
 fn cross_encode(pos: &[usize], ori: &[u8]) -> usize {
-    let pos_code = ((pos[0] * CROSS_POS_RADIX + pos[1]) * CROSS_POS_RADIX + pos[2]) * CROSS_POS_RADIX + pos[3];
-    let ori_code = ((ori[0] as usize * 2 + ori[1] as usize) * 2 + ori[2] as usize) * 2 + ori[3] as usize;
+    let pos_code =
+        ((pos[0] * CROSS_POS_RADIX + pos[1]) * CROSS_POS_RADIX + pos[2]) * CROSS_POS_RADIX + pos[3];
+    let ori_code =
+        ((ori[0] as usize * 2 + ori[1] as usize) * 2 + ori[2] as usize) * 2 + ori[3] as usize;
     pos_code * 16 + ori_code
 }
 
@@ -48,7 +50,12 @@ impl CrossPdb {
         self.table.iter().filter(|&&v| v != NONE).count()
     }
     pub fn max_dist(&self) -> u16 {
-        self.table.iter().filter(|&&v| v != NONE).copied().max().unwrap()
+        self.table
+            .iter()
+            .filter(|&&v| v != NONE)
+            .copied()
+            .max()
+            .unwrap()
     }
 }
 
@@ -102,7 +109,12 @@ impl PairPdb {
         self.table.iter().filter(|&&v| v != NONE).count()
     }
     pub fn max_dist(&self) -> u16 {
-        self.table.iter().filter(|&&v| v != NONE).copied().max().unwrap()
+        self.table
+            .iter()
+            .filter(|&&v| v != NONE)
+            .copied()
+            .max()
+            .unwrap()
     }
 }
 
@@ -213,7 +225,8 @@ const CORNER_GROUP_TABLE_SIZE: usize = 8 * 8 * 8 * 8 * 81; // 331,776
 #[inline]
 fn corner_group_encode(pos: &[usize], ori: &[u8]) -> usize {
     let pos_code = ((pos[0] * 8 + pos[1]) * 8 + pos[2]) * 8 + pos[3];
-    let ori_code = ((ori[0] as usize * 3 + ori[1] as usize) * 3 + ori[2] as usize) * 3 + ori[3] as usize;
+    let ori_code =
+        ((ori[0] as usize * 3 + ori[1] as usize) * 3 + ori[2] as usize) * 3 + ori[3] as usize;
     pos_code * 81 + ori_code
 }
 
@@ -234,7 +247,12 @@ impl CornerGroupPdb {
         self.table.iter().filter(|&&v| v != NONE).count()
     }
     pub fn max_dist(&self) -> u16 {
-        self.table.iter().filter(|&&v| v != NONE).copied().max().unwrap()
+        self.table
+            .iter()
+            .filter(|&&v| v != NONE)
+            .copied()
+            .max()
+            .unwrap()
     }
 }
 

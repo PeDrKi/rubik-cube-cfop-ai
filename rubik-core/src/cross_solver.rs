@@ -22,7 +22,9 @@ pub fn solve_cross(state: &CubeState, max_moves: usize) -> Vec<&'static str> {
     let (pos_v, ori_v) = EM::edges_from_state(state, &TRACKED);
     let mut pos: [usize; 4] = [pos_v[0], pos_v[1], pos_v[2], pos_v[3]];
     let mut ori: [u8; 4] = [ori_v[0], ori_v[1], ori_v[2], ori_v[3]];
-    let mut d = pdb.get(&pos, &ori).expect("trạng thái cross không hợp lệ / không nằm trong PDB");
+    let mut d = pdb
+        .get(&pos, &ori)
+        .expect("trạng thái cross không hợp lệ / không nằm trong PDB");
 
     let mut moves = Vec::new();
     let mut guard = 0;

@@ -86,7 +86,10 @@ fn build_move_tables() -> EdgeMoveTables {
                     break;
                 }
             }
-            assert!(found, "move table inference failed move={mv} slot={slot_idx}");
+            assert!(
+                found,
+                "move table inference failed move={mv} slot={slot_idx}"
+            );
         }
     }
     EdgeMoveTables { perm, flip }
@@ -97,11 +100,7 @@ pub fn tables() -> &'static EdgeMoveTables {
     TABLES.get_or_init(build_move_tables)
 }
 
-pub fn apply_move_to_edges(
-    positions: &[usize],
-    orients: &[u8],
-    mv: &str,
-) -> (Vec<usize>, Vec<u8>) {
+pub fn apply_move_to_edges(positions: &[usize], orients: &[u8], mv: &str) -> (Vec<usize>, Vec<u8>) {
     let mi = move_index(mv);
     apply_move_idx(positions, orients, mi)
 }
@@ -122,7 +121,11 @@ pub fn apply_move_idx(positions: &[usize], orients: &[u8], mi: usize) -> (Vec<us
 /// nóng của A* trong f2l_solver — mỗi lần áp 1 nước đi trước đây cấp phát
 /// 2 Vec mới; giờ chỉ ghi vào mảng có sẵn trên stack).
 #[inline]
-pub fn apply_move_idx_full(positions: &[usize; 12], orients: &[u8; 12], mi: usize) -> ([usize; 12], [u8; 12]) {
+pub fn apply_move_idx_full(
+    positions: &[usize; 12],
+    orients: &[u8; 12],
+    mi: usize,
+) -> ([usize; 12], [u8; 12]) {
     let t = tables();
     let mut new_pos = [0usize; 12];
     let mut new_ori = [0u8; 12];
