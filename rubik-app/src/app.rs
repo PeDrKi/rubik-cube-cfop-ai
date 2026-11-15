@@ -24,6 +24,20 @@ pub(crate) struct App {
     pub(crate) hint_moves: Vec<String>,
     pub(crate) undo_stack: Vec<CubeState>,
     pub(crate) is_fullscreen: bool,
+    /// Chế độ tập trung: chỉ còn khối Rubik, chức năng trong popover ở 2 mép (xem focus_view.rs).
+    pub(crate) focus: bool,
+    pub(crate) focus_open: Option<crate::focus_view::FocusSide>,
+    /// Popover mở bằng phím (ghim): không tự đóng khi con trỏ rời đi.
+    pub(crate) focus_pinned: bool,
+    pub(crate) focus_leave: Option<f64>,
+    /// Phím vừa đổi trạng thái SAU khi giao diện khung này đã vẽ xong -> cần vẽ thêm 1 khung để thấy kết quả.
+    pub(crate) redraw_next: bool,
+    /// Mép con trỏ đang chạm ở khung trước (chỉ mở popover khi con trỏ MỚI chạm mép).
+    pub(crate) focus_edge: Option<crate::focus_view::FocusSide>,
+    /// Toàn màn hình do chế độ tập trung tự bật (để khi thoát thì trả lại).
+    pub(crate) focus_set_fs: bool,
+    /// Phím `,` / `.` bắt từ winit (three-d không có Key tương ứng), xử lý trong handle_keys.
+    pub(crate) pending_focus_key: Option<crate::focus_view::FocusSide>,
     pub(crate) scan_state: scan_ui::ScanState,
     pub(crate) paint_state: paint_ui::PaintState,
     pub(crate) job_rx: Option<std::sync::mpsc::Receiver<JobResult>>,
@@ -44,6 +58,8 @@ pub(crate) struct App {
     pub(crate) case_log: history::CaseLog,
     pub(crate) library_open: bool,
     pub(crate) shortcuts_open: bool,
+    /// Hiện khung "Sơ đồ hoán vị" dưới sơ đồ 6 mặt (phím P hoặc ô tích trong panel).
+    pub(crate) perm_open: bool,
     pub(crate) library_query: String,
     pub(crate) library_tab_pll: bool,
     pub(crate) auto_apply_hint: bool,
@@ -114,6 +130,14 @@ impl App {
             hint_moves: Vec::new(),
             undo_stack: Vec::new(),
             is_fullscreen: false,
+            focus: false,
+            focus_open: None,
+            focus_pinned: false,
+            focus_leave: None,
+            redraw_next: false,
+            focus_edge: None,
+            focus_set_fs: false,
+            pending_focus_key: None,
             scan_state: scan_ui::ScanState::default(),
             paint_state: paint_ui::PaintState::default(),
 
@@ -159,6 +183,7 @@ impl App {
             // Bảng tra công thức chuẩn (57 OLL + 21 PLL) — phím V.
             library_open: false,
             shortcuts_open: false,
+            perm_open: true,
             library_query: String::new(),
             library_tab_pll: false,
             auto_apply_hint: false,

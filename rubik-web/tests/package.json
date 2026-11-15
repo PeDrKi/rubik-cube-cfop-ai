@@ -4,6 +4,8 @@
   "description": "Kiểm thử giao diện bản web (không cần trình duyệt thật)",
   "scripts": {
     "test": "node ui.test.js",
+    "perm": "node perm.test.js",
+    "focus": "node focus.test.js",
     "semantic": "node semantic.test.js",
     "frames": "node render_frames.js"
   },

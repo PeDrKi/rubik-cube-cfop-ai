@@ -61,21 +61,23 @@ impl App {
     }
 
     pub(crate) fn ui_shortcuts(&mut self, gui_context: &egui::Context, req: &mut Req) {
-        // ── Icon bánh răng ở góc màn hình -- mở bảng phím tắt ──
-        egui::Area::new("shortcuts_gear_icon")
-            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-14.0, 14.0))
-            .order(egui::Order::Foreground)
-            .show(gui_context, |ui| {
-                let resp = ui.add(
-                    egui::Button::new(egui::RichText::new("⚙").size(18.0))
-                        .fill(theme::BG_CARD)
-                        .stroke(egui::Stroke::new(1.0_f32, theme::BG_CARD_HI))
-                        .rounding(egui::Rounding::same(8.0)),
-                );
-                if resp.on_hover_text("Phím tắt & hướng dẫn").clicked() {
-                    self.shortcuts_open = !self.shortcuts_open;
-                }
-            });
+        // ── Icon bánh răng ở góc màn hình -- mở bảng phím tắt (ẩn trong chế độ tập trung) ──
+        if !self.focus {
+            egui::Area::new("shortcuts_gear_icon")
+                .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-14.0, 14.0))
+                .order(egui::Order::Foreground)
+                .show(gui_context, |ui| {
+                    let resp = ui.add(
+                        egui::Button::new(egui::RichText::new("⚙").size(18.0))
+                            .fill(theme::BG_CARD)
+                            .stroke(egui::Stroke::new(1.0_f32, theme::BG_CARD_HI))
+                            .rounding(egui::Rounding::same(8.0)),
+                    );
+                    if resp.on_hover_text("Phím tắt & hướng dẫn").clicked() {
+                        self.shortcuts_open = !self.shortcuts_open;
+                    }
+                });
+        }
 
         // ── Cửa sổ phím tắt & hướng dẫn (mở bằng icon bánh răng) ──
         if self.shortcuts_open {
@@ -105,6 +107,9 @@ impl App {
                         });
                     };
                     row(ui, "U D F B L R", "xoay lớp tương ứng");
+                    row(ui, "V", "chế độ tập trung: toàn màn hình, chỉ còn khối Rubik");
+                    row(ui, ", / .", "trong chế độ tập trung: mở popover Điều khiển (trái) / Công cụ (phải); chạm mép trái/phải cũng mở");
+                    row(ui, "P", "bật / tắt sơ đồ hoán vị (dưới sơ đồ 6 mặt)");
                     row(ui, "Shift + phím", "xoay ngược lại (U', R'…)");
                     row(
                         ui,

@@ -857,6 +857,23 @@ video {
   overflow: auto;
   padding: 12px;
 }
+.permbox {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ln);
+}
+.permbox[hidden] {
+  display: none;
+}
+.permbox small {
+  margin-bottom: 2px !important;
+}
+#permsvg {
+  display: block;
+  width: 230px;
+  max-width: 100%;
+  height: auto;
+}
 .wb-lib {
   display: flex;
   flex-direction: column;
@@ -1013,6 +1030,12 @@ video {
   .ovl.tr .net {
     --cs: 7px !important;
   }
+  #permsvg {
+    width: 150px;
+  }
+  .permbox small {
+    display: none;
+  }
   .ovl.tr {
     background: #0a0d14a0;
   }
@@ -1052,6 +1075,48 @@ video {
     min-height: 430px;
   }
 }
+
+/* ============ chế độ tập trung (Focus): chỉ còn khối Rubik, mở chức năng bằng popover ở 2 mép ============ */
+.fz, .fp { display: none; }
+body.focus .app { grid-template-rows: minmax(0, 1fr); }
+body.focus .top,
+body.focus .ovl.tl, body.focus .ovl.tm, body.focus .ovl.bc, body.focus .ovl.bl { display: none !important; }
+body.focus .board { grid-template-rows: minmax(0, 1fr); }
+body.focus .fz {
+  display: block; position: fixed; top: 0; bottom: 0; width: 18px; z-index: 30;
+}
+body.focus .fz.l { left: 0; }
+body.focus .fz.r { right: 0; }
+body.focus .fp {
+  display: flex; flex-direction: column; gap: 10px;
+  position: fixed; top: 12px; bottom: 12px; z-index: 35;
+  width: min(340px, 86vw); overflow: auto; padding: 12px;
+  background: #121722f2; border: 1px solid var(--ln); border-radius: 14px;
+  box-shadow: 0 18px 50px #000b;
+  transition: transform .18s ease, opacity .18s ease;
+}
+body.focus .fp[hidden] { display: none; }
+body.focus .fp.l { left: 12px; transform: translateX(-12px); opacity: 0; }
+body.focus .fp.r { right: 12px; transform: translateX(12px); opacity: 0; }
+body.focus .fp.open { transform: none; opacity: 1; }
+.fph { color: var(--mut); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+/* phần tử được chuyển vào popover: bỏ định vị cũ */
+body.focus .fp .actions { flex-wrap: wrap; }
+body.focus .fp .winbtns { flex-wrap: wrap; }
+body.focus .fp .dock { padding: 0; border: 0; background: none; }
+body.focus .fp .ovl.tr { position: static; display: block; transform: none; }
+body.focus .fp .menuwrap { position: static; }
+body.focus .fp #menub { display: none; }
+body.focus .fp .menu { display: block; position: static; min-width: 0; box-shadow: none; padding: 0; border: 0; background: none; }
+body.focus .fp .winbtns .tx, body.focus .fp .actions .tx { display: inline; }
+/* popover: bảng nước đi xuống dòng thay vì cuộn ngang; ô công thức đủ rộng */
+body.focus .fp .palette { flex-direction: column; align-items: stretch; overflow: visible; }
+body.focus .fp .mods { border-right: 0; padding-right: 0; }
+body.focus .fp .moves { flex-wrap: wrap; }
+body.focus .fp .moves button:nth-child(6), body.focus .fp .moves button:nth-child(9) { margin-left: 0; }
+body.focus .fp .cmd { flex-wrap: wrap; }
+body.focus .fp .cmd input[type='text'] { flex: 1 1 100%; min-width: 0; width: 100%; }
+body.focus .fp .winbtns { display: none; }
 </style></head><body class="">
 <div class="app">
 <header class="top">
@@ -1074,11 +1139,13 @@ video {
    <button id="rankM" role="menuitem">🏆 Bảng xếp hạng</button>
    <button id="accM" role="menuitem">👤 Tài khoản</button>
    <button id="winPlanM" role="menuitem">Bảng công thức <kbd>Ctrl+T</kbd></button>
+   <button id="permM" role="menuitem" aria-pressed="true">Sơ đồ hoán vị <kbd>P</kbd></button>
    <button id="tbl" role="menuitem">Tính bảng cho khối hiện tại</button>
    <button id="libm" role="menuitem">Thư viện công thức <kbd>Ctrl+J</kbd></button>
    <button id="stb" role="menuitem">Thống kê OLL/PLL <kbd>Ctrl+Y</kbd></button>
    <button id="scanb" role="menuitem">Quét bằng camera <kbd>Ctrl+K</kbd></button>
    <button id="paintb" role="menuitem">Điền màu thủ công</button>
+   <button id="focusM" role="menuitem" aria-pressed="false">Chế độ tập trung <kbd>V</kbd></button>
    <button id="fsb" role="menuitem">Toàn màn hình <kbd>F11</kbd></button>
    <button id="helpb" role="menuitem">Phím tắt &amp; hướng dẫn</button>
   </div></div>
@@ -1089,7 +1156,8 @@ video {
   <div id="a11y" class="sr" aria-live="polite" aria-atomic="true"></div>
    <div class="ovl tl" id="selhint"></div>
    <div class="ovl tm" id="rtimer" aria-live="off"></div>
-   <div class="ovl tr"><small>Sơ đồ · bấm để chọn mặt</small><div class="net" id="net" aria-hidden="true" style="--cs:11px"></div></div>
+   <div class="ovl tr"><small>Sơ đồ · bấm để chọn mặt</small><div class="net" id="net" aria-hidden="true" style="--cs:11px"></div>
+    <div class="permbox" id="permbox"><small>Sơ đồ hoán vị · 54 ô trên 9 vòng</small><svg id="permsvg" viewBox="110 520 500 410" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Sơ đồ hoán vị: 54 ô màu nằm ở giao điểm của 9 vòng tròn, vòng đang xoay được tô màu theo các ô trên nó"></svg></div></div>
    <div class="ovl bc" id="status" role="status" aria-live="polite"></div>
    <div class="ovl bl" id="viewhint">Kéo để xoay · Cuộn để thu phóng · Nhấp đúp để đặt lại góc nhìn</div>
   </div>
@@ -1104,6 +1172,9 @@ video {
  </section>
 </main>
 </div>
+<div class="fz l" id="fzL" aria-hidden="true"></div><div class="fz r" id="fzR" aria-hidden="true"></div>
+<aside class="fp l" id="fpL" aria-label="Điều khiển (phím ,)" hidden><div class="fph">Điều khiển <kbd>,</kbd></div></aside>
+<aside class="fp r" id="fpR" aria-label="Công cụ (phím .)" hidden><div class="fph">Công cụ <kbd>.</kbd></div></aside>
 
 
 <section class="win" id="win-plan" data-win="plan" role="dialog" aria-label="Bảng công thức" hidden>
@@ -1445,6 +1516,268 @@ function flushAnnounce() {
     (SOLVED_FACES(state) ? '. Khối đã giải xong.' : '.');
   annQ = [];
 }
+/* ============ sơ đồ hoán vị: 54 ô nằm trên 9 vòng tròn ============
+   Hình học đo từ video gốc: 3 họ vòng tròn đồng tâm (mỗi họ ứng với một trục x/y/z, mỗi vòng là một lớp). Mỗi ô dán nằm ở giao điểm của
+   2 vòng thuộc hai trục mà ô đó KHÔNG hướng theo. Một nước xoay đẩy 12 ô chạy dọc vòng của lớp đó; 8 ô trên mặt xoay nhảy quanh tâm mặt.
+   Chỉ số ô và nước đi dùng đúng quy ước của engine (mặt U D F B L R, mỗi mặt đọc theo hàng); PV.check() đối chiếu với bảng MT. */
+const PV = (() => {
+  const NS = 'http://www.w3.org/2000/svg',
+    AI = { x: 0, y: 1, z: 2 },
+    DOT = 7.4,
+    NRM = { U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], R: [1, 0, 0], L: [-1, 0, 0] },
+    CEN = { y: [359.6, 674.2], z: [302.1, 773.6], x: [417.2, 773.8] },
+    LAB = { y: [196, 586, 'end'], z: [142, 742, 'end'], x: [578, 742, 'start'] },
+    // chỉ số ô (0..53) -> [x, y, z, mặt]: vị trí khối con và mặt mà ô hướng ra
+    FL = [[-1,1,-1,'U'],[0,1,-1,'U'],[1,1,-1,'U'],[-1,1,0,'U'],[0,1,0,'U'],[1,1,0,'U'],[-1,1,1,'U'],[0,1,1,'U'],[1,1,1,'U'],[-1,-1,1,'D'],[0,-1,1,'D'],[1,-1,1,'D'],[-1,-1,0,'D'],[0,-1,0,'D'],[1,-1,0,'D'],[-1,-1,-1,'D'],[0,-1,-1,'D'],[1,-1,-1,'D'],[-1,1,1,'F'],[0,1,1,'F'],[1,1,1,'F'],[-1,0,1,'F'],[0,0,1,'F'],[1,0,1,'F'],[-1,-1,1,'F'],[0,-1,1,'F'],[1,-1,1,'F'],[1,1,-1,'B'],[0,1,-1,'B'],[-1,1,-1,'B'],[1,0,-1,'B'],[0,0,-1,'B'],[-1,0,-1,'B'],[1,-1,-1,'B'],[0,-1,-1,'B'],[-1,-1,-1,'B'],[-1,1,-1,'L'],[-1,1,0,'L'],[-1,1,1,'L'],[-1,0,-1,'L'],[-1,0,0,'L'],[-1,0,1,'L'],[-1,-1,-1,'L'],[-1,-1,0,'L'],[-1,-1,1,'L'],[1,1,1,'R'],[1,1,0,'R'],[1,1,-1,'R'],[1,0,1,'R'],[1,0,0,'R'],[1,0,-1,'R'],[1,-1,1,'R'],[1,-1,0,'R'],[1,-1,-1,'R']],
+    // chữ cái nước -> [trục, các lớp, dấu quay (1 = ngược chiều kim đồng hồ quanh +trục)]
+    BASE = {
+      U: ['y', [1], -1], D: ['y', [-1], 1], R: ['x', [1], -1], L: ['x', [-1], 1], F: ['z', [1], -1], B: ['z', [-1], 1],
+      M: ['x', [0], 1], E: ['y', [0], 1], S: ['z', [0], -1],
+      u: ['y', [1, 0], -1], d: ['y', [-1, 0], 1], r: ['x', [1, 0], -1], l: ['x', [-1, 0], 1], f: ['z', [1, 0], -1], b: ['z', [-1, 0], 1],
+      x: ['x', [-1, 0, 1], -1], y: ['y', [-1, 0, 1], -1], z: ['z', [-1, 0, 1], -1],
+    };
+  const rotV = ([x, y, z], ax, q) => (ax === 'x' ? [x, -z * q, y * q] : ax === 'y' ? [z * q, y, -x * q] : [-y * q, x * q, z]);
+  const ringOf = (ax, l) => ({ c: CEN[ax], r: 92 + 24.65 * ((ax === 'y' ? l : -l) + 1) });
+  function crossing(c1, r1, c2, r2) {
+    const dx = c2[0] - c1[0],
+      dy = c2[1] - c1[1],
+      d = Math.hypot(dx, dy),
+      a = (r1 * r1 - r2 * r2 + d * d) / (2 * d),
+      h = Math.sqrt(Math.max(r1 * r1 - a * a, 0)),
+      mx = c1[0] + (a * dx) / d,
+      my = c1[1] + (a * dy) / d;
+    return [[mx - (dy / d) * h, my + (dx / d) * h], [mx + (dy / d) * h, my - (dx / d) * h]];
+  }
+  const cache = {};
+  function slot(p, n) {
+    const k = p + '|' + n;
+    if (cache[k]) return cache[k];
+    const na = n[0] ? 'x' : n[1] ? 'y' : 'z',
+      sg = n[AI[na]] > 0,
+      [a, b] = ['x', 'y', 'z'].filter(t => t !== na),
+      A = ringOf(a, p[AI[a]]),
+      B = ringOf(b, p[AI[b]]),
+      [p1, p2] = crossing(A.c, A.r, B.c, B.r);
+    let pick;
+    if (na === 'y') pick = p1[1] < p2[1] === sg ? p1 : p2; // U ở trên, D ở dưới
+    else if (na === 'z') pick = p1[0] - p1[1] < p2[0] - p2[1] === sg ? p1 : p2; // F dưới-trái, B trên-phải
+    else pick = p1[0] + p1[1] > p2[0] + p2[1] === sg ? p1 : p2; // R dưới-phải, L trên-trái
+    return (cache[k] = pick);
+  }
+  const svg = $('permsvg'),
+    mk = (tag, at, par) => {
+      const e = document.createElementNS(NS, tag);
+      for (const k in at) e.setAttribute(k, at[k]);
+      (par || svg).appendChild(e);
+      return e;
+    };
+  ['y', 'x', 'z'].forEach(ax =>
+    [1, 0, -1].forEach(l => {
+      const g = ringOf(ax, l);
+      mk('circle', { cx: g.c[0], cy: g.c[1], r: g.r, fill: 'none', stroke: '#6f6f7c', 'stroke-width': 2.6 });
+    })
+  );
+  const ringG = mk('g', {}),
+    arcs = Array.from({ length: 36 }, () => mk('path', { d: '', fill: 'none', 'stroke-width': 4.6, opacity: 0 }, ringG)),
+    dotsG = mk('g', {}),
+    box = mk('rect', { width: 30, height: 26, rx: 5, fill: '#111116', opacity: 0 }),
+    lab = mk('text', { 'font-size': 22, fill: '#ececf4', 'text-anchor': 'middle', opacity: 0, 'font-family': 'inherit' }),
+    S = FL.map(([x, y, z, f], i) => {
+      const p = [x, y, z],
+        n = NRM[f];
+      return { i, p, n, at: slot(p, n), col: '', r0: DOT, dot: mk('circle', { r: DOT, stroke: '#0a0a0d', 'stroke-width': 1.6 }, dotsG) };
+    });
+  let cur = null;
+  function hide() {
+    arcs.forEach(a => a.setAttribute('opacity', 0));
+    box.setAttribute('opacity', 0);
+    lab.setAttribute('opacity', 0);
+    cur = null;
+  }
+  /* đặt lại mọi chấm về ô của nó theo trạng thái hiện tại (gọi sau mỗi lần paint) */
+  function sync(st) {
+    const sf = selFace ? ORD.indexOf(selFace) : -1; // mặt đang chọn: làm sáng 9 ô của mặt đó, mờ các ô còn lại
+    S.forEach(s => {
+      const on = sf >= 0 && Math.floor(s.i / 9) === sf;
+      s.r0 = on ? DOT * 1.3 : DOT;
+      s.dot.style.opacity = sf >= 0 && !on ? 0.35 : 1;
+      s.dot.setAttribute('stroke', on ? '#ffffff' : '#0a0a0d');
+      s.dot.setAttribute('stroke-width', on ? 2.6 : 1.6);
+      s.col = 'var(' + (COLN[st[s.i]] || COLN[ORD[Math.floor(s.i / 9)]]) + ')'; // chưa có trạng thái: hiện khối đã giải
+      s.dot.style.fill = s.col;
+      s.dot.setAttribute('cx', s.at[0]);
+      s.dot.setAttribute('cy', s.at[1]);
+      s.dot.setAttribute('r', s.r0);
+    });
+    hide();
+  }
+  function parse(tok) {
+    const m = /^([UDFBLRMESxyzudfblr])(2?)('?)$/.exec(tok);
+    if (!m) return null;
+    const [ax, layers, q0] = BASE[m[1]];
+    return { tok, ax, layers, q: m[3] ? -q0 : q0, turns: m[2] ? 2 : 1 };
+  }
+  /* mỗi chấm đi 1-2 chặng; chấm trên vòng chạy theo cung tròn, chấm trên mặt xoay nhảy quanh tâm mặt */
+  function begin(m) {
+    const ai = AI[m.ax],
+      a = { m, sts: S.filter(s => m.layers.includes(s.p[ai])), groups: m.layers.map(l => ({ l, ring: ringOf(m.ax, l), rs: [] })) };
+    a.sts.forEach(s => {
+      const g = a.groups.find(t => t.l === s.p[ai]);
+      s.legs = [];
+      let p = s.p,
+        n = s.n,
+        from = slot(p, n);
+      for (let i = 0; i < m.turns; i++) {
+        p = rotV(p, m.ax, m.q);
+        n = rotV(n, m.ax, m.q);
+        const to = slot(p, n);
+        s.legs.push({ from, to });
+        from = to;
+      }
+      s.ring = s.n[ai] === 0;
+      s.g = g;
+      if (s.ring) g.rs.push(s);
+      else {
+        const c = [0, 0, 0];
+        c[ai] = s.n[ai];
+        s.ctr = slot(c, c);
+      }
+    });
+    a.groups.forEach(g => {
+      const C = g.ring.c;
+      for (let i = 0; i < m.turns; i++) {
+        let pos = 0;
+        g.rs.forEach(s => {
+          const L = s.legs[i];
+          L.a0 = Math.atan2(L.from[1] - C[1], L.from[0] - C[0]);
+          const d = Math.atan2(L.to[1] - C[1], L.to[0] - C[0]) - L.a0;
+          L.da = Math.atan2(Math.sin(d), Math.cos(d));
+          if (L.da > 0) pos++;
+        });
+        const sg = pos * 2 >= g.rs.length ? 1 : -1;
+        g.rs.forEach(s => {
+          const L = s.legs[i];
+          if (L.da * sg < 0) L.da += sg * 2 * Math.PI;
+        });
+      }
+    });
+    return a;
+  }
+  /* e: tiến độ đã làm mượt 0..1 */
+  function pose(tok, e) {
+    if (permBox.hidden) return;
+    if (!cur || cur.m.tok !== tok) {
+      const m = parse(tok);
+      if (!m) return;
+      cur = begin(m);
+    }
+    const a = cur,
+      le = e * a.m.turns,
+      i = Math.min(a.m.turns - 1, Math.floor(le)),
+      t = le - i,
+      u = 1 - t;
+    a.sts.forEach(s => {
+      const L = s.legs[i];
+      let x, y;
+      if (s.ring) {
+        const th = L.a0 + L.da * t;
+        x = s.g.ring.c[0] + s.g.ring.r * Math.cos(th);
+        y = s.g.ring.c[1] + s.g.ring.r * Math.sin(th);
+      } else {
+        const cx = (L.from[0] + L.to[0]) / 2,
+          cy = (L.from[1] + L.to[1]) / 2,
+          qx = cx + (s.ctr[0] - cx) * 0.8,
+          qy = cy + (s.ctr[1] - cy) * 0.8;
+        x = u * u * L.from[0] + 2 * u * t * qx + t * t * L.to[0];
+        y = u * u * L.from[1] + 2 * u * t * qy + t * t * L.to[1];
+      }
+      s.dot.setAttribute('cx', x);
+      s.dot.setAttribute('cy', y);
+      s.dot.setAttribute('r', s.r0 * (1 + 0.3 * Math.sin(Math.PI * e)));
+    });
+    const vis = Math.min(1, e * 7) * (e > 0.8 ? (1 - e) / 0.2 : 1);
+    arcs.forEach(p => p.setAttribute('opacity', 0));
+    a.groups.forEach((g, gi) => {
+      const C = g.ring.c,
+        R = g.ring.r,
+        P = 2 * Math.PI,
+        it = g.rs
+          .map(s => ({ t: (((s.legs[i].a0 + s.legs[i].da * t) % P) + P) % P, col: s.col }))
+          .sort((p, q) => p.t - q.t),
+        n = it.length;
+      it.forEach((c, k) => {
+        const pv = it[(k + n - 1) % n],
+          nx = it[(k + 1) % n],
+          t0 = c.t - (((c.t - pv.t + P) % P) / 2),
+          t1 = c.t + (((nx.t - c.t + P) % P) / 2),
+          path = arcs[gi * 12 + k];
+        path.setAttribute(
+          'd',
+          `M${(C[0] + R * Math.cos(t0)).toFixed(2)} ${(C[1] + R * Math.sin(t0)).toFixed(2)} A${R} ${R} 0 ${t1 - t0 > Math.PI ? 1 : 0} 1 ${(C[0] + R * Math.cos(t1)).toFixed(2)} ${(C[1] + R * Math.sin(t1)).toFixed(2)}`
+        );
+        path.style.stroke = c.col;
+        path.setAttribute('opacity', vis);
+      });
+    });
+    const lp = LAB[a.m.ax],
+      end = lp[2] === 'end';
+    lab.textContent = tok.replace("'", '′');
+    lab.setAttribute('x', end ? lp[0] - 14 : lp[0] + 14);
+    lab.setAttribute('y', lp[1] + 8);
+    box.setAttribute('x', end ? lp[0] - 29 : lp[0] - 1);
+    box.setAttribute('y', lp[1] - 14);
+    lab.setAttribute('opacity', vis);
+    box.setAttribute('opacity', vis);
+  }
+  /* kiểm tra: với mọi nước trong bảng MT, ô i chạy tới ô j (MT[tok][j] = i) đúng bằng phép xoay hình học. Trả về số nước sai. */
+  function check() {
+    const bad = [];
+    for (const tok in MT) {
+      const m = parse(tok.replace(/2'$/, '2'));
+      if (!m) {
+        bad.push(tok);
+        continue;
+      }
+      const ai = AI[m.ax],
+        key = (p, n) => p + '|' + n,
+        idx = {};
+      S.forEach(s => (idx[key(s.p, s.n)] = s.i));
+      let ok = true;
+      S.forEach(s => {
+        let p = s.p,
+          n = s.n;
+        if (m.layers.includes(p[ai])) for (let k = 0; k < m.turns; k++) [p, n] = [rotV(p, m.ax, m.q), rotV(n, m.ax, m.q)];
+        if (MT[tok][idx[key(p, n)]] !== s.i) ok = false;
+      });
+      if (!ok) bad.push(tok);
+    }
+    return bad;
+  }
+  return { sync, pose, hide, check, slots: () => S.map(s => s.at) };
+})();
+/* Bật/tắt khung sơ đồ hoán vị (phím P hoặc menu); nhớ lựa chọn, mặc định bật. */
+const PERM_LS = 'rubik_perm_v1',
+  permBox = $('permbox');
+let permOn = true;
+try {
+  permOn = localStorage.getItem(PERM_LS) !== '0';
+} catch (e) {}
+function setPerm(on, remember) {
+  permOn = on;
+  permBox.hidden = !on;
+  $('permM').setAttribute('aria-pressed', String(on));
+  $('permM').classList.toggle('on', on);
+  if (on) PV.sync(state);
+  if (remember)
+    try {
+      localStorage.setItem(PERM_LS, on ? '1' : '0');
+    } catch (e) {}
+}
+const togglePerm = () => {
+  setPerm(!permOn, true);
+  say(permOn ? 'Đã bật sơ đồ hoán vị (P để tắt).' : 'Đã tắt sơ đồ hoán vị (P để bật).');
+};
+setPerm(permOn, false);
 function paint() {
   const s = state;
   cv.setAttribute('aria-label', describeState(s));
@@ -1452,6 +1785,7 @@ function paint() {
     net[i].style.background = `var(${COLN[s[i]]})`;
     net[i].classList.toggle('sel', !!(selFace && ORD[Math.floor(i / 9)] === selFace));
   }
+  PV.sync(s);
   $('selhint').textContent = selFace
     ? `Mặt ${selFace} đang chọn · ↑ → xoay thuận · ↓ ← xoay nghịch · bấm lại để bỏ chọn`
     : '';
@@ -1547,6 +1881,7 @@ function setPose(tok, k) {
     pr = tok.endsWith("'"),
     mag = 90 * (tok.includes('2') ? 2 : 1);
   anim = { ax: AX[fc], deg: (pr ? mag : -mag) * easeIO(k), layer: p => al.includes(p[idx]) };
+  PV.pose(tok, easeIO(k));
   render();
 }
 function spin(tok, ms) {
@@ -1594,12 +1929,15 @@ async function animateMove(tok) {
 }
 /* Cửa sau cho kiểm thử tự động */
 window.__cube = {
+  get focus() { return FOCUS; },
+  get setFocusMode() { return setFocusMode; },
   played,
   localMove,
   cubies,
   stickers,
   render,
   setPose,
+  perm: PV,
   setState: s => {
     state = s;
     paint();
@@ -1951,6 +2289,7 @@ function showPane(id) {
 $('winPlanBtn').onclick = () => toggleWin('plan');
 $('winPlanM').onclick = () => toggleWin('plan');
 $('winLibBtn').onclick = () => toggleWin('lib');
+$('permM').onclick = () => togglePerm();
 $('libm').onclick = () => {
   openWin('lib', true);
   if (!isMobile()) $('q').focus();
@@ -2736,6 +3075,9 @@ const HELP = [
   ['Alt (bấm rồi thả)', 'chạy từng NƯỚC một của gợi ý (H); hết thì tự tính gợi ý tiếp theo'],
   ['Ctrl+T', 'bảng công thức cho ván này'],
   ['Ctrl+J', 'tra toàn bộ công thức chuẩn'],
+  ['V', 'chế độ tập trung: toàn màn hình, chỉ còn khối Rubik'],
+  [', .', 'trong chế độ tập trung: mở popover Điều khiển (trái) / Công cụ (phải); chuột chạm mép trái/phải cũng mở'],
+  ['P', 'bật / tắt sơ đồ hoán vị (54 ô trên 9 vòng tròn) dưới sơ đồ 6 mặt'],
   ['Ctrl+Y', 'thống kê OLL/PLL đã gặp'],
   ['Ctrl+K', 'quét trạng thái từ camera'],
   ['Esc', 'huỷ khi đang tính · dừng giải tự động giữa chừng'],
@@ -2821,6 +3163,120 @@ document.addEventListener('click', e => {
   if (!menu.contains(e.target)) closeMenu(false);
 });
 setInterval(() => document.body.classList.toggle('busy', busy()), 120);
+/* ============ chế độ tập trung (Focus) ============
+   Bật: phím V hoặc menu "Thêm". Toàn màn hình, ẩn mọi thứ trừ khối Rubik (vẫn xoay/kéo/cuộn như thường).
+   Chức năng nằm trong 2 popover: đưa chuột vào mép TRÁI (Điều khiển) / PHẢI (Công cụ) hoặc bấm phím , và . */
+const FOCUS = { on: false, fs: false, open: null, pinned: false, timer: 0, ph: [] };
+const fpEl = { l: $('fpL'), r: $('fpR') };
+const FP_MOVE = {
+  l: ['.actions', '.dock'],
+  r: ['.ovl.tr', '.winbtns', '.menuwrap']
+};
+function focusDock(on) {
+  if (on) {
+    for (const side of ['l', 'r'])
+      for (const sel of FP_MOVE[side]) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const ph = document.createComment('focus');
+        el.parentNode.insertBefore(ph, el);
+        fpEl[side].appendChild(el);
+        FOCUS.ph.push([el, ph]);
+      }
+  } else {
+    for (const [el, ph] of FOCUS.ph.reverse()) {
+      ph.parentNode.insertBefore(el, ph);
+      ph.remove();
+    }
+    FOCUS.ph = [];
+  }
+}
+function openFp(side, pin) {
+  if (!FOCUS.on) return;
+  clearTimeout(FOCUS.timer);
+  const other = side === 'l' ? 'r' : 'l';
+  closeFp(other, true);
+  const p = fpEl[side];
+  p.hidden = false;
+  void p.offsetWidth;
+  p.classList.add('open');
+  FOCUS.open = side;
+  FOCUS.pinned = !!pin;
+}
+function closeFp(side, now) {
+  const p = fpEl[side];
+  if (p.hidden) return;
+  p.classList.remove('open');
+  if (FOCUS.open === side) {
+    FOCUS.open = null;
+    FOCUS.pinned = false;
+  }
+  const done = () => {
+    if (!p.classList.contains('open')) p.hidden = true;
+  };
+  if (now) done();
+  else setTimeout(done, 200);
+  if (p.contains(document.activeElement)) document.activeElement.blur();
+}
+function toggleFp(side) {
+  if (FOCUS.open === side) closeFp(side);
+  else {
+    openFp(side, true);
+    const b = fpEl[side].querySelector('button, input');
+    if (b) b.focus({ preventScroll: true });
+  }
+}
+function setFocusMode(on) {
+  if (on === FOCUS.on) return;
+  if (on) {
+    FOCUS.on = true;
+    document.body.classList.add('focus');
+    focusDock(true);
+    $('focusM').setAttribute('aria-pressed', 'true');
+    const r = document.documentElement.requestFullscreen;
+    if (r && !document.fullscreenElement)
+      document.documentElement.requestFullscreen().then(() => (FOCUS.fs = true), () => {});
+    else FOCUS.fs = !!document.fullscreenElement;
+  } else {
+    closeFp('l', true);
+    closeFp('r', true);
+    FOCUS.on = false;
+    document.body.classList.remove('focus');
+    focusDock(false);
+    $('focusM').setAttribute('aria-pressed', 'false');
+    if (FOCUS.fs && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    FOCUS.fs = false;
+  }
+  setTimeout(() => render(), 0);
+}
+const toggleFocus = () => setFocusMode(!FOCUS.on);
+$('focusM').onclick = () => toggleFocus();
+for (const side of ['l', 'r']) {
+  const z = $(side === 'l' ? 'fzL' : 'fzR'),
+    p = fpEl[side];
+  z.addEventListener('mouseenter', () => openFp(side, false));
+  z.addEventListener('click', () => openFp(side, true));
+  p.addEventListener('mouseenter', () => clearTimeout(FOCUS.timer));
+  p.addEventListener('mouseleave', () => {
+    if (FOCUS.pinned || FOCUS.open !== side) return;
+    clearTimeout(FOCUS.timer);
+    FOCUS.timer = setTimeout(() => {
+      if (!FOCUS.pinned && !(document.activeElement && p.contains(document.activeElement) && document.activeElement.tagName === 'INPUT'))
+        closeFp(side);
+    }, 350);
+  });
+}
+// Bấm/kéo vào khối để xoay thì đóng popover.
+$('scene').addEventListener('pointerdown', () => {
+  if (FOCUS.on) {
+    closeFp('l');
+    closeFp('r');
+  }
+});
+// Thoát toàn màn hình bằng Esc/F11 thì thoát luôn chế độ tập trung.
+document.addEventListener('fullscreenchange', () => {
+  if (FOCUS.on && FOCUS.fs && !document.fullscreenElement) setFocusMode(false);
+});
 let altHeld = false,
   altCombo = false,
   ctrlHeld = false,
@@ -2870,6 +3326,10 @@ addEventListener('keydown', e => {
     return;
   }
   if (e.key === 'Escape') {
+    if (FOCUS.on && FOCUS.open) {
+      closeFp(FOCUS.open);
+      return;
+    }
     if (menu.classList.contains('open')) {
       closeMenu(true);
       return;
@@ -2937,6 +3397,21 @@ addEventListener('keydown', e => {
   if (code === 'Enter') {
     go();
     autoSolve();
+    return;
+  }
+  if (L === 'V' && !ctrl && !e.altKey && !e.shiftKey) {
+    go();
+    toggleFocus();
+    return;
+  }
+  if (FOCUS.on && !ctrl && !e.altKey && (e.key === ',' || e.key === '.')) {
+    go();
+    toggleFp(e.key === ',' ? 'l' : 'r');
+    return;
+  }
+  if (L === 'P' && !ctrl && !e.altKey && !e.shiftKey) {
+    go();
+    togglePerm();
     return;
   }
   if (L === 'H') {

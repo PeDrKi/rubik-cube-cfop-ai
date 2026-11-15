@@ -13,3 +13,15 @@ codegen-units = 1
 # không ảnh hưởng tốc độ chạy. Muốn xem backtrace lúc debug thì tạm bỏ
 # dòng này rồi build lại.
 strip = true
+
+# Bản debug (`cargo run` không kèm --release) mặc định KHÔNG tối ưu gì, làm phần
+# xử lý ảnh camera chậm ~12 lần (đo: 89 ms so với 7 ms mỗi khung hình), vượt
+# ngân sách 66 ms của luồng 15 fps -> giật trên máy yếu. Luôn tối ưu các crate
+# nặng tính toán + toàn bộ thư viện phụ thuộc (image, egui, three-d...); code
+# của app (rubik-app) vẫn ở chế độ debug nên build lại nhanh và vẫn gỡ lỗi được.
+[profile.dev.package."*"]
+opt-level = 3
+[profile.dev.package.rubik-vision]
+opt-level = 3
+[profile.dev.package.rubik-core]
+opt-level = 3

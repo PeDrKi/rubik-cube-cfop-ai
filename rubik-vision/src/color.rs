@@ -48,13 +48,19 @@ fn srgb_to_lab([r, g, b]: [u8; 3]) -> [f32; 3] {
         }
     }
     let (r, g, b) = (to_linear(r), to_linear(g), to_linear(b));
+    // Độ chói tương đối Y của ô; mặt chụp sáng/tối khác nhau thì Y đổi nhiều nhưng "hướng màu" (rgb/Y) gần như giữ nguyên.
+    let y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
+    // Chuẩn hoá cường độ: đưa mọi ô về cùng độ chói (Y0) rồi mới đổi sang Lab để lấy a, b. Lab a/b không bất biến theo độ sáng
+    // (co theo căn bậc 3), nên không chuẩn hoá thì mặt chụp tối làm đỏ/cam/vàng dồn về phía nâu và lẫn nhau.
+    const Y0: f32 = 0.30;
+    let k = Y0 / (y + 0.01);
+    let (rn, gn, bn) = (r * k, g * k, b * k);
 
     // sRGB -> XYZ (D65)
-    let x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
-    let y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
-    let z = r * 0.0193339 + g * 0.119_192 + b * 0.9503041;
+    let x = rn * 0.4124564 + gn * 0.3575761 + bn * 0.1804375;
+    let yy = rn * 0.2126729 + gn * 0.7151522 + bn * 0.0721750;
+    let z = rn * 0.0193339 + gn * 0.119_192 + bn * 0.9503041;
 
-    // Chuẩn hoá theo white point D65
     let (xn, yn, zn) = (0.95047, 1.0, 1.08883);
     fn f(t: f32) -> f32 {
         const DELTA: f32 = 6.0 / 29.0;
@@ -64,19 +70,48 @@ fn srgb_to_lab([r, g, b]: [u8; 3]) -> [f32; 3] {
             t / (3.0 * DELTA * DELTA) + 4.0 / 29.0
         }
     }
-    let (fx, fy, fz) = (f(x / xn), f(y / yn), f(z / zn));
-
-    let l = 116.0 * fy - 16.0;
+    let (fx, fy, fz) = (f(x / xn), f(yy / yn), f(z / zn));
     let a = 500.0 * (fx - fy);
     let bb = 200.0 * (fy - fz);
-    [l, a, bb]
+
+    // Thành phần sáng chỉ giữ với trọng số nhỏ (L thật của ô gốc, không phải L đã chuẩn hoá): đủ để tách trắng khỏi xám
+    // nhưng không để chênh lệch ánh sáng giữa các mặt lấn át màu.
+    let l = 116.0 * f(y) - 16.0;
+    [L_WEIGHT * l, a, bb]
 }
+
+/// Trọng số của độ sáng (L) so với sắc độ (a, b) khi so khoảng cách màu.
+const L_WEIGHT: f32 = 0.35;
 
 fn lab_dist2(a: [f32; 3], b: [f32; 3]) -> f32 {
     let d0 = a[0] - b[0];
     let d1 = a[1] - b[1];
     let d2 = a[2] - b[2];
     d0 * d0 + d1 * d1 + d2 * d2
+}
+
+
+/// Hệ số cho phép "pha trắng" tối đa: ô độ tin cậy `conf` được phép là màu gốc pha thêm tới `(1 - conf) * WASH_RANGE` ánh sáng trắng.
+const WASH_RANGE: f32 = 1.6;
+const WASH_MAX: f32 = 0.85;
+/// Phạt khi dùng pha trắng (so với bình phương độ chói sắc độ), để ô đo sạch không bị "kéo" sang màu khác nhờ pha trắng.
+const WASH_PENALTY: f32 = 400.0;
+
+/// Chi phí gán ô `p` cho tâm màu `c`. Ô độ tin cậy cao: khoảng cách Lab thường. Ô nghi loá (độ tin cậy thấp): loá làm ô sáng hơn và
+/// nhạt dần về trắng (sắc độ co về gốc, độ sáng tăng), nên cho phép ô nằm trên đoạn "màu tâm -> trắng" và chỉ phạt phần
+/// ô TỐI hơn tâm; không có chi tiết này một ô cam bị loá trông như trắng/vàng nhạt rất dễ bị gán nhầm.
+fn sticker_cost(p: [f32; 3], c: [f32; 3], conf: f32) -> f32 {
+    let tmax = ((1.0 - conf) * WASH_RANGE).min(WASH_MAX);
+    if tmax <= 0.0 {
+        return lab_dist2(p, c);
+    }
+    let (da, db) = (p[1] - c[1], p[2] - c[2]);
+    // pha trắng t: màu mong đợi = c_ab * (1 - t); cực tiểu hoá |p_ab - c_ab(1-t)|^2 + WASH_PENALTY t^2
+    let cc = c[1] * c[1] + c[2] * c[2];
+    let t = (-(da * c[1] + db * c[2]) / (cc + WASH_PENALTY)).clamp(0.0, tmax);
+    let (ea, eb) = (da + c[1] * t, db + c[2] * t);
+    let dark = (c[0] - p[0]).max(0.0);
+    ea * ea + eb * eb + WASH_PENALTY * t * t + dark * dark
 }
 
 /// Số vòng lặp tinh chỉnh tâm màu kiểu k-means nhẹ (xem doc đầu file).
@@ -91,7 +126,40 @@ const REFINE_PULL: f32 = 0.5;
 /// `classify_scan` lẫn `low_confidence_stickers`/`ambiguous_candidates`
 /// để tránh tính `srgb_to_lab` lặp lại và đảm bảo cả 2 luôn nhất quán.
 fn scan_to_labs(scan: &RawScan) -> [[[f32; 3]; 9]; 6] {
-    std::array::from_fn(|f| std::array::from_fn(|s| srgb_to_lab(scan.faces[f].samples[s])))
+    let mut labs: [[[f32; 3]; 9]; 6] =
+        std::array::from_fn(|f| std::array::from_fn(|s| srgb_to_lab(scan.faces[f].samples[s])));
+    let confidence = scan_to_confidence(scan);
+    // Cân bằng trắng theo từng mặt: mỗi mặt chụp dưới ánh sáng riêng nên có thể ám cả một màu (đèn vàng, bóng đổ xanh).
+    // Lặp: phân loại -> với mỗi mặt lấy độ lệch trung vị (a, b) giữa màu đo và màu tâm được gán -> trừ độ lệch đó khỏi cả mặt.
+    // Trung vị (không phải trung bình) để 1-2 ô nhận nhầm/loá không kéo lệch cả mặt.
+    for _ in 0..WB_ITERS {
+        let centers = refine_centers(&labs, &confidence);
+        let assign = balanced_assign(&labs, &confidence, &centers);
+        for f in 0..6 {
+            let mut da: Vec<f32> = Vec::with_capacity(9);
+            let mut db: Vec<f32> = Vec::with_capacity(9);
+            for s in 0..9 {
+                let c = centers[assign[f][s] as usize];
+                da.push(labs[f][s][1] - c[1]);
+                db.push(labs[f][s][2] - c[2]);
+            }
+            let (ma, mb) = (median(&mut da), median(&mut db));
+            for s in 0..9 {
+                labs[f][s][1] -= WB_STRENGTH * ma;
+                labs[f][s][2] -= WB_STRENGTH * mb;
+            }
+        }
+    }
+    labs
+}
+
+/// Số vòng cân bằng trắng theo mặt và hệ số áp dụng độ lệch tìm được mỗi vòng (<1 để hội tụ êm).
+const WB_ITERS: usize = 3;
+const WB_STRENGTH: f32 = 0.8;
+
+fn median(v: &mut [f32]) -> f32 {
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    v[v.len() / 2]
 }
 
 /// Gom độ tin cậy mỗi ô (`RawFace::confidence`, xem `sample.rs`) thành
@@ -138,7 +206,7 @@ fn balanced_assign(
     let mut cost = vec![vec![0f64; TOTAL_STICKERS + 1]; TOTAL_STICKERS + 1];
     for i in 0..TOTAL_STICKERS {
         for c in 0..N_COLORS {
-            let d = (lab_dist2(points[i], centers[c]) * weights[i]) as f64;
+            let d = (sticker_cost(points[i], centers[c], weights[i]) * weights[i]) as f64;
             for slot in 0..STICKERS_PER_COLOR {
                 let j = c * STICKERS_PER_COLOR + slot;
                 cost[i + 1][j + 1] = d;

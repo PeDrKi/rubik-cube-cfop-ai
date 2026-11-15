@@ -182,7 +182,10 @@ impl App {
         // trước đây luôn Poll + request_redraw nên ngốn ~97% CPU dù
         // không làm gì. Đây là thay đổi quan trọng nhất cho máy yếu.
         let busy_now = self.pending.is_some() || !self.queue.is_empty() || self.job_rx.is_some();
-        self.needs_redraw = busy_now;
+        // Chế độ tập trung đang đếm giờ để tự đóng popover: phải vẽ lại tiếp thì mới kiểm tra được hết giờ chưa.
+        let focus_closing = self.focus && self.focus_leave.is_some();
+        self.needs_redraw = busy_now || focus_closing || self.redraw_next;
+        self.redraw_next = false;
         if busy_now {
             *control_flow = ControlFlow::Poll;
             self.winit_window.request_redraw();

@@ -8,6 +8,13 @@ use three_d::*;
 
 impl App {
     pub(crate) fn handle_keys(&mut self, frame_input: &FrameInput, req: &Req) {
+        // Phím , / . (từ winit) — mở popover trái / phải khi đang ở chế độ tập trung.
+        if let Some(side) = self.pending_focus_key.take() {
+            if self.focus && !(req.editing_formula || self.scan_state.open || self.paint_state.open)
+            {
+                self.toggle_focus_side(side);
+            }
+        }
         for event in &frame_input.events {
             if req.editing_formula || self.scan_state.open || self.paint_state.open {
                 break;
@@ -145,6 +152,19 @@ impl App {
                             self.status = "Đợi khối xoay xong đã".to_string();
                         }
                     }
+                    // V = bật/tắt chế độ tập trung (toàn màn hình, chỉ còn khối Rubik).
+                    Key::V if !(modifiers.ctrl || modifiers.command || modifiers.alt) => {
+                        self.set_focus(!self.focus);
+                    }
+                    // P = bật/tắt khung sơ đồ hoán vị (dưới sơ đồ 6 mặt).
+                    Key::P if !(modifiers.ctrl || modifiers.command || modifiers.alt) => {
+                        self.perm_open = !self.perm_open;
+                        self.status = if self.perm_open {
+                            "Đã bật sơ đồ hoán vị (P để tắt)".to_string()
+                        } else {
+                            "Đã tắt sơ đồ hoán vị (P để bật)".to_string()
+                        };
+                    }
                     Key::H => {
                         if self.job_rx.is_none() && self.queue.is_empty() && self.pending.is_none()
                         {
@@ -238,7 +258,11 @@ impl App {
                         }
                     }
                     Key::Escape => {
-                        if self.stats_open {
+                        if self.focus && self.focus_open.is_some() {
+                            self.focus_open = None;
+                            self.focus_pinned = false;
+                            self.redraw_next = true;
+                        } else if self.stats_open {
                             self.stats_open = false;
                         } else if self.library_open {
                             self.library_open = false;

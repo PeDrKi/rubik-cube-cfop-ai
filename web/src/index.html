@@ -29,11 +29,13 @@
    <button id="rankM" role="menuitem">🏆 Bảng xếp hạng</button>
    <button id="accM" role="menuitem">👤 Tài khoản</button>
    <button id="winPlanM" role="menuitem">Bảng công thức <kbd>Ctrl+T</kbd></button>
+   <button id="permM" role="menuitem" aria-pressed="true">Sơ đồ hoán vị <kbd>P</kbd></button>
    <button id="tbl" role="menuitem">Tính bảng cho khối hiện tại</button>
    <button id="libm" role="menuitem">Thư viện công thức <kbd>Ctrl+J</kbd></button>
    <button id="stb" role="menuitem">Thống kê OLL/PLL <kbd>Ctrl+Y</kbd></button>
    <button id="scanb" role="menuitem">Quét bằng camera <kbd>Ctrl+K</kbd></button>
    <button id="paintb" role="menuitem">Điền màu thủ công</button>
+   <button id="focusM" role="menuitem" aria-pressed="false">Chế độ tập trung <kbd>V</kbd></button>
    <button id="fsb" role="menuitem">Toàn màn hình <kbd>F11</kbd></button>
    <button id="helpb" role="menuitem">Phím tắt &amp; hướng dẫn</button>
   </div></div>
@@ -44,7 +46,8 @@
   <div id="a11y" class="sr" aria-live="polite" aria-atomic="true"></div>
    <div class="ovl tl" id="selhint"></div>
    <div class="ovl tm" id="rtimer" aria-live="off"></div>
-   <div class="ovl tr"><small>Sơ đồ · bấm để chọn mặt</small><div class="net" id="net" aria-hidden="true" style="--cs:11px"></div></div>
+   <div class="ovl tr"><small>Sơ đồ · bấm để chọn mặt</small><div class="net" id="net" aria-hidden="true" style="--cs:11px"></div>
+    <div class="permbox" id="permbox"><small>Sơ đồ hoán vị · 54 ô trên 9 vòng</small><svg id="permsvg" viewBox="110 520 500 410" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Sơ đồ hoán vị: 54 ô màu nằm ở giao điểm của 9 vòng tròn, vòng đang xoay được tô màu theo các ô trên nó"></svg></div></div>
    <div class="ovl bc" id="status" role="status" aria-live="polite"></div>
    <div class="ovl bl" id="viewhint">Kéo để xoay · Cuộn để thu phóng · Nhấp đúp để đặt lại góc nhìn</div>
   </div>
@@ -59,6 +62,9 @@
  </section>
 </main>
 </div>
+<div class="fz l" id="fzL" aria-hidden="true"></div><div class="fz r" id="fzR" aria-hidden="true"></div>
+<aside class="fp l" id="fpL" aria-label="Điều khiển (phím ,)" hidden><div class="fph">Điều khiển <kbd>,</kbd></div></aside>
+<aside class="fp r" id="fpR" aria-label="Công cụ (phím .)" hidden><div class="fph">Công cụ <kbd>.</kbd></div></aside>
 
 
 <section class="win" id="win-plan" data-win="plan" role="dialog" aria-label="Bảng công thức" hidden>

@@ -14,11 +14,13 @@
 mod actions;
 mod app;
 mod camera_capture;
+mod focus_view;
 mod history;
 mod input;
 mod jobs;
 mod mesh;
 mod paint_ui;
+mod perm_view;
 mod scan_ui;
 mod scene;
 mod solve_flow;
@@ -158,6 +160,13 @@ fn main() {
                             // (90 do) cham toi da 2 giay -- gioi han tren van
                             // giu nhu cu (~0.05s cho 1 phan tu, du nhanh de
                             // xem muot).
+                            // , / . = mở popover trái / phải của chế độ tập trung.
+                            Some(winit::event::VirtualKeyCode::Comma) => {
+                                app.pending_focus_key = Some(focus_view::FocusSide::Left);
+                            }
+                            Some(winit::event::VirtualKeyCode::Period) => {
+                                app.pending_focus_key = Some(focus_view::FocusSide::Right);
+                            }
                             Some(winit::event::VirtualKeyCode::LBracket) => {
                                 app.anim_speed =
                                     (app.anim_speed - 2.0).max(std::f32::consts::FRAC_PI_2 / 2.0);

@@ -8,3 +8,5 @@ _sao_luu_*/
 # Dữ liệu huấn luyện sinh lại được bằng train_detect/train.py
 train_detect/*.pt
 train_detect/*.png
+
+log_docs.rar
